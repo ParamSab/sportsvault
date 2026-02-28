@@ -1,0 +1,13 @@
+{
+  "builds": [
+    {
+      "src": "next.config.js",
+      "use": "@vercel/next"
+    }
+  ],
+  "env": {
+    "DATABASE_URL": "@database_url",
+    "SESSION_SECRET": "@session_secret",
+    "RESEND_API_KEY": "@resend_api_key"
+  }
+}

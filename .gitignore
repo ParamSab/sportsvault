@@ -1,0 +1,30 @@
+# dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+
+# production
+build/
+
+# env files
+.env
+.env*.local
+
+# SQLite database (local only — Vercel uses cloud DB)
+*.db
+*.db-journal
+prisma/dev.db
+prisma/migrations/
+
+# debug
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

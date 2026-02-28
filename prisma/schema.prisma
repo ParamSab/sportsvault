@@ -1,0 +1,136 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id          String   @id @default(uuid())
+  name        String
+  phone       String?  @unique
+  email       String?  @unique
+  photo       String?
+  location    String?
+  lat         Float?
+  lng         Float?
+  
+  // Stored as JSON strings
+  sports      String?  // JSON array ["football", "cricket"]
+  positions   String?  // JSON object {"football": "Striker"}
+  ratings     String?  // JSON object {"football": {...}}
+
+  trustScore  Int      @default(0)
+  gamesPlayed Int      @default(0)
+  wins        Int      @default(0)
+  losses      Int      @default(0)
+  draws       Int      @default(0)
+  privacy     String   @default("public")
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organizedGames Game[] @relation("Organizer")
+  rsvps          Rsvp[]
+  notifications  Notification[]
+
+  thoughtsSent     Thought[] @relation("ThoughtSender")
+  thoughtsReceived Thought[] @relation("ThoughtReceiver")
+  
+  friendshipsInitiated Friendship[] @relation("FriendshipInitiator")
+  friendshipsReceived  Friendship[] @relation("FriendshipReceiver")
+
+  friendTiers    FriendTier[] @relation("TierOwner")
+}
+
+model Friendship {
+  id          String   @id @default(uuid())
+  userId      String
+  friendId    String
+  status      String   @default("accepted") // pending, accepted
+  createdAt   DateTime @default(now())
+
+  user        User     @relation("FriendshipInitiator", fields: [userId], references: [id])
+  friend      User     @relation("FriendshipReceiver", fields: [friendId], references: [id])
+
+  @@unique([userId, friendId])
+}
+
+model FriendTier {
+  id          String   @id @default(uuid())
+  userId      String   
+  friendId    String
+  sport       String
+  tier        Int      // 1, 2, 3
+  
+  user        User     @relation("TierOwner", fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, friendId, sport])
+}
+
+model Thought {
+  id          String   @id @default(uuid())
+  fromId      String
+  toId        String
+  text        String
+  createdAt   DateTime @default(now())
+
+  sender      User     @relation("ThoughtSender", fields: [fromId], references: [id])
+  receiver    User     @relation("ThoughtReceiver", fields: [toId], references: [id])
+}
+
+model Game {
+  id          String   @id @default(uuid())
+  title       String
+  sport       String
+  format      String
+  date        String
+  time        String
+  duration    Int
+  location    String
+  lat         Float?
+  lng         Float?
+  address     String?
+  maxPlayers  Int
+  skillLevel  String
+  visibility  String   @default("public")  // public | friends | private
+  
+  organizerId String
+  organizer   User     @relation("Organizer", fields: [organizerId], references: [id], onDelete: Cascade)
+
+  rsvps       Rsvp[]
+  notifications Notification[]
+  
+  createdAt   DateTime @default(now())
+}
+
+model Rsvp {
+  id        String   @id @default(uuid())
+  gameId    String
+  playerId  String
+  status    String   // 'yes', 'no', 'backup', 'maybe'
+  position  String?  // player's position in this game
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  game      Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  player    User     @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([gameId, playerId])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  action    String?  // URL/link
+  gameId    String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game      Game?    @relation(fields: [gameId], references: [id], onDelete: Cascade)
+}
