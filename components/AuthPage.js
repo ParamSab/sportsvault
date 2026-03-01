@@ -140,10 +140,12 @@ export default function AuthPage() {
             const dbData = await dbRes.json();
             if (dbData.user) newUser.dbId = dbData.user.id;
 
+            // Strip photo (base64) from session cookie — cookies have a 4KB limit
+            const { photo: _photo, ...sessionUser } = newUser;
             await fetch('/api/auth/session', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user: newUser }),
+                body: JSON.stringify({ user: sessionUser }),
             });
         } catch (_) { /* continue with localStorage fallback */ }
 
