@@ -448,9 +448,6 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                                 <div style={{ fontSize: '2rem', marginBottom: 8 }}>⚠️</div>
                                 <div style={{ fontWeight: 700, color: '#ef4444' }}>Broadcast failed</div>
                                 <div className="text-xs text-muted" style={{ marginTop: 6 }}>{broadcastResult?.error}</div>
-                                {broadcastResult?.error?.includes('not configured') && (
-                                    <div className="text-xs" style={{ color: '#f59e0b', marginTop: 8 }}>Add TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER to your .env file</div>
-                                )}
                                 <button className="btn btn-outline btn-sm" style={{ marginTop: 12 }} onClick={resetBroadcast}>Try again</button>
                             </div>
                         )}
