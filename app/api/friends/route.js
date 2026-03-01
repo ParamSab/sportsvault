@@ -1,9 +1,9 @@
 import { prisma } from '@/lib/prisma';
-import { getSession } from '@/lib/session';
+import { getAppSession } from '@/lib/session';
 
-export async function GET(req) {
+export async function GET() {
     try {
-        const session = await getSession(req);
+        const session = await getAppSession();
         if (!session.user) return Response.json({ friends: [] });
 
         const friendships = await prisma.friendship.findMany({
@@ -23,7 +23,6 @@ export async function GET(req) {
             where: { userId: session.user.dbId }
         });
 
-        // Map friendships to flat user objects
         const friends = friendships.map(f => {
             const friendData = f.userId === session.user.dbId ? f.friend : f.user;
             return {
@@ -41,7 +40,7 @@ export async function GET(req) {
 
 export async function POST(req) {
     try {
-        const session = await getSession(req);
+        const session = await getAppSession();
         if (!session.user) return Response.json({ error: 'Not authenticated' }, { status: 401 });
 
         const { friendId, action, phone, name } = await req.json();
@@ -49,8 +48,6 @@ export async function POST(req) {
         if (action === 'add') {
             let finalFriendId = friendId;
 
-            // If it's a "new" (offline) friend, we might need to create a shadow user or just save locally.
-            // For now, let's just support adding existing users.
             if (phone && name) {
                 const shadow = await prisma.user.upsert({
                     where: { phone },
