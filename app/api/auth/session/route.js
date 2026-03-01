@@ -5,10 +5,20 @@ const sessionOptions = {
     password: process.env.SESSION_SECRET || 'sportsvault-super-secret-key-min-32-chars!!',
     cookieName: 'sportsvault_session',
     cookieOptions: {
+        httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
         maxAge: 60 * 60 * 24 * 30, // 30 days
     },
 };
+
+// Only store the minimal fields needed to identify the user.
+// Photo is base64 and blows the 4KB cookie limit.
+function minimalUser(user) {
+    const { photo: _photo, thoughts: _t, ...rest } = user;
+    return rest;
+}
 
 export async function GET() {
     try {
@@ -32,7 +42,7 @@ export async function POST(req) {
             ? { ...sessionOptions, cookieOptions: { ...sessionOptions.cookieOptions, maxAge: undefined } }
             : sessionOptions;
         const session = await getIronSession(cookieStore, opts);
-        session.user = user;
+        session.user = minimalUser(user);
         await session.save();
         return Response.json({ success: true });
     } catch (err) {

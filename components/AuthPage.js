@@ -11,6 +11,7 @@ export default function AuthPage() {
     const [expectedOtp, setExpectedOtp] = useState('');
     const [rememberMe, setRememberMe] = useState(true);
     const [isSending, setIsSending] = useState(false);
+    const [isVerifying, setIsVerifying] = useState(false);
     const [onboardStep, setOnboardStep] = useState(0);
     const [stepError, setStepError] = useState('');
     const [profile, setProfile] = useState({
@@ -54,11 +55,13 @@ export default function AuthPage() {
     };
 
     const handleVerifyOTP = async () => {
+        if (isVerifying) return;
         const entered = otp.join('');
         if (entered !== expectedOtp) {
             alert("Incorrect code");
             return;
         }
+        setIsVerifying(true);
 
         // Check if this email already has an account — skip onboarding if so
         try {
@@ -99,6 +102,7 @@ export default function AuthPage() {
         } catch (_) { /* fall through to onboarding */ }
 
         // New user — proceed to onboarding
+        setIsVerifying(false);
         setStep('onboarding');
     };
 
@@ -427,8 +431,8 @@ export default function AuthPage() {
                                     />
                                 ))}
                             </div>
-                            <button className="btn btn-primary btn-block btn-lg" onClick={handleVerifyOTP}>
-                                Verify →
+                            <button className="btn btn-primary btn-block btn-lg" onClick={handleVerifyOTP} disabled={isVerifying}>
+                                {isVerifying ? 'Checking...' : 'Verify →'}
                             </button>
                             <button
                                 className="btn btn-ghost btn-block"
