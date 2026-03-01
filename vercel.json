@@ -8,6 +8,9 @@
   "env": {
     "DATABASE_URL": "@database_url",
     "SESSION_SECRET": "@session_secret",
-    "RESEND_API_KEY": "@resend_api_key"
+    "RESEND_API_KEY": "@resend_api_key",
+    "TWILIO_ACCOUNT_SID": "@twilio_account_sid",
+    "TWILIO_AUTH_TOKEN": "@twilio_auth_token",
+    "TWILIO_PHONE_NUMBER": "@twilio_phone_number"
   }
 }
