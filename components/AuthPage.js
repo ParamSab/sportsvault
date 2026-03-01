@@ -53,13 +53,53 @@ export default function AuthPage() {
         }
     };
 
-    const handleVerifyOTP = () => {
+    const handleVerifyOTP = async () => {
         const entered = otp.join('');
-        if (entered === expectedOtp) {
-            setStep('onboarding');
-        } else {
+        if (entered !== expectedOtp) {
             alert("Incorrect code");
+            return;
         }
+
+        // Check if this email already has an account — skip onboarding if so
+        try {
+            const res = await fetch(`/api/users?email=${encodeURIComponent(email)}`);
+            const data = await res.json();
+            if (data.user && data.user.name) {
+                // Returning user — log them in directly
+                const existingUser = {
+                    id: 'current',
+                    dbId: data.user.id,
+                    name: data.user.name,
+                    email: data.user.email || email,
+                    phone: data.user.phone || '',
+                    photo: data.user.photo || null,
+                    location: data.user.location || '',
+                    sports: data.user.sports || [],
+                    positions: data.user.positions || {},
+                    ratings: data.user.ratings || {},
+                    trustScore: data.user.trustScore || 50,
+                    gamesPlayed: data.user.gamesPlayed || 0,
+                    wins: data.user.wins || 0,
+                    losses: data.user.losses || 0,
+                    draws: data.user.draws || 0,
+                    thoughts: [],
+                    privacy: data.user.privacy || 'public',
+                    joined: data.user.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0],
+                };
+                // Save session (strip photo — cookies have a 4KB limit)
+                const { photo: _photo, ...sessionUser } = existingUser;
+                await fetch('/api/auth/session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user: sessionUser, rememberMe }),
+                });
+                dispatch({ type: 'LOGIN', payload: existingUser });
+                return;
+            }
+        } catch (_) { /* fall through to onboarding */ }
+
+        // New user — proceed to onboarding
+        setStep('onboarding');
     };
 
     const handleOtpChange = (index, value) => {

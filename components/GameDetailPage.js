@@ -160,7 +160,12 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             <span style={{ fontSize: '1.125rem' }}>👤</span>
-                            <span className="text-sm">Organized by <span style={{ fontWeight: 600, color: sport?.color, cursor: 'pointer' }} onClick={() => onViewProfile(game.organizer)}>{getPlayer(game.organizer)?.name || state.currentUser?.name || 'You'}</span></span>
+                            <span className="text-sm">Organized by <span style={{ fontWeight: 600, color: sport?.color, cursor: 'pointer' }} onClick={() => onViewProfile(game.organizer)}>
+                                {getPlayer(game.organizer)?.name
+                                    || state.players?.find(p => p.id === game.organizer)?.name
+                                    || (game.organizer === currentUserId ? state.currentUser?.name : null)
+                                    || 'You'}
+                            </span></span>
                         </div>
                     </div>
                 </div>
