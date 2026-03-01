@@ -27,8 +27,11 @@ export async function GET() {
 export async function POST(req) {
     try {
         const cookieStore = await cookies();
-        const session = await getIronSession(cookieStore, sessionOptions);
-        const { user } = await req.json();
+        const { user, rememberMe } = await req.json();
+        const opts = rememberMe === false
+            ? { ...sessionOptions, cookieOptions: { ...sessionOptions.cookieOptions, maxAge: undefined } }
+            : sessionOptions;
+        const session = await getIronSession(cookieStore, opts);
         session.user = user;
         await session.save();
         return Response.json({ success: true });

@@ -9,6 +9,7 @@ export default function AuthPage() {
     const [email, setEmail] = useState('');
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [expectedOtp, setExpectedOtp] = useState('');
+    const [rememberMe, setRememberMe] = useState(true);
     const [isSending, setIsSending] = useState(false);
     const [onboardStep, setOnboardStep] = useState(0);
     const [stepError, setStepError] = useState('');
@@ -145,7 +146,7 @@ export default function AuthPage() {
             await fetch('/api/auth/session', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user: sessionUser }),
+                body: JSON.stringify({ user: sessionUser, rememberMe }),
             });
         } catch (_) { /* continue with localStorage fallback */ }
 
@@ -337,6 +338,19 @@ export default function AuthPage() {
                                     autoFocus
                                 />
                             </div>
+                            <label style={{
+                                display: 'flex', alignItems: 'center', gap: 10,
+                                marginBottom: 20, cursor: 'pointer',
+                                color: 'var(--text-secondary)', fontSize: '0.9rem',
+                            }}>
+                                <input
+                                    type="checkbox"
+                                    checked={rememberMe}
+                                    onChange={e => setRememberMe(e.target.checked)}
+                                    style={{ width: 16, height: 16, accentColor: '#6366f1', cursor: 'pointer' }}
+                                />
+                                Remember me for 30 days
+                            </label>
                             <button className="btn btn-primary btn-block btn-lg" onClick={handleSendOTP} disabled={isSending}>
                                 {isSending ? 'Sending...' : 'Send Code →'}
                             </button>
