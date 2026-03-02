@@ -46,12 +46,27 @@ export default function RatePage({ gameId, onBack }) {
         }));
     };
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
         const attrValues = Object.values(currentRatings);
         if (attrValues.length === 0) return;
         const avg = attrValues.reduce((s, v) => s + v, 0) / attrValues.length;
 
         dispatch({ type: 'SUBMIT_RATING', payload: { playerId: player.id, sport, rating: avg } });
+
+        // Save to DB
+        try {
+            await fetch('/api/users/rate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    playerId: player.id,
+                    sport,
+                    rating: avg,
+                    thought: thought.trim(),
+                    fromId: state.currentUser?.dbId || state.currentUser?.id
+                })
+            });
+        } catch (err) { console.error('Rating sync error:', err); }
 
         if (thought.trim()) {
             dispatch({

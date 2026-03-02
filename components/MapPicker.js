@@ -46,21 +46,27 @@ export default function MapPicker({ lat = 19.076, lng = 72.877, onLocationChange
 
     const handleGPS = () => {
         if (!navigator.geolocation) return alert('Geolocation not supported');
+        setSearching(true);
         navigator.geolocation.getCurrentPosition(async pos => {
             const lt = pos.coords.latitude, ln = pos.coords.longitude;
             try {
                 const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lt}&lon=${ln}`);
                 const data = await res.json();
-                const name = data.name || data.address?.road || data.display_name.split(',')[0];
+                const name = data.name || data.address?.road || data.display_name.split(',')[0] || 'Current Location';
                 const address = data.display_name;
                 setPinned({ lat: lt, lng: ln, name, address });
                 setQuery(name);
                 onLocationChange?.({ lat: lt, lng: ln, name, address });
             } catch {
                 setPinned(p => ({ ...p, lat: lt, lng: ln }));
-                onLocationChange?.({ lat: lt, lng: ln, name: '', address: '' });
+                onLocationChange?.({ lat: lt, lng: ln, name: 'Dropped Pin', address: `${lt.toFixed(4)}, ${ln.toFixed(4)}` });
             }
-        }, () => alert('Could not get location'), { enableHighAccuracy: true });
+            setSearching(false);
+        }, (err) => {
+            setSearching(false);
+            console.error('GPS Error:', err);
+            alert(`Could not get location: ${err.message}. Please search manually.`);
+        }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
     };
 
     return (

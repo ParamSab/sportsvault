@@ -10,6 +10,7 @@ generator client {
 model User {
   id          String   @id @default(uuid())
   name        String
+  password    String?
   phone       String?  @unique
   email       String?  @unique
   photo       String?
@@ -95,6 +96,7 @@ model Game {
   address     String?
   maxPlayers  Int
   skillLevel  String
+  status      String   @default("open")  // open | completed | cancelled
   visibility  String   @default("public")  // public | friends | private
   
   organizerId String

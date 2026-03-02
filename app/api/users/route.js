@@ -1,14 +1,18 @@
 import { prisma } from '@/lib/prisma';
+import bcrypt from 'bcryptjs';
 
 export async function POST(req) {
     try {
-        const { name, email, phone, photo, location, sports, positions } = await req.json();
+        const { name, email, password, phone, photo, location, sports, positions } = await req.json();
         if (!email) return Response.json({ error: 'Email required' }, { status: 400 });
+
+        const hashedPassword = password ? await bcrypt.hash(password, 10) : undefined;
 
         const user = await prisma.user.upsert({
             where: { email },
             update: {
                 name,
+                password: hashedPassword,
                 phone: phone || null,
                 photo: photo || null,
                 location: location || null,
@@ -18,6 +22,7 @@ export async function POST(req) {
             create: {
                 name,
                 email,
+                password: hashedPassword,
                 phone: phone || null,
                 photo: photo || null,
                 location: location || null,

@@ -6,6 +6,21 @@ export async function GET(req) {
         const userId = searchParams.get('userId');
         const friendIds = searchParams.get('friendIds')?.split(',') || [];
 
+        // --- Auto-expire games (24h after start) ---
+        try {
+            const now = new Date();
+            const openGames = await prisma.game.findMany({ where: { status: 'open' } });
+            for (const g of openGames) {
+                const gameStart = new Date(`${g.date}T${g.time || '00:00'}`);
+                const expiry = new Date(gameStart.getTime() + (24 * 60 * 60 * 1000));
+                if (now > expiry) {
+                    await prisma.game.update({ where: { id: g.id }, data: { status: 'completed' } });
+                }
+            }
+        } catch (expireErr) {
+            console.error('Error auto-expiring games:', expireErr);
+        }
+
         const games = await prisma.game.findMany({
             where: {
                 OR: [
@@ -65,6 +80,7 @@ export async function POST(req) {
                 lng: game.lng || null,
                 maxPlayers: game.maxPlayers || 10,
                 skillLevel: game.skillLevel || 'All Levels',
+                status: 'open',
                 visibility: game.visibility || 'public',
                 organizerId: userId,
                 rsvps: {

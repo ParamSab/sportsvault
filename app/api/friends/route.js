@@ -14,8 +14,28 @@ export async function GET(req) {
                 ]
             },
             include: {
-                user: { select: { id: true, name: true, phone: true, photo: true, location: true, sports: true, positions: true } },
-                friend: { select: { id: true, name: true, phone: true, photo: true, location: true, sports: true, positions: true } }
+                user: {
+                    select: {
+                        id: true, name: true, phone: true, photo: true, location: true,
+                        sports: true, positions: true, ratings: true, trustScore: true,
+                        thoughtsReceived: {
+                            include: { from: { select: { name: true } } },
+                            orderBy: { date: 'desc' },
+                            take: 10
+                        }
+                    }
+                },
+                friend: {
+                    select: {
+                        id: true, name: true, phone: true, photo: true, location: true,
+                        sports: true, positions: true, ratings: true, trustScore: true,
+                        thoughtsReceived: {
+                            include: { from: { select: { name: true } } },
+                            orderBy: { date: 'desc' },
+                            take: 10
+                        }
+                    }
+                }
             }
         });
 
@@ -29,7 +49,14 @@ export async function GET(req) {
             return {
                 ...friendData,
                 sports: JSON.parse(friendData.sports || '[]'),
-                positions: JSON.parse(friendData.positions || '{}')
+                positions: JSON.parse(friendData.positions || '{}'),
+                ratings: JSON.parse(friendData.ratings || '{}'),
+                thoughts: (friendData.thoughtsReceived || []).map(t => ({
+                    from: t.fromId,
+                    fromName: t.from?.name,
+                    text: t.text,
+                    date: t.date.toISOString().split('T')[0]
+                }))
             };
         });
 

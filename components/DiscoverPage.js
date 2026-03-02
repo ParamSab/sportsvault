@@ -2,12 +2,24 @@
 import { useState, useMemo } from 'react';
 import { useStore } from '@/lib/store';
 import { SPORTS, getPlayer, getSportEmoji, spotsLeft, formatDate, getInitials } from '@/lib/mockData';
+import dynamic from 'next/dynamic';
 
 export default function DiscoverPage({ onViewGame, onViewProfile }) {
-    const { state } = useStore();
+    const { state, dispatch } = useStore();
     const [sportFilter, setSportFilter] = useState('all');
     const [viewMode, setViewMode] = useState('list');
     const [skillFilter, setSkillFilter] = useState('all');
+
+    const Map = useMemo(() => dynamic(() => import('./MapPicker').then(mod => {
+        return function SimpleMap({ games, onViewGame, center }) {
+            const mapSrc = `https://maps.google.com/maps?q=${center.lat},${center.lng}&z=13&output=embed`;
+            return (
+                <div style={{ position: 'relative', height: '100%', width: '100%' }}>
+                    <iframe src={mapSrc} width="100%" height="100%" style={{ border: 0 }} allowFullScreen loading="lazy" />
+                </div>
+            )
+        }
+    }), { ssr: false }), []);
 
     const upcomingGames = useMemo(() => {
         const currentUserId = state.currentUser?.id || 'current';
@@ -80,64 +92,38 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
                     <option value="Beginner-Friendly">Beginner</option>
                     <option value="Intermediate">Intermediate</option>
                     <option value="Advanced">Advanced</option>
-                    <option value="All Levels">All Levels</option>
                 </select>
             </div>
 
             {/* Map View */}
             {viewMode === 'map' && (
                 <div style={{
-                    height: 260, borderRadius: 'var(--radius-lg)', overflow: 'hidden',
-                    background: 'linear-gradient(135deg, #0f1629 0%, #162034 50%, #1a2540 100%)',
+                    height: 350, borderRadius: 'var(--radius-lg)', overflow: 'hidden',
                     border: '1px solid var(--border-color)', marginBottom: 16,
-                    position: 'relative',
+                    position: 'relative', background: 'var(--bg-card)'
                 }}>
-                    {/* Stylized map background */}
-                    <div style={{ position: 'absolute', inset: 0, opacity: 0.15 }}>
-                        <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-                            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#4a5568" strokeWidth="0.5" />
-                            </pattern>
-                            <rect width="100%" height="100%" fill="url(#grid)" />
-                            <circle cx="30%" cy="40%" r="60" fill="none" stroke="#4a5568" strokeWidth="0.5" opacity="0.5" />
-                            <circle cx="60%" cy="55%" r="80" fill="none" stroke="#4a5568" strokeWidth="0.5" opacity="0.3" />
-                            <path d="M 10% 60% Q 30% 30% 50% 50% T 90% 35%" fill="none" stroke="#4a5568" strokeWidth="1" opacity="0.4" />
-                        </svg>
-                    </div>
-                    {/* Game pins */}
-                    {upcomingGames.map((game, i) => {
-                        const sportColor = SPORTS[game.sport]?.color || '#6366f1';
-                        const x = 15 + (i * 18) % 70;
-                        const y = 20 + ((i * 23) + 10) % 55;
-                        return (
-                            <button
-                                key={game.id}
-                                onClick={() => onViewGame(game.id)}
-                                style={{
-                                    position: 'absolute', left: `${x}%`, top: `${y}%`,
-                                    transform: 'translate(-50%, -50%)',
-                                    background: sportColor, width: 36, height: 36,
-                                    borderRadius: '50% 50% 50% 0', border: 'none',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    fontSize: '0.875rem', cursor: 'pointer',
-                                    boxShadow: `0 0 16px ${sportColor}60`,
-                                    animation: 'pulse 2s ease-in-out infinite',
-                                    animationDelay: `${i * 0.3}s`,
-                                    transform: 'translate(-50%, -50%) rotate(-45deg)',
-                                    zIndex: 2,
-                                }}
-                            >
-                                <span style={{ transform: 'rotate(45deg)' }}>{getSportEmoji(game.sport)}</span>
-                            </button>
-                        );
-                    })}
+                    <iframe
+                        src={`https://maps.google.com/maps?q=${state.currentUser?.lat || 19.076},${state.currentUser?.lng || 72.877}&z=12&output=embed`}
+                        width="100%" height="100%" style={{ border: 0, filter: 'grayscale(0.2) invert(0.9) hue-rotate(180deg) brightness(0.8)' }}
+                        allowFullScreen loading="lazy"
+                    />
                     <div style={{
                         position: 'absolute', bottom: 12, left: 12, right: 12,
                         background: 'rgba(10,14,26,0.85)', borderRadius: 'var(--radius-md)',
-                        padding: '8px 12px', fontSize: '0.75rem', color: 'var(--text-secondary)',
-                        backdropFilter: 'blur(8px)',
+                        padding: '12px', fontSize: '0.8rem', color: 'var(--text-secondary)',
+                        backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.1)',
+                        zIndex: 10
                     }}>
-                        📍 Showing {upcomingGames.length} games near {state.currentUser?.location || 'Mumbai'}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span>📍 Showing {upcomingGames.length} games near {state.currentUser?.location || 'Mumbai'}</span>
+                            <button className="btn btn-xs btn-ghost" onClick={() => {
+                                if (navigator.geolocation) {
+                                    navigator.geolocation.getCurrentPosition(pos => {
+                                        dispatch({ type: 'UPDATE_PROFILE', payload: { lat: pos.coords.latitude, lng: pos.coords.longitude } });
+                                    });
+                                }
+                            }}>Recenter 🎯</button>
+                        </div>
                     </div>
                 </div>
             )}
