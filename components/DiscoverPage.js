@@ -9,10 +9,19 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
     const [viewMode, setViewMode] = useState('list');
     const [skillFilter, setSkillFilter] = useState('all');
 
+    // Game expires 1 day after game date (e.g. game on Mar 1 is hidden from Mar 3 onwards)
+    function isExpired(game) {
+        const gameDate = new Date(game.date + 'T00:00:00');
+        const expiry = new Date(gameDate);
+        expiry.setDate(expiry.getDate() + 2);
+        return new Date() >= expiry;
+    }
+
     const upcomingGames = useMemo(() => {
         const currentUserId = state.currentUser?.id || 'current';
         const friendIds = new Set(state.friends || []);
         return state.games
+            .filter(g => !isExpired(g))
             .filter(g => g.status === 'open')
             .filter(g => {
                 const vis = g.visibility || 'public';
@@ -154,7 +163,10 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
                 {upcomingGames.map(game => {
                     const spots = spotsLeft(game);
                     const sportColor = SPORTS[game.sport]?.color;
-                    const organizer = getPlayer(game.organizer);
+                    const currentUserId = state.currentUser?.id || 'current';
+                    const organizer = getPlayer(game.organizer)
+                        || state.players?.find(p => p.id === game.organizer)
+                        || (game.organizer === currentUserId ? state.currentUser : null);
                     return (
                         <button
                             key={game.id}

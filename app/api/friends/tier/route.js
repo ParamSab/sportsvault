@@ -1,9 +1,9 @@
 import { prisma } from '@/lib/prisma';
-import { getSession } from '@/lib/session';
+import { getAppSession } from '@/lib/session';
 
 export async function POST(req) {
     try {
-        const session = await getSession(req);
+        const session = await getAppSession();
         if (!session.user) return Response.json({ error: 'Not authenticated' }, { status: 401 });
 
         const { friendId, sport, tier } = await req.json();

@@ -9,7 +9,9 @@ export default function AuthPage() {
     const [email, setEmail] = useState('');
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [expectedOtp, setExpectedOtp] = useState('');
+    const [rememberMe, setRememberMe] = useState(true);
     const [isSending, setIsSending] = useState(false);
+    const [isVerifying, setIsVerifying] = useState(false);
     const [onboardStep, setOnboardStep] = useState(0);
     const [stepError, setStepError] = useState('');
     const [profile, setProfile] = useState({
@@ -52,13 +54,56 @@ export default function AuthPage() {
         }
     };
 
-    const handleVerifyOTP = () => {
+    const handleVerifyOTP = async () => {
+        if (isVerifying) return;
         const entered = otp.join('');
-        if (entered === expectedOtp) {
-            setStep('onboarding');
-        } else {
+        if (entered !== expectedOtp) {
             alert("Incorrect code");
+            return;
         }
+        setIsVerifying(true);
+
+        // Check if this email already has an account — skip onboarding if so
+        try {
+            const res = await fetch(`/api/users?email=${encodeURIComponent(email)}`);
+            const data = await res.json();
+            if (data.user && data.user.name) {
+                // Returning user — log them in directly
+                const existingUser = {
+                    id: 'current',
+                    dbId: data.user.id,
+                    name: data.user.name,
+                    email: data.user.email || email,
+                    phone: data.user.phone || '',
+                    photo: data.user.photo || null,
+                    location: data.user.location || '',
+                    sports: data.user.sports || [],
+                    positions: data.user.positions || {},
+                    ratings: data.user.ratings || {},
+                    trustScore: data.user.trustScore || 50,
+                    gamesPlayed: data.user.gamesPlayed || 0,
+                    wins: data.user.wins || 0,
+                    losses: data.user.losses || 0,
+                    draws: data.user.draws || 0,
+                    thoughts: [],
+                    privacy: data.user.privacy || 'public',
+                    joined: data.user.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0],
+                };
+                // Save session (strip photo — cookies have a 4KB limit)
+                const { photo: _photo, ...sessionUser } = existingUser;
+                await fetch('/api/auth/session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user: sessionUser, rememberMe }),
+                });
+                dispatch({ type: 'LOGIN', payload: existingUser });
+                return;
+            }
+        } catch (_) { /* fall through to onboarding */ }
+
+        // New user — proceed to onboarding
+        setIsVerifying(false);
+        setStep('onboarding');
     };
 
     const handleOtpChange = (index, value) => {
@@ -140,10 +185,12 @@ export default function AuthPage() {
             const dbData = await dbRes.json();
             if (dbData.user) newUser.dbId = dbData.user.id;
 
+            // Strip photo (base64) from session cookie — cookies have a 4KB limit
+            const { photo: _photo, ...sessionUser } = newUser;
             await fetch('/api/auth/session', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user: newUser }),
+                body: JSON.stringify({ user: sessionUser, rememberMe }),
             });
         } catch (_) { /* continue with localStorage fallback */ }
 
@@ -335,6 +382,19 @@ export default function AuthPage() {
                                     autoFocus
                                 />
                             </div>
+                            <label style={{
+                                display: 'flex', alignItems: 'center', gap: 10,
+                                marginBottom: 20, cursor: 'pointer',
+                                color: 'var(--text-secondary)', fontSize: '0.9rem',
+                            }}>
+                                <input
+                                    type="checkbox"
+                                    checked={rememberMe}
+                                    onChange={e => setRememberMe(e.target.checked)}
+                                    style={{ width: 16, height: 16, accentColor: '#6366f1', cursor: 'pointer' }}
+                                />
+                                Remember me for 30 days
+                            </label>
                             <button className="btn btn-primary btn-block btn-lg" onClick={handleSendOTP} disabled={isSending}>
                                 {isSending ? 'Sending...' : 'Send Code →'}
                             </button>
@@ -371,8 +431,8 @@ export default function AuthPage() {
                                     />
                                 ))}
                             </div>
-                            <button className="btn btn-primary btn-block btn-lg" onClick={handleVerifyOTP}>
-                                Verify →
+                            <button className="btn btn-primary btn-block btn-lg" onClick={handleVerifyOTP} disabled={isVerifying}>
+                                {isVerifying ? 'Checking...' : 'Verify →'}
                             </button>
                             <button
                                 className="btn btn-ghost btn-block"

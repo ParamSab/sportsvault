@@ -1,13 +1,23 @@
 import { prisma } from '@/lib/prisma';
 
+// Games expire 1 day after the game date.
+// Return the cutoff: games with date < cutoff are expired.
+function getExpiryCutoff() {
+    const d = new Date();
+    d.setDate(d.getDate() - 1); // yesterday
+    return d.toISOString().split('T')[0]; // YYYY-MM-DD string
+}
+
 export async function GET(req) {
     try {
         const { searchParams } = new URL(req.url);
         const userId = searchParams.get('userId');
-        const friendIds = searchParams.get('friendIds')?.split(',') || [];
+        const friendIds = searchParams.get('friendIds')?.split(',').filter(Boolean) || [];
+        const cutoff = getExpiryCutoff();
 
         const games = await prisma.game.findMany({
             where: {
+                date: { gte: cutoff }, // not expired
                 OR: [
                     { visibility: 'public' },
                     { organizerId: userId || undefined },
@@ -21,18 +31,24 @@ export async function GET(req) {
             },
             include: {
                 organizer: { select: { id: true, name: true, photo: true } },
-                rsvps: true,
+                rsvps: {
+                    include: {
+                        player: { select: { id: true, name: true, photo: true } }
+                    }
+                },
             },
             orderBy: { createdAt: 'desc' },
         });
 
-        // Serialize for client
+        // Serialize for client, include RSVP player name/photo
         const serialized = games.map(g => ({
             ...g,
             rsvps: g.rsvps.map(r => ({
                 playerId: r.playerId,
                 status: r.status,
                 position: r.position || '',
+                playerName: r.player?.name || null,
+                playerPhoto: r.player?.photo || null,
             })),
         }));
 

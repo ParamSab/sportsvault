@@ -25,7 +25,9 @@ export default function FriendsPage({ onViewProfile, onViewGame }) {
     const handleAddByPhone = async () => {
         if (searchPhone.length < 10) return;
 
-        const found = PLAYERS.find(p => p.phone.endsWith(searchPhone)) || state.players.find(p => p.phone && p.phone.endsWith(searchPhone));
+        // 1. Search in local state first
+        const found = PLAYERS.find(p => p.phone && p.phone.endsWith(searchPhone))
+            || state.players.find(p => p.phone && p.phone.endsWith(searchPhone));
 
         if (found) {
             await fetch('/api/friends', {
@@ -37,11 +39,54 @@ export default function FriendsPage({ onViewProfile, onViewGame }) {
             setSearchPhone('');
             setShowNewNameInput(false);
             setNewName('');
-        } else if (!showNewNameInput) {
-            // Number not found, prompt for name
+            return;
+        }
+
+        // 2. Search DB by phone number
+        if (!showNewNameInput) {
+            try {
+                const phone = `+91${searchPhone}`;
+                const res = await fetch(`/api/users?phone=${encodeURIComponent(phone)}`);
+                const data = await res.json();
+                if (data.user) {
+                    // Real DB user found — add friendship
+                    await fetch('/api/friends', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'add', friendId: data.user.id })
+                    });
+                    dispatch({
+                        type: 'ADD_FRIEND', payload: {
+                            isNew: true,
+                            id: data.user.id,
+                            name: data.user.name,
+                            phone: data.user.phone,
+                            photo: data.user.photo || null,
+                            location: data.user.location || '',
+                            sports: data.user.sports || [],
+                            positions: data.user.positions || {},
+                            ratings: data.user.ratings || {},
+                            trustScore: data.user.trustScore || 50,
+                            gamesPlayed: data.user.gamesPlayed || 0,
+                            wins: data.user.wins || 0,
+                            losses: data.user.losses || 0,
+                            draws: data.user.draws || 0,
+                            privacy: data.user.privacy || 'public',
+                            joined: data.user.createdAt?.split('T')[0],
+                        }
+                    });
+                    setSearchPhone('');
+                    return;
+                }
+            } catch (_) { /* fall through to offline prompt */ }
+
+            // Not found — prompt for name to add as offline friend
             setShowNewNameInput(true);
-        } else if (newName.trim().length > 0) {
-            // Commit new offline friend
+            return;
+        }
+
+        // 3. Commit as offline friend with entered name
+        if (newName.trim().length > 0) {
             const phone = `+91${searchPhone}`;
             const res = await fetch('/api/friends', {
                 method: 'POST',
