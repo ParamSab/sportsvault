@@ -28,6 +28,31 @@ export default function AuthPage() {
         }
     };
 
+    
+    const handleLogin = async () => {
+        if (!email.includes('@')) return alert("Enter a valid email");
+        if (!password) return alert("Enter your password");
+        setIsSending(true);
+        try {
+            const res = await fetch('/api/auth/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password, rememberMe })
+            });
+            const data = await res.json();
+            if (res.status === 200 && data.exists && data.user) {
+                dispatch({ type: 'LOGIN', payload: data.user });
+            } else {
+                alert(data.error || "Invalid email or password");
+            }
+        } catch (err) {
+            console.error("Login error:", err);
+            alert("An error occurred during login.");
+        } finally {
+            setIsSending(false);
+        }
+    };
+
     const handleSendOTP = async () => {
         if (!email.includes('@')) return alert("Enter a valid email");
 
@@ -56,25 +81,8 @@ export default function AuthPage() {
     const handleVerifyOTP = async () => {
         const entered = otp.join('');
         if (entered === expectedOtp || (email === 'test@example.com' && entered === '123456')) {
-            // Check if user exists in DB
-            try {
-                const res = await fetch('/api/auth/verify', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password })
-                });
-                const data = await res.json();
-                if (data.exists && data.user) {
-                    dispatch({ type: 'LOGIN', payload: data.user });
-                } else if (!data.exists) {
-                    setStep('onboarding');
-                } else {
-                    alert(data.error || "Invalid password");
-                }
-            } catch (err) {
-                console.error("Verification error:", err);
-                setStep('onboarding');
-            }
+            // Success! Go directly to onboarding since this is Signup flow.
+            setStep('onboarding');
         } else {
             alert("Incorrect code");
         }
@@ -164,7 +172,7 @@ export default function AuthPage() {
             await fetch('/api/auth/session', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user: newUser }),
+                body: JSON.stringify({ user: newUser, rememberMe }),
             });
         } catch (_) { /* continue with localStorage fallback */ }
 
@@ -220,12 +228,8 @@ export default function AuthPage() {
                     </div>
                     <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handlePhotoUpload} />
                 </label>
-                <div className="text-sm text-secondary">Tap to upload</div>
-                {!profile.photo && onboardStep === 1 && (
-                    <div className="text-xs" style={{ color: 'var(--danger)', marginTop: 8 }}>
-                        * Profile photo is required
-                    </div>
-                )}
+                <div className="text-sm text-secondary">Tap to upload (Optional)</div>
+                
             </div>
         </div>,
         // Step 2: Location

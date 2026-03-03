@@ -14,7 +14,7 @@ const sessionOptions = {
 
 export async function POST(req) {
     try {
-        const { email, password } = await req.json();
+        const { email, password, rememberMe } = await req.json();
         if (!email) return Response.json({ error: 'Email required' }, { status: 400 });
 
         const user = await prisma.user.findUnique({
@@ -30,8 +30,14 @@ export async function POST(req) {
                 }
             }
 
+            const customOptions = { ...sessionOptions };
+            if (!rememberMe) {
+                customOptions.cookieOptions = { ...customOptions.cookieOptions };
+                delete customOptions.cookieOptions.maxAge; // Session cookie only
+            }
+
             const cookieStore = await cookies();
-            const session = await getIronSession(cookieStore, sessionOptions);
+            const session = await getIronSession(cookieStore, customOptions);
 
             const userData = {
                 ...user,
