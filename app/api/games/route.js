@@ -82,6 +82,7 @@ export async function POST(req) {
                 skillLevel: game.skillLevel || 'All Levels',
                 status: 'open',
                 visibility: game.visibility || 'public',
+                approvalRequired: !!game.approvalRequired,
                 organizerId: userId,
                 rsvps: {
                     create: [{

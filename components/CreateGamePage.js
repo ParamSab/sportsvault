@@ -32,6 +32,7 @@ export default function CreateGamePage({ onComplete }) {
         skillLevel: 'All Levels', maxPlayers: 10,
         lat: 19.076, lng: 72.877,
         visibility: 'public',
+        approvalRequired: false,
     });
 
     const update = (key, val) => setGame(prev => ({ ...prev, [key]: val }));
@@ -67,6 +68,7 @@ export default function CreateGamePage({ onComplete }) {
                 position: state.currentUser?.positions?.[game.sport] || 'Unknown',
             }],
             status: 'open',
+            approvalRequired: game.approvalRequired,
         };
 
         // Save to DB if user has a real DB id
@@ -239,6 +241,17 @@ export default function CreateGamePage({ onComplete }) {
                         )}
                     </button>
                 ))}
+            </div>
+
+            <div style={{ marginTop: 24, padding: '16px 20px', borderRadius: 16, background: 'var(--bg-input)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: '1px solid var(--border-color)' }}>
+                <div>
+                    <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)' }}>Require Approval</div>
+                    <div className="text-muted text-xs" style={{ marginTop: 2 }}>Review RSVPs before letting players join</div>
+                </div>
+                <label className="ts-toggle">
+                    <input type="checkbox" checked={game.approvalRequired} onChange={e => update('approvalRequired', e.target.checked)} />
+                    <span className="ts-slider round"></span>
+                </label>
             </div>
         </div>,
 

@@ -43,14 +43,35 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     }, [confirmedPlayers, game.sport]);
 
     const handleRSVP = async (status) => {
+        let finalStatus = status;
+
+        // Check dropout penalty
+        if ((myRsvp?.status === 'yes' || myRsvp?.status === 'checked_in') && status === 'no') {
+            const gameStart = new Date(`${game.date}T${game.time || '00:00'}`);
+            const hoursUntil = (gameStart - new Date()) / (1000 * 60 * 60);
+            if (hoursUntil < 24 && hoursUntil > 0) {
+                if (!window.confirm("Dropping out within 24 hours of the game will negatively affect your Reliability Score. Are you sure you want to drop out?")) {
+                    return;
+                }
+            }
+        }
+
+        if (status === 'yes') {
+            if (spots <= 0 && myRsvp?.status !== 'yes' && myRsvp?.status !== 'checked_in') {
+                finalStatus = 'backup';
+            } else if (game.approvalRequired && myRsvp?.status !== 'yes' && myRsvp?.status !== 'checked_in') {
+                finalStatus = 'pending';
+            }
+        }
+
         const pos = selectedPosition || state.currentUser?.positions?.[game.sport] || POSITIONS[game.sport]?.[0] || '';
-        dispatch({ type: 'RSVP', payload: { gameId, playerId: currentUserId, status, position: pos } });
+        dispatch({ type: 'RSVP', payload: { gameId, playerId: currentUserId, status: finalStatus, position: pos } });
         // Persist to DB
         if (state.currentUser?.dbId) {
             fetch('/api/games/rsvp', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ gameId, playerId: state.currentUser.dbId, status, position: pos }),
+                body: JSON.stringify({ gameId, playerId: state.currentUser.dbId, status: finalStatus, position: pos }),
             }).catch(() => { });
         }
     };
@@ -75,6 +96,41 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     const [msgCopied, setMsgCopied] = useState(false);
 
     // Build the blast message text
+    
+    const getYesButtonText = () => {
+        if (myRsvp?.status === 'yes') return '✅ Yes!';
+        if (myRsvp?.status === 'checked_in') return '🏟️ Checked In';
+        if (myRsvp?.status === 'pending') return '⏳ Requested';
+        if (myRsvp?.status !== 'yes' && myRsvp?.status !== 'checked_in' && spots <= 0) return '📝 Join Waitlist';
+        if (myRsvp?.status !== 'yes' && myRsvp?.status !== 'checked_in' && game.approvalRequired) return '✋ Request to Join';
+        return '✅ Yes';
+    };
+
+    const handleHostAction = async (playerId, status) => {
+        dispatch({ type: 'RSVP', payload: { gameId, playerId, status } });
+        if (state.currentUser?.dbId) {
+            const dbPlayer = state.players?.find(p => p.id === playerId);
+            if (dbPlayer && dbPlayer.dbId) {
+                fetch('/api/games/rsvp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ gameId, playerId: dbPlayer.dbId, status })
+                }).catch(()=>{});
+            }
+        }
+    };
+    
+    const cancelGame = async () => {
+        if (!window.confirm("Are you sure you want to cancel this game? This will notify all players.")) return;
+        dispatch({ type: 'UPDATE_GAME', payload: { id: game.id, status: 'cancelled' } });
+        if (state.currentUser?.dbId) {
+             // For a real app, you'd hit a PUT /api/games endpoint here.
+             // We'll leave the local dispatch for prototype visualization.
+        }
+        onBack();
+    };
+
+
     const buildBlastMessage = () => {
         const inviteLink = `${window.location.origin}/?game=${game.id}`;
         const mapLine = game.lat && game.lng ? `\nhttps://maps.google.com/?q=${game.lat},${game.lng}` : '';
@@ -193,8 +249,8 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
 
             {/* RSVP Buttons */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
-                <button className={`btn btn-sm ${myRsvp?.status === 'yes' ? 'btn-rsvp-yes' : 'btn-outline'}`} onClick={() => handleRSVP('yes')}>
-                    ✅ Yes{myRsvp?.status === 'yes' ? '!' : ''}
+                <button className={`btn btn-sm ${(myRsvp?.status === 'yes' || myRsvp?.status === 'checked_in' || myRsvp?.status === 'pending') ? 'btn-rsvp-yes' : 'btn-outline'}`} onClick={() => handleRSVP('yes')}>
+                    {getYesButtonText()}
                 </button>
                 <button className={`btn btn-sm ${myRsvp?.status === 'backup' ? 'btn-primary' : 'btn-outline'}`} onClick={() => handleRSVP('backup')}>
                     ⏳ Backup
@@ -206,6 +262,37 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                     ❌ No
                 </button>
             </div>
+
+            
+            {/* Host Approvals */}
+            {isOrganizer && pendingRsvps.length > 0 && (
+                <div className="glass-card no-hover animate-fade-in" style={{ marginBottom: 16, border: '1px solid var(--warning)' }}>
+                    <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: 12, color: 'var(--warning)' }}>
+                        ✋ Pending Approvals ({pendingRsvps.length})
+                    </h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        {pendingRsvps.map(r => {
+                            const p = getPlayer(r.playerId) || state.players?.find(pl => pl.id === r.playerId);
+                            if (!p) return null;
+                            return (
+                                <div key={r.playerId} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg-body)', padding: '10px 12px', borderRadius: 8 }}>
+                                    <div className="avatar" style={{ width: 32, height: 32, background: p.photo ? `url(${p.photo}) center/cover` : undefined, fontSize: p.photo ? '0' : '0.6875rem' }}>
+                                        {p.photo ? '' : getInitials(p.name)}
+                                    </div>
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{p.name}</div>
+                                        {p.ratings?.[game.sport]?.count >= 1 && <div className="text-xs text-muted">⭐ {p.ratings[game.sport].overall} Reliability</div>}
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 6 }}>
+                                        <button className="btn btn-sm btn-ghost" style={{ color: 'var(--danger)', padding: '4px 8px' }} onClick={() => handleHostAction(r.playerId, 'no')}>Deny</button>
+                                        <button className="btn btn-sm btn-primary" style={{ padding: '4px 12px' }} onClick={() => handleHostAction(r.playerId, 'yes')} disabled={spots <= 0}>Accept</button>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
 
             {/* Attendee Lists */}
             <div className="glass-card no-hover" style={{ marginBottom: 16 }}>
@@ -237,6 +324,12 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                                         <div className="text-xs text-muted">{r.position || r.rsvpPosition}</div>
                                     </div>
                                     {p.ratings?.[game.sport]?.count >= 10 && <span className="text-xs" style={{ color: 'var(--warning)' }}>⭐ {p.ratings[game.sport].overall}</span>}
+                                    {isOrganizer && r.status !== 'checked_in' && (
+                                        <button className="btn btn-sm btn-outline" style={{ padding: '4px 10px', fontSize: '0.7rem' }} onClick={() => handleHostAction(r.playerId, 'checked_in')}>Check In</button>
+                                    )}
+                                    {r.status === 'checked_in' && (
+                                        <span className="text-xs" style={{ color: 'var(--success)', fontWeight: 700, padding: '4px 8px', background: 'rgba(34,197,94,0.1)', borderRadius: 4 }}>✓ Checked In</span>
+                                    )}
                                 </div>
                             );
                         })}
