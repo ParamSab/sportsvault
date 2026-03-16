@@ -33,6 +33,7 @@ export default function CreateGamePage({ onComplete }) {
         lat: 19.076, lng: 72.877,
         visibility: 'public',
         approvalRequired: false,
+        bookingImage: null,
     });
 
     const update = (key, val) => setGame(prev => ({ ...prev, [key]: val }));
@@ -69,6 +70,7 @@ export default function CreateGamePage({ onComplete }) {
             }],
             status: 'open',
             approvalRequired: game.approvalRequired,
+            bookingImage: game.bookingImage,
         };
 
         // Save to DB if user has a real DB id
@@ -255,7 +257,42 @@ export default function CreateGamePage({ onComplete }) {
             </div>
         </div>,
 
-        // 4: Preview
+                // 4: Booking Confirmation
+        <div key="booking" className="animate-fade-in">
+            <h2 style={{ marginBottom: 8 }}>Booking Receipt</h2>
+            <p className="text-muted text-sm" style={{ marginBottom: 24 }}>Upload a photo of your turf booking to build trust.</p>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+                <label style={{ cursor: 'pointer', position: 'relative', width: '100%' }}>
+                    <div style={{
+                        width: '100%', height: 200, borderRadius: 16,
+                        background: game.bookingImage ? `url(${game.bookingImage}) center/cover` : 'var(--bg-input)',
+                        border: '2px dashed var(--border-color)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: game.bookingImage ? '0' : '2.5rem',
+                        overflow: 'hidden'
+                    }}>
+                        {game.bookingImage ? '' : '📸'}
+                    </div>
+                    <input 
+                        type="file" 
+                        accept="image/*" 
+                        style={{ display: 'none' }} 
+                        onChange={(e) => {
+                            const file = e.target.files[0];
+                            if (file) {
+                                const reader = new FileReader();
+                                reader.onloadend = () => update('bookingImage', reader.result);
+                                reader.readAsDataURL(file);
+                            }
+                        }} 
+                    />
+                </label>
+                <div className="text-sm text-secondary">Tap to upload proof (Receipt, Email, etc.)</div>
+                <div className="text-xs text-muted">This is optional but highly recommended.</div>
+            </div>
+        </div>,
+
+        // 5: Preview
         <div key="preview" className="animate-fade-in">
             <h2 style={{ marginBottom: 20 }}>Looks good? 🔥</h2>
             <div className="glass-card no-hover" style={{ overflow: 'hidden', padding: 0 }}>

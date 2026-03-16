@@ -83,6 +83,7 @@ export async function POST(req) {
                 status: 'open',
                 visibility: game.visibility || 'public',
                 approvalRequired: !!game.approvalRequired,
+                bookingImage: game.bookingImage || null,
                 organizerId: userId,
                 rsvps: {
                     create: [{

@@ -99,6 +99,7 @@ model Game {
   status      String   @default("open")  // open | completed | cancelled
   visibility  String   @default("public")  // public | friends | private
   approvalRequired Boolean @default(false)
+  bookingImage     String?
   
   organizerId String
   organizer   User     @relation("Organizer", fields: [organizerId], references: [id], onDelete: Cascade)

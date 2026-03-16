@@ -1,19 +1,14 @@
 import { prisma } from '@/lib/prisma';
-import bcrypt from 'bcryptjs';
 
 export async function POST(req) {
     try {
-        const { name, email, password, phone, photo, location, sports, positions } = await req.json();
-        if (!email) return Response.json({ error: 'Email required' }, { status: 400 });
-
-        const hashedPassword = password ? await bcrypt.hash(password, 10) : undefined;
+        const { name, phone, photo, location, sports, positions } = await req.json();
+        if (!phone) return Response.json({ error: 'Phone required' }, { status: 400 });
 
         const user = await prisma.user.upsert({
-            where: { email },
+            where: { phone },
             update: {
                 name,
-                password: hashedPassword,
-                phone: phone || null,
                 photo: photo || null,
                 location: location || null,
                 sports: JSON.stringify(sports || []),
@@ -21,9 +16,7 @@ export async function POST(req) {
             },
             create: {
                 name,
-                email,
-                password: hashedPassword,
-                phone: phone || null,
+                phone,
                 photo: photo || null,
                 location: location || null,
                 sports: JSON.stringify(sports || []),
@@ -31,7 +24,6 @@ export async function POST(req) {
             },
         });
 
-        // Return user with parsed JSON fields
         return Response.json({
             user: {
                 ...user,
@@ -56,11 +48,11 @@ export async function GET(req) {
             where: {
                 OR: [
                     { name: { contains: q } },
-                    { email: { contains: q } },
+                    { phone: { contains: q } },
                 ],
             },
             take: 10,
-            select: { id: true, name: true, email: true, photo: true, location: true },
+            select: { id: true, name: true, phone: true, photo: true, location: true },
         });
         return Response.json({ users });
     } catch (err) {

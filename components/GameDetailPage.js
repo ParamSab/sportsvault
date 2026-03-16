@@ -217,9 +217,22 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             <span style={{ fontSize: '1.125rem' }}>👤</span>
                             <span className="text-sm">Organized by <span style={{ fontWeight: 600, color: sport?.color, cursor: 'pointer' }} onClick={() => onViewProfile(game.organizer)}>{getPlayer(game.organizer)?.name || state.currentUser?.name || 'You'}</span></span>
+                
                         </div>
                     </div>
                 </div>
+{game.bookingImage && (
+                    <div style={{ marginTop: 24, padding: 16, background: 'var(--bg-input)', borderRadius: 16, border: '1px solid var(--border-color)' }}>
+                        <div style={{ fontWeight: 700, fontSize: '0.875rem', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            📜 Booking Receipt
+                        </div>
+                        <img 
+                            src={game.bookingImage} 
+                            style={{ width: '100%', borderRadius: 12, border: '1px solid var(--border-color)', pointerEvents: 'none' }} 
+                            alt="Booking Proof" 
+                        />
+                    </div>
+                )}
                 {/* Embedded Mini-Map */}
                 {game.lat && game.lng && (
                     <div style={{ height: 130, borderTop: '1px solid var(--border-color)', position: 'relative', overflow: 'hidden' }}>
@@ -442,6 +455,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                                         <p className="text-xs text-muted" style={{ marginBottom: 12, textAlign: 'center' }}>
                                             Pick a <b>{SPORTS[game.sport]?.name}</b> priority list to blast:
                                         </p>
+                
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                                             {[1, 2, 3].map(tier => {
                                                 const players = friendsInTiers[tier];

@@ -1,7 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
-import bcrypt from 'bcryptjs';
 
 const sessionOptions = {
     password: process.env.SESSION_SECRET || 'sportsvault-super-secret-key-min-32-chars!!',
@@ -14,22 +13,14 @@ const sessionOptions = {
 
 export async function POST(req) {
     try {
-        const { email, password, rememberMe } = await req.json();
-        if (!email) return Response.json({ error: 'Email required' }, { status: 400 });
+        const { phone, rememberMe } = await req.json();
+        if (!phone) return Response.json({ error: 'Phone number required' }, { status: 400 });
 
         const user = await prisma.user.findUnique({
-            where: { email },
+            where: { phone },
         });
 
         if (user) {
-            // Check password if set
-            if (user.password) {
-                const isMatch = await bcrypt.compare(password || '', user.password);
-                if (!isMatch) {
-                    return Response.json({ exists: true, error: 'Invalid password' }, { status: 401 });
-                }
-            }
-
             const customOptions = { ...sessionOptions };
             if (!rememberMe) {
                 customOptions.cookieOptions = { ...customOptions.cookieOptions };
@@ -46,7 +37,6 @@ export async function POST(req) {
                 ratings: JSON.parse(user.ratings || '{}'),
                 dbId: user.id
             };
-            // Don't leak password
             delete userData.password;
 
             session.user = userData;
