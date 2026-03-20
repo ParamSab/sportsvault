@@ -34,7 +34,7 @@ export default function AppShell() {
     }, []);
 
     const navigate = (tab) => {
-        if (isGuest && tab !== 'discover') {
+        if (isGuest && tab !== 'discover' && tab !== 'profile') {
             setShowAuthGate(true);
             return;
         }
@@ -56,7 +56,7 @@ export default function AppShell() {
                         <div style={{ fontSize: '3rem', marginBottom: 20 }}>👋</div>
                         <h2 style={{ marginBottom: 12 }}>Join the Community</h2>
                         <p className="text-muted" style={{ marginBottom: 32 }}>Please log in to manage friends, view your profile, and join games.</p>
-                        <button className="btn btn-primary btn-block btn-lg" onClick={() => navigate('profile')}>
+                        <button className="btn btn-primary btn-block btn-lg" onClick={() => { setShowAuthGate(false); setActiveTab('profile'); }}>
                             Login / Sign Up
                         </button>
                         <button className="btn btn-ghost btn-block mt-md" onClick={() => { setShowAuthGate(false); setActiveTab('discover'); }}>
@@ -89,16 +89,21 @@ export default function AppShell() {
             {/* Header */}
             <header className="app-header">
                 <div className="app-logo" onClick={() => navigate('discover')} style={{ cursor: 'pointer' }}>
-                    SportsVault
+                    SportsVault Dashboard
                 </div>
                 {isGuest ? (
                     <button className="btn btn-xs btn-primary" style={{ padding: '6px 14px', borderRadius: 99 }} onClick={() => navigate('profile')}>
                         Login
                     </button>
                 ) : (
-                    <div className="header-location">
-                        <span>📍</span>
-                        <span>{state.currentUser?.location || 'Mumbai'}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div className="header-location">
+                            <span>📍</span>
+                            <span>{state.currentUser?.location || 'Mumbai'}</span>
+                        </div>
+                        <button className="btn btn-xs btn-outline" style={{ border: '1px solid #ef4444', color: '#ef4444' }} onClick={() => dispatch({ type: 'LOGOUT' })}>
+                            Logout
+                        </button>
                     </div>
                 )}
             </header>
