@@ -34,6 +34,13 @@ export default function CreateGamePage({ onComplete }) {
         visibility: 'public',
         approvalRequired: false,
         bookingImage: null,
+        // Footy Addicts Parity
+        pitchType: '5-a-side',
+        surface: '3G Astro',
+        footwear: 'AG Boots / TF shoes',
+        price: 0,
+        gender: 'mixed',
+        amenities: [],
     });
 
     const update = (key, val) => setGame(prev => ({ ...prev, [key]: val }));
@@ -69,8 +76,6 @@ export default function CreateGamePage({ onComplete }) {
                 position: state.currentUser?.positions?.[game.sport] || 'Unknown',
             }],
             status: 'open',
-            approvalRequired: game.approvalRequired,
-            bookingImage: game.bookingImage,
         };
 
         // Save to DB if user has a real DB id
@@ -79,7 +84,13 @@ export default function CreateGamePage({ onComplete }) {
                 await fetch('/api/games', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ game: newGame, userId: state.currentUser.dbId }),
+                    body: JSON.stringify({ 
+                        game: {
+                            ...newGame,
+                            amenities: JSON.stringify(newGame.amenities)
+                        }, 
+                        userId: state.currentUser.dbId 
+                    }),
                 });
             } catch (_) { /* fall through to local */ }
         }
@@ -219,7 +230,73 @@ export default function CreateGamePage({ onComplete }) {
             </div>
         </div>,
 
-        // 3: Privacy
+        // 3: Professional Details (Footy Addicts Parity)
+        <div key="professional" className="animate-fade-in">
+            <h2 style={{ marginBottom: 8 }}>Game Specs</h2>
+            <p className="text-muted text-sm" style={{ marginBottom: 20 }}>Professional details for your players</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div>
+                        <label style={labelStyle}>Game Type</label>
+                        <select value={game.pitchType} onChange={e => update('pitchType', e.target.value)} style={inputStyle}>
+                            {['5-a-side', '6-a-side', '7-a-side', '8-a-side', '9-a-side', '11-a-side'].map(t => <option key={t}>{t}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label style={labelStyle}>Gender</label>
+                        <select value={game.gender} onChange={e => update('gender', e.target.value)} style={inputStyle}>
+                            <option value="mixed">Mixed</option>
+                            <option value="male">Men's</option>
+                            <option value="female">Women's</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div>
+                        <label style={labelStyle}>Pitch Surface</label>
+                        <select value={game.surface} onChange={e => update('surface', e.target.value)} style={inputStyle}>
+                            {['3G Astro', '4G Astro', 'Natural Grass', 'Indoor', 'Hard Ground', 'Hybrid'].map(s => <option key={s}>{s}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label style={labelStyle}>Footwear</label>
+                        <input type="text" placeholder="e.g. AG/TF only" value={game.footwear} onChange={e => update('footwear', e.target.value)} style={inputStyle} />
+                    </div>
+                </div>
+
+                <div>
+                    <label style={labelStyle}>Price per player (Rs)</label>
+                    <input type="number" value={game.price} onChange={e => update('price', +e.target.value)} style={inputStyle} />
+                </div>
+
+                <div>
+                    <label style={labelStyle}>Amenities Included</label>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                        {['Bibs', 'Water', 'Changing Rooms', 'Showers', 'Parking'].map(amn => (
+                            <button key={amn} 
+                                onClick={() => {
+                                    const newAmn = game.amenities.includes(amn) 
+                                        ? game.amenities.filter(a => a !== amn)
+                                        : [...game.amenities, amn];
+                                    update('amenities', newAmn);
+                                }}
+                                className="chip"
+                                style={{
+                                    background: game.amenities.includes(amn) ? `${SPORTS[game.sport]?.color || '#6366f1'}25` : undefined,
+                                    borderColor: game.amenities.includes(amn) ? SPORTS[game.sport]?.color : undefined,
+                                    color: game.amenities.includes(amn) ? SPORTS[game.sport]?.color : undefined,
+                                }}>
+                                {amn}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </div>,
+
+        // 4: Privacy
         <div key="privacy" className="animate-fade-in">
             <h2 style={{ marginBottom: 8 }}>Who can see this?</h2>
             <p className="text-muted text-sm" style={{ marginBottom: 24 }}>Control who discovers your game</p>
@@ -257,7 +334,7 @@ export default function CreateGamePage({ onComplete }) {
             </div>
         </div>,
 
-                // 4: Booking Confirmation
+                // 5: Booking Confirmation
         <div key="booking" className="animate-fade-in">
             <h2 style={{ marginBottom: 8 }}>Booking Receipt</h2>
             <p className="text-muted text-sm" style={{ marginBottom: 24 }}>Upload a photo of your turf booking to build trust.</p>
@@ -292,7 +369,7 @@ export default function CreateGamePage({ onComplete }) {
             </div>
         </div>,
 
-        // 5: Preview
+        // 6: Preview
         <div key="preview" className="animate-fade-in">
             <h2 style={{ marginBottom: 20 }}>Looks good? 🔥</h2>
             <div className="glass-card no-hover" style={{ overflow: 'hidden', padding: 0 }}>
@@ -315,6 +392,9 @@ export default function CreateGamePage({ onComplete }) {
                         <div className="text-sm text-muted">📅 {game.date || 'No date'} at {game.time || '--:--'}</div>
                         <div className="text-sm text-muted">⏱️ {game.duration} minutes · {game.maxPlayers} players</div>
                         <div className="text-sm text-muted">⭐ {game.skillLevel}</div>
+                        <div className="text-xs text-secondary" style={{ marginTop: 4, opacity: 0.8 }}>
+                            {game.pitchType} · {game.surface} · {game.gender}
+                        </div>
                     </div>
                 </div>
             </div>

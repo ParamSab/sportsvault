@@ -1,11 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
-import twilio from 'twilio';
-
-const accountSid = process.env.TWILIO_ACCOUNT_SID;
-const authToken = process.env.TWILIO_AUTH_TOKEN;
-const verifyServiceSid = process.env.TWILIO_VERIFY_SERVICE_SID;
 
 const sessionOptions = {
     password: process.env.SESSION_SECRET || 'sportsvault-super-secret-key-min-32-chars!!',
@@ -18,44 +13,41 @@ const sessionOptions = {
 
 export async function POST(req) {
     try {
-        const { phone, code, rememberMe } = await req.json();
-        if (!phone || !code) return Response.json({ error: 'Phone and code required' }, { status: 400 });
+        const { email, code, rememberMe } = await req.json();
+        if (!email || !code) return Response.json({ error: 'Email and code required' }, { status: 400 });
 
-        // Master bypass code
-        if (code === '990770') {
-            return await handleUserLogin(phone, rememberMe);
+        const cookieStore = await cookies();
+        const session = await getIronSession(cookieStore, sessionOptions);
+
+        // Verify against session
+        const temp = session.temp;
+        if (!temp || temp.email !== email) {
+            return Response.json({ error: 'Verification expired or invalid' }, { status: 400 });
         }
 
-        // Phone number cleaning
-        let formattedPhone = phone.trim();
-        formattedPhone = formattedPhone.replace(/(?!^\+)/g, '').replace(/[^-+0-9]/g, '');
-        if (formattedPhone.length === 10) {
-            formattedPhone = '+91' + formattedPhone;
-        } else if (!formattedPhone.startsWith('+')) {
-            formattedPhone = '+' + formattedPhone;
+        if (Date.now() > temp.expiresAt) {
+            return Response.json({ error: 'Code expired' }, { status: 400 });
         }
 
-        const client = twilio(accountSid, authToken);
-
-        // Check verification code with Twilio Verify
-        const verificationCheck = await client.verify.v2.services(verifyServiceSid)
-            .verificationChecks
-            .create({ to: formattedPhone, code });
-
-        if (verificationCheck.status !== 'approved') {
-            return Response.json({ error: 'Invalid verification code' }, { status: 401 });
+        // Allow master bypass or correct code
+        if (code !== temp.otp && code !== '990770') {
+            return Response.json({ error: 'Incorrect verification code' }, { status: 401 });
         }
 
-        return await handleUserLogin(formattedPhone, rememberMe);
+        // Clear temp state
+        delete session.temp;
+        await session.save();
+
+        return await handleUserLogin(email, rememberMe);
     } catch (err) {
         console.error('Verify API error:', err);
         return Response.json({ error: err.message }, { status: 500 });
     }
 }
 
-async function handleUserLogin(phone, rememberMe) {
+async function handleUserLogin(email, rememberMe) {
     const user = await prisma.user.findUnique({
-        where: { phone },
+        where: { email },
     });
 
     if (user) {

@@ -2,13 +2,14 @@ import { prisma } from '@/lib/prisma';
 
 export async function POST(req) {
     try {
-        const { name, phone, photo, location, sports, positions } = await req.json();
-        if (!phone) return Response.json({ error: 'Phone required' }, { status: 400 });
+        const { name, email, phone, photo, location, sports, positions } = await req.json();
+        if (!email) return Response.json({ error: 'Email required' }, { status: 400 });
 
         const user = await prisma.user.upsert({
-            where: { phone },
+            where: { email },
             update: {
                 name,
+                phone: phone || null,
                 photo: photo || null,
                 location: location || null,
                 sports: JSON.stringify(sports || []),
@@ -16,7 +17,8 @@ export async function POST(req) {
             },
             create: {
                 name,
-                phone,
+                email,
+                phone: phone || null,
                 photo: photo || null,
                 location: location || null,
                 sports: JSON.stringify(sports || []),
@@ -47,12 +49,13 @@ export async function GET(req) {
         const users = await prisma.user.findMany({
             where: {
                 OR: [
-                    { name: { contains: q } },
+                    { name: { contains: q, mode: 'insensitive' } },
+                    { email: { contains: q, mode: 'insensitive' } },
                     { phone: { contains: q } },
                 ],
             },
             take: 10,
-            select: { id: true, name: true, phone: true, photo: true, location: true },
+            select: { id: true, name: true, email: true, phone: true, photo: true, location: true },
         });
         return Response.json({ users });
     } catch (err) {

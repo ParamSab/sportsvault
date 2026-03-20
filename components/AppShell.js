@@ -9,6 +9,7 @@ import ProfilePage from './ProfilePage';
 import GameDetailPage from './GameDetailPage';
 import RatePage from './RatePage';
 import SportsCVPage from './SportsCVPage';
+import AuthPage from './AuthPage';
 
 export default function AppShell() {
     const { state, dispatch } = useStore();
@@ -17,6 +18,9 @@ export default function AppShell() {
     const [viewingProfile, setViewingProfile] = useState(null);
     const [viewingCV, setViewingCV] = useState(null);
     const [ratingGame, setRatingGame] = useState(null);
+    const [showAuthGate, setShowAuthGate] = useState(false);
+
+    const isGuest = !state.isAuthenticated;
 
     useEffect(() => {
         if (typeof window !== 'undefined') {
@@ -24,13 +28,17 @@ export default function AppShell() {
             const gameId = params.get('game');
             if (gameId) {
                 setViewingGame(gameId);
-                // Clean up the URL to prevent reloading the same game if they refresh later
                 window.history.replaceState({}, document.title, window.location.pathname);
             }
         }
     }, []);
 
     const navigate = (tab) => {
+        if (isGuest && tab !== 'discover') {
+            setShowAuthGate(true);
+            return;
+        }
+        setShowAuthGate(false);
         setActiveTab(tab);
         setViewingGame(null);
         setViewingProfile(null);
@@ -41,6 +49,26 @@ export default function AppShell() {
     const unreadCount = state.notifications.filter(n => !n.read).length;
 
     const renderContent = () => {
+        if (showAuthGate) {
+            return (
+                <div className="animate-fade-in" style={{ padding: '20px 0' }}>
+                    <div className="glass-card no-hover text-center" style={{ padding: '48px 24px' }}>
+                        <div style={{ fontSize: '3rem', marginBottom: 20 }}>👋</div>
+                        <h2 style={{ marginBottom: 12 }}>Join the Community</h2>
+                        <p className="text-muted" style={{ marginBottom: 32 }}>Please log in to manage friends, view your profile, and join games.</p>
+                        <button className="btn btn-primary btn-block btn-lg" onClick={() => navigate('profile')}>
+                            Login / Sign Up
+                        </button>
+                        <button className="btn btn-ghost btn-block mt-md" onClick={() => { setShowAuthGate(false); setActiveTab('discover'); }}>
+                            Continue as Guest
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        if (activeTab === 'profile' && isGuest) return <AuthPage />;
+
         if (viewingGame) return <GameDetailPage gameId={viewingGame} onBack={() => setViewingGame(null)} onViewProfile={setViewingProfile} />;
         if (viewingProfile) return <ProfilePage playerId={viewingProfile} onBack={() => setViewingProfile(null)} onViewCV={setViewingCV} onViewGame={setViewingGame} />;
         if (viewingCV) return <SportsCVPage playerId={viewingCV} onBack={() => setViewingCV(null)} />;
@@ -63,10 +91,16 @@ export default function AppShell() {
                 <div className="app-logo" onClick={() => navigate('discover')} style={{ cursor: 'pointer' }}>
                     SportsVault
                 </div>
-                <div className="header-location">
-                    <span>📍</span>
-                    <span>{state.currentUser?.location || 'Mumbai'}</span>
-                </div>
+                {isGuest ? (
+                    <button className="btn btn-xs btn-primary" style={{ padding: '6px 14px', borderRadius: 99 }} onClick={() => navigate('profile')}>
+                        Login
+                    </button>
+                ) : (
+                    <div className="header-location">
+                        <span>📍</span>
+                        <span>{state.currentUser?.location || 'Mumbai'}</span>
+                    </div>
+                )}
             </header>
 
             {/* Content */}
@@ -78,7 +112,7 @@ export default function AppShell() {
 
             {/* Bottom Navigation */}
             <nav className="bottom-nav">
-                <button className={`nav-item ${activeTab === 'discover' ? 'active' : ''}`} onClick={() => navigate('discover')}>
+                <button className={`nav-item ${activeTab === 'discover' && !showAuthGate ? 'active' : ''}`} onClick={() => navigate('discover')}>
                     <span className="nav-icon">🔍</span>
                     <span className="nav-label">Discover</span>
                 </button>
@@ -92,9 +126,9 @@ export default function AppShell() {
                 <button className={`nav-item ${activeTab === 'notifications' ? 'active' : ''}`} onClick={() => navigate('notifications')}>
                     <span className="nav-icon">🔔</span>
                     <span className="nav-label">Alerts</span>
-                    {unreadCount > 0 && <span className="badge-count">{unreadCount}</span>}
+                    {(unreadCount > 0 && !isGuest) && <span className="badge-count">{unreadCount}</span>}
                 </button>
-                <button className={`nav-item ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => navigate('profile')}>
+                <button className={`nav-item ${activeTab === 'profile' || showAuthGate ? 'active' : ''}`} onClick={() => navigate('profile')}>
                     <span className="nav-icon">👤</span>
                     <span className="nav-label">Profile</span>
                 </button>

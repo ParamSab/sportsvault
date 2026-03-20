@@ -15,6 +15,8 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     const [selectedPosition, setSelectedPosition] = useState('');
     const [showTeams, setShowTeams] = useState(false);
     const [showBroadcastPanel, setShowBroadcastPanel] = useState(false);
+    
+    const isGuest = !state.isAuthenticated;
     const [broadcastTier, setBroadcastTier] = useState(null);
     const [broadcastStatus, setBroadcastStatus] = useState(null); // null | 'sending' | 'sent' | 'error'
     const [broadcastResult, setBroadcastResult] = useState(null);
@@ -26,6 +28,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     const confirmedRsvps = game.rsvps.filter(r => r.status === 'yes');
     const backupRsvps = game.rsvps.filter(r => r.status === 'backup');
     const maybeRsvps = game.rsvps.filter(r => r.status === 'maybe');
+    const pendingRsvps = game.rsvps.filter(r => r.status === 'pending');
     const spots = spotsLeft(game);
     const currentUserId = state.currentUser?.id || 'current';
     const myRsvp = game.rsvps.find(r => r.playerId === currentUserId);
@@ -95,8 +98,6 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
 
     const [msgCopied, setMsgCopied] = useState(false);
 
-    // Build the blast message text
-    
     const getYesButtonText = () => {
         if (myRsvp?.status === 'yes') return '✅ Yes!';
         if (myRsvp?.status === 'checked_in') return '🏟️ Checked In';
@@ -120,17 +121,6 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
         }
     };
     
-    const cancelGame = async () => {
-        if (!window.confirm("Are you sure you want to cancel this game? This will notify all players.")) return;
-        dispatch({ type: 'UPDATE_GAME', payload: { id: game.id, status: 'cancelled' } });
-        if (state.currentUser?.dbId) {
-             // For a real app, you'd hit a PUT /api/games endpoint here.
-             // We'll leave the local dispatch for prototype visualization.
-        }
-        onBack();
-    };
-
-
     const buildBlastMessage = () => {
         const inviteLink = `${window.location.origin}/?game=${game.id}`;
         const mapLine = game.lat && game.lng ? `\nhttps://maps.google.com/?q=${game.lat},${game.lng}` : '';
@@ -171,6 +161,12 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
 
     const whatsappMsg = generateWhatsAppMessage(game, state.players, showTeams ? teams : null);
 
+    const amenList = useMemo(() => {
+        try {
+            return typeof game.amenities === 'string' ? JSON.parse(game.amenities) : (game.amenities || []);
+        } catch { return []; }
+    }, [game.amenities]);
+
     return (
         <div className="animate-fade-in">
             <button className="btn btn-ghost" onClick={onBack} style={{ marginBottom: 12, padding: '8px 0' }}>
@@ -186,14 +182,24 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                             {sport?.emoji} {game.format}
                         </span>
                     </div>
-                    {/* Privacy badge */}
-                    <div style={{
-                        position: 'absolute', top: 12, right: 12,
-                        background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)',
-                        borderRadius: 99, padding: '4px 10px', fontSize: '0.7rem', fontWeight: 700,
-                        color: privacyInfo.color, border: `1px solid ${privacyInfo.color}40`,
-                    }}>
-                        {privacyInfo.emoji} {privacyInfo.label}
+                    {/* Privacy & Price badge */}
+                    <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', gap: 6 }}>
+                        <div style={{
+                            background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)',
+                            borderRadius: 99, padding: '4px 10px', fontSize: '0.7rem', fontWeight: 700,
+                            color: privacyInfo.color, border: `1px solid ${privacyInfo.color}40`,
+                        }}>
+                            {privacyInfo.emoji} {privacyInfo.label}
+                        </div>
+                        {game.price > 0 && (
+                            <div style={{
+                                background: 'rgba(34,197,94,0.2)', backdropFilter: 'blur(8px)',
+                                borderRadius: 99, padding: '4px 10px', fontSize: '0.7rem', fontWeight: 700,
+                                color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)',
+                            }}>
+                                Rs.{game.price}
+                            </div>
+                        )}
                     </div>
                 </div>
                 <div style={{ padding: 20 }}>
@@ -210,19 +216,48 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                                 <div className="text-xs text-muted">🕐 {game.time} · ⏱️ {game.duration} mins</div>
                             </div>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <span style={{ fontSize: '1.125rem' }}>⭐</span>
-                            <span style={{ fontWeight: 600, fontSize: '0.9375rem' }}>{game.skillLevel}</span>
+                        
+                        {/* New Spec Bar */}
+                        <div style={{ 
+                            display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 4, padding: '12px 14px', 
+                            background: 'rgba(255,255,255,0.03)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.05)' 
+                        }}>
+                            <div className="text-xs" style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--text-secondary)' }}>
+                                🏟️ <span style={{ fontWeight: 600 }}>{game.pitchType || 'Game'}</span>
+                            </div>
+                            <span style={{ opacity: 0.2 }}>|</span>
+                            <div className="text-xs" style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--text-secondary)' }}>
+                                🌱 <span style={{ fontWeight: 600 }}>{game.surface || 'Turf'}</span>
+                            </div>
+                            <span style={{ opacity: 0.2 }}>|</span>
+                            <div className="text-xs" style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--text-secondary)' }}>
+                                👟 <span style={{ fontWeight: 600 }}>{game.footwear || 'Any'}</span>
+                            </div>
+                            <span style={{ opacity: 0.2 }}>|</span>
+                            <div className="text-xs" style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--text-secondary)' }}>
+                                👥 <span style={{ fontWeight: 600, textTransform: 'capitalize' }}>{game.gender || 'Mixed'}</span>
+                            </div>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+
+                        {amenList.length > 0 && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                                {amenList.map(a => (
+                                    <span key={a} style={{ fontSize: '0.65rem', padding: '3px 8px', borderRadius: 99, background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                        {a === 'Bibs' ? '🎽' : a === 'Water' ? '💧' : a === 'Shower' ? '🚿' : '✅'} {a}
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
                             <span style={{ fontSize: '1.125rem' }}>👤</span>
                             <span className="text-sm">Organized by <span style={{ fontWeight: 600, color: sport?.color, cursor: 'pointer' }} onClick={() => onViewProfile(game.organizer)}>{getPlayer(game.organizer)?.name || state.currentUser?.name || 'You'}</span></span>
-                
                         </div>
                     </div>
                 </div>
-{game.bookingImage && (
-                    <div style={{ marginTop: 24, padding: 16, background: 'var(--bg-input)', borderRadius: 16, border: '1px solid var(--border-color)' }}>
+
+                {game.bookingImage && (
+                    <div style={{ margin: '0 20px 20px 20px', padding: 16, background: 'var(--bg-input)', borderRadius: 16, border: '1px solid var(--border-color)' }}>
                         <div style={{ fontWeight: 700, fontSize: '0.875rem', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
                             📜 Booking Receipt
                         </div>
@@ -233,6 +268,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                         />
                     </div>
                 )}
+                
                 {/* Embedded Mini-Map */}
                 {game.lat && game.lng && (
                     <div style={{ height: 130, borderTop: '1px solid var(--border-color)', position: 'relative', overflow: 'hidden' }}>
@@ -260,21 +296,30 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                 </div>
             </div>
 
-            {/* RSVP Buttons */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
-                <button className={`btn btn-sm ${(myRsvp?.status === 'yes' || myRsvp?.status === 'checked_in' || myRsvp?.status === 'pending') ? 'btn-rsvp-yes' : 'btn-outline'}`} onClick={() => handleRSVP('yes')}>
-                    {getYesButtonText()}
-                </button>
-                <button className={`btn btn-sm ${myRsvp?.status === 'backup' ? 'btn-primary' : 'btn-outline'}`} onClick={() => handleRSVP('backup')}>
-                    ⏳ Backup
-                </button>
-                <button className={`btn btn-sm ${myRsvp?.status === 'maybe' ? 'btn-rsvp-maybe' : 'btn-outline'}`} onClick={() => handleRSVP('maybe')}>
-                    🤔 Maybe
-                </button>
-                <button className={`btn btn-sm ${myRsvp?.status === 'no' ? 'btn-rsvp-no' : 'btn-outline'}`} onClick={() => handleRSVP('no')}>
-                    ❌ No
-                </button>
-            </div>
+            {/* RSVP / Join Section */}
+            {isGuest ? (
+                <div className="glass-card no-hover text-center animate-fade-in" style={{ padding: 24, marginBottom: 16, border: '1px dashed var(--primary-color)' }}>
+                   <p className="text-sm text-muted" style={{ marginBottom: 16 }}>Want to join this game?</p>
+                   <button className="btn btn-primary btn-block btn-lg" onClick={() => onViewProfile('login_prompt')}>
+                       Log in to RSVP →
+                   </button>
+                </div>
+            ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+                    <button className={`btn btn-sm ${(myRsvp?.status === 'yes' || myRsvp?.status === 'checked_in' || myRsvp?.status === 'pending') ? 'btn-rsvp-yes' : 'btn-outline'}`} onClick={() => handleRSVP('yes')}>
+                        {getYesButtonText()}
+                    </button>
+                    <button className={`btn btn-sm ${myRsvp?.status === 'backup' ? 'btn-primary' : 'btn-outline'}`} onClick={() => handleRSVP('backup')}>
+                        ⏳ Backup
+                    </button>
+                    <button className={`btn btn-sm ${myRsvp?.status === 'maybe' ? 'btn-rsvp-maybe' : 'btn-outline'}`} onClick={() => handleRSVP('maybe')}>
+                        🤔 Maybe
+                    </button>
+                    <button className={`btn btn-sm ${myRsvp?.status === 'no' ? 'btn-rsvp-no' : 'btn-outline'}`} onClick={() => handleRSVP('no')}>
+                        ❌ No
+                    </button>
+                </div>
+            )}
 
             
             {/* Host Approvals */}

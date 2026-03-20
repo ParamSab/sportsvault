@@ -84,6 +84,13 @@ export async function POST(req) {
                 visibility: game.visibility || 'public',
                 approvalRequired: !!game.approvalRequired,
                 bookingImage: game.bookingImage || null,
+                // Footy Addicts Parity
+                pitchType: game.pitchType || '5-a-side',
+                surface: game.surface || '3G Astro',
+                footwear: game.footwear || '',
+                price: game.price ? parseFloat(game.price.toString()) : 0,
+                gender: game.gender || 'mixed',
+                amenities: game.amenities || '[]',
                 organizerId: userId,
                 rsvps: {
                     create: [{

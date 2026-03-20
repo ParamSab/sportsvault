@@ -5,8 +5,8 @@ import { SPORTS, POSITIONS, PLAYERS } from '@/lib/mockData';
 
 export default function AuthPage() {
     const { dispatch } = useStore();
-    const [step, setStep] = useState('phone'); // phone, otp, onboarding
-    const [phone, setPhone] = useState('');
+    const [step, setStep] = useState('email'); // email, otp, onboarding
+    const [email, setEmail] = useState('');
     const [rememberMe, setRememberMe] = useState(true);
 
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
@@ -29,7 +29,7 @@ export default function AuthPage() {
     };
 
     const handleSendOTP = async () => {
-        if (phone.length < 10) return alert("Enter a valid phone number");
+        if (!email.includes('@')) return alert("Enter a valid email address");
 
         setIsSending(true);
 
@@ -37,13 +37,14 @@ export default function AuthPage() {
             const res = await fetch('/api/auth/otp/send', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ to: phone })
+                body: JSON.stringify({ email })
             });
-            if (!res.ok) throw new Error("Failed to send verification code");
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Failed to send verification code");
             setStep('otp');
         } catch (err) {
             console.error(err);
-            alert("Could not send verification code. Please check your number or try again later.");
+            alert(err.message || "Could not send verification code. Please try again later.");
         } finally {
             setIsSending(false);
         }
@@ -58,7 +59,7 @@ export default function AuthPage() {
             const res = await fetch('/api/auth/otp/verify', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone, code: entered, rememberMe })
+                body: JSON.stringify({ email, code: entered, rememberMe })
             });
             const data = await res.json();
             if (res.status === 200) {
@@ -126,7 +127,7 @@ export default function AuthPage() {
             ...basePlayer,
             id: 'current',
             name: profile.name || 'Player',
-            phone: phone.startsWith('+91') ? phone : `+91${phone}`,
+            email: email,
             photo: profile.photo,
             location: profile.location || 'Mumbai',
             sports: profile.sports.length > 0 ? profile.sports : ['football'],
@@ -143,7 +144,7 @@ export default function AuthPage() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    name: newUser.name, phone: newUser.phone, photo: newUser.photo,
+                    name: newUser.name, email: newUser.email, photo: newUser.photo,
                     location: newUser.location, sports: newUser.sports, positions: newUser.positions,
                 }),
             });
@@ -244,24 +245,21 @@ export default function AuthPage() {
                     {step === 'phone' && <p style={{ color: 'var(--text-secondary)', fontSize: '0.9375rem' }}>Find players. Join games. Build your rep.</p>}
                 </div>
 
-                {step === 'phone' && (
+                {step === 'email' && (
                     <div className="animate-fade-in">
                         <div className="glass-card no-hover" style={{ padding: 32 }}>
                             <h3 style={{ marginBottom: 4 }}>Welcome</h3>
-                            <p className="text-muted text-sm" style={{ marginBottom: 24 }}>Enter your phone number to log in or sign up.</p>
+                            <p className="text-muted text-sm" style={{ marginBottom: 24 }}>Enter your email to log in or sign up.</p>
                             <div style={{ marginBottom: 20 }}>
-                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Phone Number</label>
-                                <div style={{ display: 'flex', gap: 8 }}>
-                                    <div style={{ padding: '14px', background: 'var(--bg-input)', borderRadius: 12, border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', fontWeight: 600, color: 'var(--text-secondary)', minWidth: 64, justifyContent: 'center' }}>+91</div>
-                                    <input type="tel" placeholder="10-digit mobile number" value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))} style={{ fontSize: '1rem', padding: '14px 16px', flex: 1 }} autoFocus />
-                                </div>
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Email Address</label>
+                                <input type="email" placeholder="name@example.com" value={email} onChange={(e) => setEmail(e.target.value)} style={{ fontSize: '1rem', padding: '14px 16px', width: '100%' }} autoFocus />
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 24 }}>
                                 <input type="checkbox" id="rememberMe" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} style={{ width: 16, height: 16, cursor: 'pointer' }} />
                                 <label htmlFor="rememberMe" style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', cursor: 'pointer' }}>Remember me for 30 days</label>
                             </div>
                             <button className="btn btn-primary btn-block btn-lg" onClick={handleSendOTP} disabled={isSending}>
-                                {isSending ? 'Sending...' : 'Send Code →'}
+                                {isSending ? 'Sending...' : 'Send Magic Code →'}
                             </button>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'center', gap: 24, marginTop: 32 }}>
@@ -273,15 +271,15 @@ export default function AuthPage() {
                 {step === 'otp' && (
                     <div className="animate-fade-in">
                         <div className="glass-card no-hover" style={{ padding: 32 }}>
-                            <h3 style={{ marginBottom: 4 }}>Check your phone</h3>
-                            <p className="text-muted text-sm" style={{ marginBottom: 24 }}>Enter the 6-digit code sent to +91 {phone}</p>
+                            <h3 style={{ marginBottom: 4 }}>Check your inbox</h3>
+                            <p className="text-muted text-sm" style={{ marginBottom: 24 }}>Enter the 6-digit code sent to {email}</p>
                             <div className="otp-container" style={{ marginBottom: 24 }}>
                                 {otp.map((digit, i) => (
                                     <input key={i} id={`otp-${i}`} type="text" inputMode="numeric" className="otp-input" value={digit} onChange={e => handleOtpChange(i, e.target.value)} onKeyDown={e => handleOtpKeyDown(i, e)} maxLength={1} autoFocus={i === 0} />
                                 ))}
                             </div>
                             <button className="btn btn-primary btn-block btn-lg" onClick={handleVerifyOTP}>Verify →</button>
-                            <button className="btn btn-ghost btn-block" style={{ marginTop: 12 }} onClick={() => setStep('phone')}>Change number</button>
+                            <button className="btn btn-ghost btn-block" style={{ marginTop: 12 }} onClick={() => setStep('email')}>Change email</button>
                         </div>
                     </div>
                 )}

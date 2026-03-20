@@ -101,6 +101,14 @@ model Game {
   approvalRequired Boolean @default(false)
   bookingImage     String?
   
+  // Footy Addicts Parity Features
+  pitchType        String? // e.g., "5-a-side", "11-a-side"
+  surface          String? // e.g., "3G Astro", "Natural Grass", "Indoor"
+  footwear         String? // e.g., "AG Boots only", "No studs", "TF/IN only"
+  price            Float?   @default(0)
+  gender           String   @default("mixed") // mixed, male, female
+  amenities        String?  // JSON string: ["bibs", "water", "changing_rooms", "showers", "parking"]
+  
   organizerId String
   organizer   User     @relation("Organizer", fields: [organizerId], references: [id], onDelete: Cascade)
 
