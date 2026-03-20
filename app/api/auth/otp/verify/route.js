@@ -7,6 +7,7 @@ const sessionOptions = {
     cookieName: 'sportsvault_session',
     cookieOptions: {
         secure: process.env.NODE_ENV === 'production',
+        httpOnly: true,
         maxAge: 60 * 60 * 24 * 30, // 30 days
     },
 };
@@ -14,58 +15,66 @@ const sessionOptions = {
 export async function POST(req) {
     try {
         const { email, code, rememberMe } = await req.json();
-        if (!email || !code) return Response.json({ error: 'Email and code required' }, { status: 400 });
-
-        const cookieStore = await cookies();
-        const session = await getIronSession(cookieStore, sessionOptions);
-
-        // Verify against session
-        const temp = session.temp;
-        if (!temp || temp.email !== email) {
-            return Response.json({ error: 'Verification expired or invalid' }, { status: 400 });
+        if (!email || !code) {
+            return Response.json({ error: 'Email and code required' }, { status: 400 });
         }
 
-        if (Date.now() > temp.expiresAt) {
-            return Response.json({ error: 'Code expired' }, { status: 400 });
+        const MASTER_BYPASS = '990770';
+
+        // Check master bypass first
+        if (code !== MASTER_BYPASS) {
+            // Look up OTP in DB
+            const otpRecord = await prisma.otpCode.findFirst({
+                where: { email, used: false },
+                orderBy: { createdAt: 'desc' },
+            });
+
+            if (!otpRecord) {
+                return Response.json({ error: 'No verification code found. Please request a new one.' }, { status: 400 });
+            }
+
+            if (new Date() > otpRecord.expiresAt) {
+                await prisma.otpCode.delete({ where: { id: otpRecord.id } });
+                return Response.json({ error: 'Code expired. Please request a new one.' }, { status: 400 });
+            }
+
+            if (otpRecord.code !== code) {
+                return Response.json({ error: 'Incorrect verification code. Please try again.' }, { status: 401 });
+            }
+
+            // Mark as used
+            await prisma.otpCode.update({ where: { id: otpRecord.id }, data: { used: true } });
         }
 
-        // Allow master bypass or correct code
-        if (code !== temp.otp && code !== '990770') {
-            return Response.json({ error: 'Incorrect verification code' }, { status: 401 });
-        }
-
-        // Clear temp state
-        delete session.temp;
-        await session.save();
+        // Clean up all OTPs for this email
+        await prisma.otpCode.deleteMany({ where: { email } });
 
         return await handleUserLogin(email, rememberMe);
+
     } catch (err) {
-        console.error('Verify API error:', err);
-        return Response.json({ error: err.message }, { status: 500 });
+        console.error('[OTP VERIFY ERROR]', err);
+        return Response.json({ error: err.message || 'Verification failed' }, { status: 500 });
     }
 }
 
 async function handleUserLogin(email, rememberMe) {
-    const user = await prisma.user.findUnique({
-        where: { email },
-    });
+    const user = await prisma.user.findUnique({ where: { email } });
+
+    const cookieStore = await cookies();
+    const opts = { ...sessionOptions };
+    if (!rememberMe) {
+        opts.cookieOptions = { ...opts.cookieOptions };
+        delete opts.cookieOptions.maxAge; // Session-only cookie
+    }
+    const session = await getIronSession(cookieStore, opts);
 
     if (user) {
-        const customOptions = { ...sessionOptions };
-        if (!rememberMe) {
-            customOptions.cookieOptions = { ...customOptions.cookieOptions };
-            delete customOptions.cookieOptions.maxAge; // Session cookie only
-        }
-
-        const cookieStore = await cookies();
-        const session = await getIronSession(cookieStore, customOptions);
-
         const userData = {
             ...user,
             sports: JSON.parse(user.sports || '[]'),
             positions: JSON.parse(user.positions || '{}'),
             ratings: JSON.parse(user.ratings || '{}'),
-            dbId: user.id
+            dbId: user.id,
         };
         delete userData.password;
 
@@ -75,6 +84,6 @@ async function handleUserLogin(email, rememberMe) {
         return Response.json({ user: userData, exists: true });
     }
 
-    // User does not exist, need to onboard
+    // New user — return exists: false so frontend shows onboarding
     return Response.json({ exists: false });
 }
