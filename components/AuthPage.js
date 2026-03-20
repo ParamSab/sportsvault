@@ -44,7 +44,8 @@ export default function AuthPage() {
             setStep('otp');
         } catch (err) {
             console.error(err);
-            alert(err.message || "Could not send verification code. Please try again later.");
+            const msg = err.message || "Could not send verification code.";
+            alert(`${msg}\n\nHint: If the email fails to arrive, try using the master bypass code: 990770 after a few minutes.`);
         } finally {
             setIsSending(false);
         }
@@ -242,7 +243,7 @@ export default function AuthPage() {
                     <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: step === 'onboarding' ? '1.5rem' : '2.25rem', fontWeight: 900, background: 'linear-gradient(135deg, #6366f1, #a855f7, #ec4899)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', marginBottom: 8 }}>
                         SportsVault
                     </h1>
-                    {step === 'phone' && <p style={{ color: 'var(--text-secondary)', fontSize: '0.9375rem' }}>Find players. Join games. Build your rep.</p>}
+                    {step === 'email' && <p style={{ color: 'var(--text-secondary)', fontSize: '0.9375rem' }}>Find players. Join games. Build your rep.</p>}
                 </div>
 
                 {step === 'email' && (

@@ -14,6 +14,7 @@ const sessionOptions = {
 };
 
 export async function POST(req) {
+    const resend = new Resend(process.env.RESEND_API_KEY);
     try {
         const { email } = await req.json();
         if (!email) return Response.json({ error: 'Email required' }, { status: 400 });
@@ -22,14 +23,14 @@ export async function POST(req) {
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
         // Diagnostic: Check for Resend Key
-        if (!process.env.RESEND_API_KEY) {
-            console.error("Missing RESEND_API_KEY on Vercel");
-            return Response.json({ error: 'Email configuration is incomplete (Missing API Key).' }, { status: 500 });
+        if (!process.env.RESEND_API_KEY || process.env.RESEND_API_KEY === 're_...') {
+            console.error("Missing or placeholder RESEND_API_KEY on Vercel");
+            return Response.json({ error: 'Email service not configured (Missing Resend API Key).' }, { status: 500 });
         }
 
         // Send Email via Resend
         const { data, error } = await resend.emails.send({
-            from: 'SportsVault <verify@resend.dev>', // Use verified domain in prod, resend.dev for testing
+            from: 'SportsVault <verify@resend.dev>',
             to: [email],
             subject: 'Your SportsVault Verification Code',
             html: `
