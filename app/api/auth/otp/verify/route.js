@@ -1,3 +1,4 @@
+import twilio from 'twilio';
 import { prisma } from '@/lib/prisma';
 import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
@@ -14,57 +15,59 @@ const sessionOptions = {
 
 export async function POST(req) {
     try {
-        const { email, code, rememberMe } = await req.json();
-        if (!email || !code) {
-            return Response.json({ error: 'Email and code required' }, { status: 400 });
+        const { phone, code, rememberMe } = await req.json();
+        if (!phone || !code) {
+            return Response.json({ error: 'Phone number and code are required.' }, { status: 400 });
         }
+
+        // Normalize E.164
+        const normalized = phone.startsWith('+') ? phone : `+${phone.replace(/\D/g, '')}`;
 
         const MASTER_BYPASS = '990770';
 
-        // Check master bypass first
         if (code !== MASTER_BYPASS) {
-            // Look up OTP in DB
-            const otpRecord = await prisma.otpCode.findFirst({
-                where: { email, used: false },
-                orderBy: { createdAt: 'desc' },
-            });
+            const accountSid = process.env.TWILIO_ACCOUNT_SID;
+            const authToken = process.env.TWILIO_AUTH_TOKEN;
+            const serviceSid = process.env.TWILIO_VERIFY_SERVICE_SID;
 
-            if (!otpRecord) {
-                return Response.json({ error: 'No verification code found. Please request a new one.' }, { status: 400 });
+            if (!accountSid || !authToken || !serviceSid || serviceSid.startsWith('VAxx')) {
+                return Response.json({ error: 'SMS service is not configured.' }, { status: 500 });
             }
 
-            if (new Date() > otpRecord.expiresAt) {
-                await prisma.otpCode.delete({ where: { id: otpRecord.id } });
-                return Response.json({ error: 'Code expired. Please request a new one.' }, { status: 400 });
-            }
+            const client = twilio(accountSid, authToken);
 
-            if (otpRecord.code !== code) {
-                return Response.json({ error: 'Incorrect verification code. Please try again.' }, { status: 401 });
-            }
+            const check = await client.verify.v2
+                .services(serviceSid)
+                .verificationChecks.create({ to: normalized, code });
 
-            // Mark as used
-            await prisma.otpCode.update({ where: { id: otpRecord.id }, data: { used: true } });
+            if (check.status !== 'approved') {
+                return Response.json({ error: 'Incorrect or expired code. Please try again.' }, { status: 401 });
+            }
         }
 
-        // Clean up all OTPs for this email
-        await prisma.otpCode.deleteMany({ where: { email } });
-
-        return await handleUserLogin(email, rememberMe);
+        return await handleUserLogin(normalized, rememberMe);
 
     } catch (err) {
         console.error('[OTP VERIFY ERROR]', err);
-        return Response.json({ error: err.message || 'Verification failed' }, { status: 500 });
+        // Twilio throws 60202 for wrong code
+        if (err?.code === 60202) {
+            return Response.json({ error: 'Incorrect code. Please try again.' }, { status: 401 });
+        }
+        if (err?.code === 60203) {
+            return Response.json({ error: 'Max attempts exceeded. Request a new code.' }, { status: 401 });
+        }
+        return Response.json({ error: err.message || 'Verification failed.' }, { status: 500 });
     }
 }
 
-async function handleUserLogin(email, rememberMe) {
-    const user = await prisma.user.findUnique({ where: { email } });
+async function handleUserLogin(phone, rememberMe) {
+    const user = await prisma.user.findUnique({ where: { phone } });
 
     const cookieStore = await cookies();
     const opts = { ...sessionOptions };
     if (!rememberMe) {
         opts.cookieOptions = { ...opts.cookieOptions };
-        delete opts.cookieOptions.maxAge; // Session-only cookie
+        delete opts.cookieOptions.maxAge;
     }
     const session = await getIronSession(cookieStore, opts);
 
@@ -84,6 +87,6 @@ async function handleUserLogin(email, rememberMe) {
         return Response.json({ user: userData, exists: true });
     }
 
-    // New user — return exists: false so frontend shows onboarding
-    return Response.json({ exists: false });
+    // New user — frontend shows onboarding
+    return Response.json({ exists: false, phone });
 }
