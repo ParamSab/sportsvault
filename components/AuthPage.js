@@ -1,16 +1,18 @@
 'use client';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useStore } from '@/lib/store';
 import { SPORTS, POSITIONS, PLAYERS } from '@/lib/mockData';
 
 export default function AuthPage() {
     const { dispatch } = useStore();
-    const [step, setStep] = useState('email'); // email, otp, onboarding
-    const [email, setEmail] = useState('');
+    const [step, setStep] = useState('phone'); // phone, otp, onboarding
+    const [phone, setPhone] = useState('');
     const [rememberMe, setRememberMe] = useState(true);
-
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [isSending, setIsSending] = useState(false);
+    const [error, setError] = useState('');
+    const [resendCountdown, setResendCountdown] = useState(0);
+    const countdownRef = useRef(null);
 
     // Onboarding
     const [onboardStep, setOnboardStep] = useState(0);
@@ -18,6 +20,17 @@ export default function AuthPage() {
     const [profile, setProfile] = useState({
         name: '', photo: null, location: '', sports: [], positions: {},
     });
+
+    const startResendTimer = () => {
+        setResendCountdown(30);
+        clearInterval(countdownRef.current);
+        countdownRef.current = setInterval(() => {
+            setResendCountdown(prev => {
+                if (prev <= 1) { clearInterval(countdownRef.current); return 0; }
+                return prev - 1;
+            });
+        }, 1000);
+    };
 
     const handlePhotoUpload = (e) => {
         const file = e.target.files[0];
@@ -29,38 +42,41 @@ export default function AuthPage() {
     };
 
     const handleSendOTP = async () => {
-        if (!email.includes('@')) return alert("Enter a valid email address");
+        setError('');
+        const trimmed = phone.trim();
+        if (!trimmed) return setError('Please enter your phone number.');
+        const digits = trimmed.replace(/\D/g, '');
+        if (digits.length < 10) return setError('Enter a valid phone number with country code (e.g. +91 98765 43210).');
 
         setIsSending(true);
-
         try {
             const res = await fetch('/api/auth/otp/send', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email })
+                body: JSON.stringify({ phone: trimmed }),
             });
             const data = await res.json();
-            if (!res.ok) throw new Error(data.error || "Failed to send verification code");
+            if (!res.ok) throw new Error(data.error || 'Failed to send verification code.');
             setStep('otp');
+            startResendTimer();
         } catch (err) {
-            console.error(err);
-            const msg = err.message || "Could not send verification code.";
-            alert(`${msg}\n\nHint: If the email fails to arrive, try using the master bypass code: 990770 after a few minutes.`);
+            setError(err.message || 'Could not send verification code. Please try again.');
         } finally {
             setIsSending(false);
         }
     };
 
     const handleVerifyOTP = async () => {
+        setError('');
         const entered = otp.join('');
-        if (entered.length < 6) return alert("Enter the full 6-digit code");
+        if (entered.length < 6) return setError('Enter the full 6-digit code.');
 
         setIsSending(true);
         try {
             const res = await fetch('/api/auth/otp/verify', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, code: entered, rememberMe })
+                body: JSON.stringify({ phone: phone.trim(), code: entered, rememberMe }),
             });
             const data = await res.json();
             if (res.status === 200) {
@@ -70,18 +86,48 @@ export default function AuthPage() {
                     setStep('onboarding');
                 }
             } else {
-                alert(data.error || "Incorrect code");
+                setError(data.error || 'Incorrect code. Please try again.');
             }
         } catch (err) {
-            console.error("Verification error:", err);
-            alert("An error occurred verifying your account.");
+            setError('An error occurred. Please try again.');
+        } finally {
+            setIsSending(false);
+        }
+    };
+
+    const handleResend = async () => {
+        if (resendCountdown > 0) return;
+        setError('');
+        setOtp(['', '', '', '', '', '']);
+        setIsSending(true);
+        try {
+            const res = await fetch('/api/auth/otp/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone: phone.trim() }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to resend code.');
+            startResendTimer();
+        } catch (err) {
+            setError(err.message || 'Could not resend code.');
         } finally {
             setIsSending(false);
         }
     };
 
     const handleOtpChange = (index, value) => {
-        if (value.length > 1) return;
+        // Handle paste of full code
+        if (value.length > 1) {
+            const digits = value.replace(/\D/g, '').slice(0, 6);
+            if (digits.length >= 6) {
+                const newOtp = digits.split('');
+                setOtp(newOtp);
+                document.getElementById(`otp-5`)?.focus();
+                return;
+            }
+        }
+        if (!/^\d*$/.test(value)) return; // numeric only
         const newOtp = [...otp];
         newOtp[index] = value;
         setOtp(newOtp);
@@ -94,6 +140,7 @@ export default function AuthPage() {
         if (e.key === 'Backspace' && !otp[index] && index > 0) {
             document.getElementById(`otp-${index - 1}`)?.focus();
         }
+        if (e.key === 'Enter') handleVerifyOTP();
     };
 
     const toggleSport = (sport) => {
@@ -111,7 +158,6 @@ export default function AuthPage() {
 
     const validateOnboardStep = (idx) => {
         if (idx === 0 && profile.name.trim().length < 2) { setStepError('Please enter your full name (at least 2 characters)'); return false; }
-        // idx 1 is photo (optional)
         if (idx === 2 && !profile.location.trim()) { setStepError('Please enter your city or neighbourhood'); return false; }
         if (idx === 3 && profile.sports.length === 0) { setStepError('Select at least one sport'); return false; }
         if (idx === 4) {
@@ -123,12 +169,10 @@ export default function AuthPage() {
     };
 
     const handleComplete = async () => {
-        const basePlayer = PLAYERS[0];
         const newUser = {
-            ...basePlayer,
             id: 'current',
             name: profile.name || 'Player',
-            email: email,
+            phone: phone.trim(),
             photo: profile.photo,
             location: profile.location || 'Mumbai',
             sports: profile.sports.length > 0 ? profile.sports : ['football'],
@@ -145,7 +189,7 @@ export default function AuthPage() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    name: newUser.name, email: newUser.email, photo: newUser.photo,
+                    name: newUser.name, phone: newUser.phone, photo: newUser.photo,
                     location: newUser.location, sports: newUser.sports, positions: newUser.positions,
                 }),
             });
@@ -233,6 +277,13 @@ export default function AuthPage() {
         </div>,
     ];
 
+    // ─── Inline error box ────────────────────────────────────────────────────
+    const ErrorBox = ({ msg }) => msg ? (
+        <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: 12, padding: '12px 16px', background: 'rgba(239,68,68,0.08)', borderRadius: 10, border: '1px solid rgba(239,68,68,0.2)' }}>
+            ⚠️ {msg}
+        </div>
+    ) : null;
+
     return (
         <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '24px', background: 'radial-gradient(ellipse at top, #1a1f35 0%, #0a0e1a 60%)' }}>
             <div style={{ maxWidth: 420, width: '100%', margin: '0 auto' }}>
@@ -243,25 +294,35 @@ export default function AuthPage() {
                     <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: step === 'onboarding' ? '1.5rem' : '2.25rem', fontWeight: 900, background: 'linear-gradient(135deg, #6366f1, #a855f7, #ec4899)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', marginBottom: 8 }}>
                         SportsVault
                     </h1>
-                    {step === 'email' && <p style={{ color: 'var(--text-secondary)', fontSize: '0.9375rem' }}>Find players. Join games. Build your rep.</p>}
+                    {step === 'phone' && <p style={{ color: 'var(--text-secondary)', fontSize: '0.9375rem' }}>Find players. Join games. Build your rep.</p>}
                 </div>
 
-                {step === 'email' && (
+                {step === 'phone' && (
                     <div className="animate-fade-in">
                         <div className="glass-card no-hover" style={{ padding: 32 }}>
                             <h3 style={{ marginBottom: 4 }}>Welcome</h3>
-                            <p className="text-muted text-sm" style={{ marginBottom: 24 }}>Enter your email to log in or sign up.</p>
+                            <p className="text-muted text-sm" style={{ marginBottom: 24 }}>Enter your phone number to log in or sign up.</p>
                             <div style={{ marginBottom: 20 }}>
-                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Email Address</label>
-                                <input type="email" placeholder="name@example.com" value={email} onChange={(e) => setEmail(e.target.value)} style={{ fontSize: '1rem', padding: '14px 16px', width: '100%' }} autoFocus />
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Phone Number</label>
+                                <input
+                                    type="tel"
+                                    placeholder="+91 98765 43210"
+                                    value={phone}
+                                    onChange={(e) => setPhone(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleSendOTP()}
+                                    style={{ fontSize: '1rem', padding: '14px 16px', width: '100%' }}
+                                    autoFocus
+                                />
+                                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 6 }}>Include country code, e.g. +91 for India</p>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 24 }}>
                                 <input type="checkbox" id="rememberMe" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} style={{ width: 16, height: 16, cursor: 'pointer' }} />
                                 <label htmlFor="rememberMe" style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', cursor: 'pointer' }}>Remember me for 30 days</label>
                             </div>
-                            <button className="btn btn-primary btn-block btn-lg" onClick={handleSendOTP} disabled={isSending}>
-                                {isSending ? 'Sending...' : 'Send Magic Code →'}
+                            <button className="btn btn-primary btn-block btn-lg" onClick={handleSendOTP} disabled={isSending} style={{ opacity: isSending ? 0.7 : 1, cursor: isSending ? 'not-allowed' : 'pointer' }}>
+                                {isSending ? '⏳ Sending Code…' : 'Send Code via SMS →'}
                             </button>
+                            <ErrorBox msg={error} />
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'center', gap: 24, marginTop: 32 }}>
                             {Object.values(SPORTS).map(s => <span key={s.name} style={{ fontSize: '1.5rem', opacity: 0.4, animation: 'float 3s ease-in-out infinite', animationDelay: `${Math.random()}s` }}>{s.emoji}</span>)}
@@ -272,15 +333,53 @@ export default function AuthPage() {
                 {step === 'otp' && (
                     <div className="animate-fade-in">
                         <div className="glass-card no-hover" style={{ padding: 32 }}>
-                            <h3 style={{ marginBottom: 4 }}>Check your inbox</h3>
-                            <p className="text-muted text-sm" style={{ marginBottom: 24 }}>Enter the 6-digit code sent to {email}</p>
+                            <h3 style={{ marginBottom: 4 }}>Check your texts</h3>
+                            <p className="text-muted text-sm" style={{ marginBottom: 6 }}>We sent a 6-digit code to</p>
+                            <p style={{ fontWeight: 700, fontSize: '1rem', marginBottom: 24, color: 'var(--text-accent)' }}>{phone}</p>
+
                             <div className="otp-container" style={{ marginBottom: 24 }}>
                                 {otp.map((digit, i) => (
-                                    <input key={i} id={`otp-${i}`} type="text" inputMode="numeric" className="otp-input" value={digit} onChange={e => handleOtpChange(i, e.target.value)} onKeyDown={e => handleOtpKeyDown(i, e)} maxLength={1} autoFocus={i === 0} />
+                                    <input
+                                        key={i}
+                                        id={`otp-${i}`}
+                                        type="text"
+                                        inputMode="numeric"
+                                        className="otp-input"
+                                        style={{ borderColor: digit ? '#6366f1' : undefined }}
+                                        value={digit}
+                                        onChange={e => handleOtpChange(i, e.target.value)}
+                                        onKeyDown={e => handleOtpKeyDown(i, e)}
+                                        onPaste={e => { e.preventDefault(); handleOtpChange(i, e.clipboardData.getData('text')); }}
+                                        maxLength={6}
+                                        autoFocus={i === 0}
+                                    />
                                 ))}
                             </div>
-                            <button className="btn btn-primary btn-block btn-lg" onClick={handleVerifyOTP}>Verify →</button>
-                            <button className="btn btn-ghost btn-block" style={{ marginTop: 12 }} onClick={() => setStep('email')}>Change email</button>
+
+                            <button
+                                className="btn btn-primary btn-block btn-lg"
+                                onClick={handleVerifyOTP}
+                                disabled={isSending}
+                                style={{ opacity: isSending ? 0.7 : 1, cursor: isSending ? 'not-allowed' : 'pointer' }}
+                            >
+                                {isSending ? '⏳ Verifying…' : 'Verify →'}
+                            </button>
+
+                            <ErrorBox msg={error} />
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 20 }}>
+                                <button className="btn btn-ghost" style={{ fontSize: '0.875rem', padding: '8px 0' }} onClick={() => { setStep('phone'); setError(''); setOtp(['','','','','','']); }}>
+                                    ← Change number
+                                </button>
+                                <button
+                                    className="btn btn-ghost"
+                                    style={{ fontSize: '0.875rem', padding: '8px 0', opacity: resendCountdown > 0 ? 0.5 : 1, cursor: resendCountdown > 0 ? 'not-allowed' : 'pointer' }}
+                                    onClick={handleResend}
+                                    disabled={resendCountdown > 0 || isSending}
+                                >
+                                    {resendCountdown > 0 ? `Resend in ${resendCountdown}s` : 'Resend Code'}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -288,15 +387,31 @@ export default function AuthPage() {
                 {step === 'onboarding' && (
                     <div className="animate-slide-up">
                         <div className="glass-card no-hover" style={{ padding: 32 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                                <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.05em' }}>STEP {onboardStep + 1} OF 5</div>
-                                <div style={{ display: 'flex', gap: 4 }}>{onboardingSteps.map((_, i) => <div key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: i === onboardStep ? 'var(--primary-color)' : i < onboardStep ? 'rgba(99,102,241,0.3)' : 'var(--border-color)', transition: 'all 0.3s' }} />)}</div>
+                            {/* Progress bar */}
+                            <div style={{ marginBottom: 24 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                                    <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Step {onboardStep + 1} of 5</div>
+                                </div>
+                                <div style={{ display: 'flex', gap: 4 }}>
+                                    {onboardingSteps.map((_, i) => (
+                                        <div key={i} style={{
+                                            flex: 1, height: 4, borderRadius: 2,
+                                            background: i < onboardStep ? '#6366f1' : i === onboardStep ? 'linear-gradient(90deg, #6366f1, #a855f7)' : 'var(--border-color)',
+                                            transition: 'all 0.3s',
+                                        }} />
+                                    ))}
+                                </div>
                             </div>
+
                             {onboardingSteps[onboardStep]}
+
                             {stepError && <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: 16, padding: '12px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: 8, border: '1px solid rgba(239, 68, 68, 0.2)' }}>⚠️ {stepError}</div>}
+
                             <div style={{ display: 'flex', gap: 12, marginTop: 32 }}>
                                 {onboardStep > 0 && <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => { setOnboardStep(s => s - 1); setStepError(''); }}>← Back</button>}
-                                <button className="btn btn-primary" style={{ flex: 2 }} onClick={() => { if (validateOnboardStep(onboardStep)) { if (onboardStep < onboardingSteps.length - 1) setOnboardStep(s => s + 1); else handleComplete(); } }}>{onboardStep < onboardingSteps.length - 1 ? 'Next →' : 'Complete Profile 🚀'}</button>
+                                <button className="btn btn-primary" style={{ flex: 2 }} onClick={() => { if (validateOnboardStep(onboardStep)) { if (onboardStep < onboardingSteps.length - 1) setOnboardStep(s => s + 1); else handleComplete(); } }}>
+                                    {onboardStep < onboardingSteps.length - 1 ? 'Next →' : 'Complete Profile 🚀'}
+                                </button>
                             </div>
                         </div>
                     </div>

@@ -2,14 +2,15 @@ import { prisma } from '@/lib/prisma';
 
 export async function POST(req) {
     try {
-        const { name, email, phone, photo, location, sports, positions } = await req.json();
-        if (!email) return Response.json({ error: 'Email required' }, { status: 400 });
+        const { name, phone, photo, location, sports, positions } = await req.json();
+        if (!phone) return Response.json({ error: 'Phone number required' }, { status: 400 });
+
+        const normalized = phone.startsWith('+') ? phone : `+${phone.replace(/\D/g, '')}`;
 
         const user = await prisma.user.upsert({
-            where: { email },
+            where: { phone: normalized },
             update: {
                 name,
-                phone: phone || null,
                 photo: photo || null,
                 location: location || null,
                 sports: JSON.stringify(sports || []),
@@ -17,8 +18,7 @@ export async function POST(req) {
             },
             create: {
                 name,
-                email,
-                phone: phone || null,
+                phone: normalized,
                 photo: photo || null,
                 location: location || null,
                 sports: JSON.stringify(sports || []),

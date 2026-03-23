@@ -1,60 +1,39 @@
-import { Resend } from 'resend';
-import { prisma } from '@/lib/prisma';
+import twilio from 'twilio';
 
 export async function POST(req) {
     try {
-        const { email } = await req.json();
-        if (!email || !email.includes('@')) {
-            return Response.json({ error: 'Valid email required' }, { status: 400 });
+        const { phone } = await req.json();
+
+        if (!phone) {
+            return Response.json({ error: 'Phone number is required.' }, { status: 400 });
         }
 
-        if (!process.env.RESEND_API_KEY || process.env.RESEND_API_KEY === 're_...') {
-            return Response.json({ error: 'Email service not configured. Please contact support.' }, { status: 500 });
+        // Normalize: ensure E.164 format
+        const normalized = phone.startsWith('+') ? phone : `+${phone.replace(/\D/g, '')}`;
+        if (normalized.length < 10) {
+            return Response.json({ error: 'Enter a valid phone number with country code.' }, { status: 400 });
         }
 
-        const resend = new Resend(process.env.RESEND_API_KEY);
+        const accountSid = process.env.TWILIO_ACCOUNT_SID;
+        const authToken = process.env.TWILIO_AUTH_TOKEN;
+        const serviceSid = process.env.TWILIO_VERIFY_SERVICE_SID;
 
-        // Generate 6-digit OTP
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
-
-        // Delete any existing OTPs for this email first
-        await prisma.otpCode.deleteMany({ where: { email } });
-
-        // Store OTP in database
-        await prisma.otpCode.create({
-            data: { email, code: otp, expiresAt },
-        });
-
-        // Send Email via Resend
-        const { data, error } = await resend.emails.send({
-            from: 'SportsVault <onboarding@resend.dev>',
-            to: [email],
-            subject: 'Your SportsVault Verification Code',
-            html: `
-                <div style="font-family: sans-serif; padding: 40px; max-width: 480px; margin: 0 auto; background: #0a0e1a; color: #e2e8f0; border-radius: 16px;">
-                    <h2 style="color: #6366f1; margin-bottom: 8px;">SportsVault ⚡</h2>
-                    <p style="color: #94a3b8; margin-bottom: 24px;">Your verification code is:</p>
-                    <div style="font-size: 42px; font-weight: 900; letter-spacing: 12px; color: #a855f7; background: rgba(99,102,241,0.1); padding: 24px; border-radius: 12px; text-align: center; margin: 24px 0; border: 1px solid rgba(99,102,241,0.3);">
-                        ${otp}
-                    </div>
-                    <p style="font-size: 13px; color: #64748b;">This code expires in 10 minutes. Do not share it with anyone.</p>
-                </div>
-            `
-        });
-
-        if (error) {
-            console.error('[RESEND ERROR]', error);
-            // Clean up DB entry on failure
-            await prisma.otpCode.deleteMany({ where: { email } });
-            return Response.json({ error: `Email sending failed: ${error.message}` }, { status: 500 });
+        if (!accountSid || !authToken || !serviceSid || serviceSid.startsWith('VAxx')) {
+            return Response.json({ error: 'SMS service is not configured. Contact support.' }, { status: 500 });
         }
 
-        console.log(`[AUTH] OTP sent to ${email}, expires at ${expiresAt.toISOString()}`);
-        return Response.json({ success: true });
+        const client = twilio(accountSid, authToken);
+
+        const verification = await client.verify.v2
+            .services(serviceSid)
+            .verifications.create({ to: normalized, channel: 'sms' });
+
+        console.log(`[AUTH] Twilio Verify sent to ${normalized}, status: ${verification.status}`);
+        return Response.json({ success: true, status: verification.status });
 
     } catch (err) {
         console.error('[OTP SEND ERROR]', err);
-        return Response.json({ error: err.message || 'Failed to send verification code' }, { status: 500 });
+        const msg = err?.message || 'Failed to send verification code';
+        return Response.json({ error: msg }, { status: 500 });
     }
 }
