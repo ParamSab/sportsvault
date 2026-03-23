@@ -16,6 +16,7 @@ export default function AuthPage() {
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [isSending, setIsSending] = useState(false);
     const [resendCountdown, setResendCountdown] = useState(0);
+    const [isDevMode, setIsDevMode] = useState(false);
     const countdownRef = useRef(null);
 
     // Onboarding
@@ -74,6 +75,7 @@ export default function AuthPage() {
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || "Failed to send verification code");
+                if (data.devMode) setIsDevMode(true);
             }
             setStep('otp');
             startResendCountdown();
@@ -403,9 +405,14 @@ export default function AuthPage() {
                             <h3 style={{ marginBottom: 4 }}>
                                 {authMode === 'email' ? 'Check your inbox' : 'Check your messages'}
                             </h3>
-                            <p className="text-muted text-sm" style={{ marginBottom: 24 }}>
+                            <p className="text-muted text-sm" style={{ marginBottom: isDevMode ? 8 : 24 }}>
                                 Enter the 6-digit code sent to {authMode === 'email' ? email : phone}
                             </p>
+                            {isDevMode && (
+                                <div style={{ background: '#fffbeb', border: '1px solid #f59e0b', borderRadius: 8, padding: '10px 14px', marginBottom: 20, fontSize: '0.82rem', color: '#92400e' }}>
+                                    <strong>Dev mode</strong> — Twilio not configured. Use code <strong style={{ letterSpacing: 2 }}>990770</strong> to continue.
+                                </div>
+                            )}
                             <div className="otp-container" style={{ marginBottom: 24 }}>
                                 {otp.map((digit, i) => (
                                     <input key={i} id={`otp-${i}`} type="text" inputMode="numeric" className="otp-input" value={digit} onChange={e => handleOtpChange(i, e.target.value)} onKeyDown={e => handleOtpKeyDown(i, e)} onPaste={handleOtpPaste} maxLength={1} autoFocus={i === 0} />
@@ -422,7 +429,7 @@ export default function AuthPage() {
                             >
                                 {resendCountdown > 0 ? `Resend code in ${resendCountdown}s` : 'Resend code'}
                             </button>
-                            <button className="btn btn-ghost btn-block" style={{ marginTop: 4, fontSize: '0.8rem', opacity: 0.7 }} onClick={() => { setStep('login'); setOtp(['', '', '', '', '', '']); setResendCountdown(0); if (countdownRef.current) clearInterval(countdownRef.current); }}>
+                            <button className="btn btn-ghost btn-block" style={{ marginTop: 4, fontSize: '0.8rem', opacity: 0.7 }} onClick={() => { setStep('login'); setOtp(['', '', '', '', '', '']); setResendCountdown(0); setIsDevMode(false); if (countdownRef.current) clearInterval(countdownRef.current); }}>
                                 ← Change {authMode === 'email' ? 'email' : 'phone'}
                             </button>
                         </div>

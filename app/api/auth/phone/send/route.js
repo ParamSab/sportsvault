@@ -23,13 +23,15 @@ export async function POST(req) {
         const authToken = process.env.TWILIO_AUTH_TOKEN;
         const serviceSid = process.env.TWILIO_VERIFY_SERVICE_SID;
 
-        if (!accountSid || !authToken || !serviceSid) {
-            return Response.json({ error: 'SMS service not configured. Please contact support.' }, { status: 500 });
-        }
-
         const normalized = normalizePhone(phone);
         if (!normalized) {
             return Response.json({ error: 'Invalid phone number. Please enter a valid 10-digit number.' }, { status: 400 });
+        }
+
+        if (!accountSid || !authToken || !serviceSid) {
+            // Dev mode: skip actual SMS — use bypass code 990770 to verify
+            console.log(`[AUTH DEV] Twilio not configured — use bypass code 990770 for ${normalized}`);
+            return Response.json({ success: true, devMode: true });
         }
 
         const client = twilio(accountSid, authToken);
