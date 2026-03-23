@@ -3,12 +3,14 @@ import { prisma } from '@/lib/prisma';
 export async function POST(req) {
     try {
         const { name, email, phone, photo, location, sports, positions } = await req.json();
-        if (!email) return Response.json({ error: 'Email required' }, { status: 400 });
+        if (!email && !phone) return Response.json({ error: 'Email or phone required' }, { status: 400 });
 
+        const whereClause = email ? { email } : { phone };
         const user = await prisma.user.upsert({
-            where: { email },
+            where: whereClause,
             update: {
                 name,
+                email: email || null,
                 phone: phone || null,
                 photo: photo || null,
                 location: location || null,
@@ -17,7 +19,7 @@ export async function POST(req) {
             },
             create: {
                 name,
-                email,
+                email: email || null,
                 phone: phone || null,
                 photo: photo || null,
                 location: location || null,
