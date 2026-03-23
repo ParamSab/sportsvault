@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useStore } from '@/lib/store';
 import { SPORTS, POSITIONS, PLAYERS } from '@/lib/mockData';
 
@@ -15,6 +15,8 @@ export default function AuthPage() {
 
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [isSending, setIsSending] = useState(false);
+    const [resendCountdown, setResendCountdown] = useState(0);
+    const countdownRef = useRef(null);
 
     // Onboarding
     const [onboardStep, setOnboardStep] = useState(0);
@@ -22,6 +24,19 @@ export default function AuthPage() {
     const [profile, setProfile] = useState({
         name: '', photo: null, location: '', sports: [], positions: {},
     });
+
+    const startResendCountdown = () => {
+        setResendCountdown(60);
+        if (countdownRef.current) clearInterval(countdownRef.current);
+        countdownRef.current = setInterval(() => {
+            setResendCountdown(prev => {
+                if (prev <= 1) { clearInterval(countdownRef.current); return 0; }
+                return prev - 1;
+            });
+        }, 1000);
+    };
+
+    useEffect(() => () => { if (countdownRef.current) clearInterval(countdownRef.current); }, []);
 
     const handlePhotoUpload = (e) => {
         const file = e.target.files[0];
@@ -61,6 +76,7 @@ export default function AuthPage() {
                 if (!res.ok) throw new Error(data.error || "Failed to send verification code");
             }
             setStep('otp');
+            startResendCountdown();
         } catch (err) {
             console.error(err);
             alert(err.message || "Could not send verification code.");
@@ -115,6 +131,40 @@ export default function AuthPage() {
         setOtp(newOtp);
         if (value && index < 5) {
             document.getElementById(`otp-${index + 1}`)?.focus();
+        }
+    };
+
+    const handleOtpPaste = (e) => {
+        e.preventDefault();
+        const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+        if (!pasted) return;
+        const newOtp = [...otp];
+        for (let i = 0; i < 6; i++) newOtp[i] = pasted[i] || '';
+        setOtp(newOtp);
+        const nextEmpty = pasted.length < 6 ? pasted.length : 5;
+        document.getElementById(`otp-${nextEmpty}`)?.focus();
+    };
+
+    const handleResend = async () => {
+        if (resendCountdown > 0 || isSending) return;
+        setIsSending(true);
+        try {
+            const endpoint = authMode === 'email' ? '/api/auth/otp/send' : '/api/auth/phone/send';
+            const body = authMode === 'email' ? { email } : { phone };
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to resend code');
+            setOtp(['', '', '', '', '', '']);
+            startResendCountdown();
+            document.getElementById('otp-0')?.focus();
+        } catch (err) {
+            alert(err.message || 'Could not resend code.');
+        } finally {
+            setIsSending(false);
         }
     };
 
@@ -358,13 +408,21 @@ export default function AuthPage() {
                             </p>
                             <div className="otp-container" style={{ marginBottom: 24 }}>
                                 {otp.map((digit, i) => (
-                                    <input key={i} id={`otp-${i}`} type="text" inputMode="numeric" className="otp-input" value={digit} onChange={e => handleOtpChange(i, e.target.value)} onKeyDown={e => handleOtpKeyDown(i, e)} maxLength={1} autoFocus={i === 0} />
+                                    <input key={i} id={`otp-${i}`} type="text" inputMode="numeric" className="otp-input" value={digit} onChange={e => handleOtpChange(i, e.target.value)} onKeyDown={e => handleOtpKeyDown(i, e)} onPaste={handleOtpPaste} maxLength={1} autoFocus={i === 0} />
                                 ))}
                             </div>
                             <button className="btn btn-primary btn-block btn-lg" onClick={handleVerifyOTP} disabled={isSending}>
                                 {isSending ? 'Verifying...' : 'Verify →'}
                             </button>
-                            <button className="btn btn-ghost btn-block" style={{ marginTop: 12 }} onClick={() => { setStep('login'); setOtp(['', '', '', '', '', '']); }}>
+                            <button
+                                className="btn btn-ghost btn-block"
+                                style={{ marginTop: 12 }}
+                                onClick={handleResend}
+                                disabled={resendCountdown > 0 || isSending}
+                            >
+                                {resendCountdown > 0 ? `Resend code in ${resendCountdown}s` : 'Resend code'}
+                            </button>
+                            <button className="btn btn-ghost btn-block" style={{ marginTop: 4, fontSize: '0.8rem', opacity: 0.7 }} onClick={() => { setStep('login'); setOtp(['', '', '', '', '', '']); setResendCountdown(0); if (countdownRef.current) clearInterval(countdownRef.current); }}>
                                 ← Change {authMode === 'email' ? 'email' : 'phone'}
                             </button>
                         </div>
