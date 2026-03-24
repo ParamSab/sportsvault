@@ -1,39 +1,55 @@
-import twilio from 'twilio';
+import { prisma } from '@/lib/prisma';
+import fetch from 'node-fetch';
 
 export async function POST(req) {
     try {
-        const { phone } = await req.json();
+        const { email } = await req.json();
 
-        if (!phone) {
-            return Response.json({ error: 'Phone number is required.' }, { status: 400 });
+        if (!email) {
+            return Response.json({ error: 'Email is required.' }, { status: 400 });
         }
 
-        // Normalize: ensure E.164 format
-        const normalized = phone.startsWith('+') ? phone : `+${phone.replace(/\D/g, '')}`;
-        if (normalized.length < 10) {
-            return Response.json({ error: 'Enter a valid phone number with country code.' }, { status: 400 });
+        // Generate 6-digit code
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+
+        await prisma.otpCode.create({
+            data: { email, code, expiresAt },
+        });
+
+        const resendKey = process.env.RESEND_API_KEY;
+        if (!resendKey) {
+            console.log(`[AUTH DEV] Resend key missing, code for ${email} is ${code}`);
+            return Response.json({ success: true, devMode: true, message: 'Resend API key missing, use 990770' });
         }
 
-        const accountSid = process.env.TWILIO_ACCOUNT_SID;
-        const authToken = process.env.TWILIO_AUTH_TOKEN;
-        const serviceSid = process.env.TWILIO_VERIFY_SERVICE_SID;
+        const resBody = {
+            from: "SportsVault <noreply@resend.dev>",
+            to: [email],
+            subject: "Your SportsVault Login Code",
+            html: `<p>Your login code is <strong>${code}</strong></p><p>It expires in 15 minutes.</p>`
+        };
 
-        if (!accountSid || !authToken || !serviceSid || serviceSid.startsWith('VAxx')) {
-            return Response.json({ error: 'SMS service is not configured. Contact support.' }, { status: 500 });
+        const response = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${resendKey}`
+            },
+            body: JSON.stringify(resBody)
+        });
+
+        const resendData = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(resendData.message || 'Failed to send email via Resend');
         }
 
-        const client = twilio(accountSid, authToken);
-
-        const verification = await client.verify.v2
-            .services(serviceSid)
-            .verifications.create({ to: normalized, channel: 'sms' });
-
-        console.log(`[AUTH] Twilio Verify sent to ${normalized}, status: ${verification.status}`);
-        return Response.json({ success: true, status: verification.status });
+        console.log(`[AUTH] Resend email sent to ${email}`);
+        return Response.json({ success: true, method: 'email' });
 
     } catch (err) {
         console.error('[OTP SEND ERROR]', err);
-        const msg = err?.message || 'Failed to send verification code';
-        return Response.json({ error: msg }, { status: 500 });
+        return Response.json({ error: err.message || 'Failed to send verification code' }, { status: 500 });
     }
 }
