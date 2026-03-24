@@ -79,7 +79,7 @@ export async function POST(req) {
             delete userData.password;
             session.user = userData;
             await session.save();
-            return Response.json({ user: userData, exists: true });
+            return Response.json({ user: userData, exists: true, needsPasswordSetup: !user.password });
         }
 
         // New user — return normalized phone so frontend can use it during onboarding

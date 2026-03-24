@@ -43,3 +43,15 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE TRIGGER saved_games_updated_at
   BEFORE UPDATE ON saved_games
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- OTP codes table for email verification
+CREATE TABLE IF NOT EXISTS otp_codes (
+  id         UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  email      TEXT        NOT NULL,
+  code       TEXT        NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  used       BOOLEAN     DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_otp_codes_email ON otp_codes (email);

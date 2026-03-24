@@ -5,15 +5,22 @@ import { useStore } from '@/lib/store';
 import { SPORTS, POSITIONS, PLAYERS } from '@/lib/mockData';
 
 export default function AuthPage() {
-    const { dispatch } = useStore();
+    const { state, dispatch } = useStore();
     const router = useRouter();
-    const [step, setStep] = useState('login'); // login, otp, onboarding
-    const [authMode, setAuthMode] = useState('phone'); // email, phone (Default to phone as per user preference)
+    const [step, setStep] = useState('login'); // login, otp, onboarding, setup-credentials
+    const [authMode, setAuthMode] = useState('phone'); // email, phone
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
     const [rememberMe, setRememberMe] = useState(true);
-    // Phone number returned from verify (normalized E.164) for onboarding
+    // Verified identifiers returned from server
     const [verifiedPhone, setVerifiedPhone] = useState('');
+    const [verifiedEmail, setVerifiedEmail] = useState('');
+    // Credentials setup
+    const [setupEmail, setSetupEmail] = useState('');
+    const [setupPassword, setSetupPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [credError, setCredError] = useState('');
 
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [isSending, setIsSending] = useState(false);
@@ -113,9 +120,16 @@ export default function AuthPage() {
             if (res.status === 200) {
                 if (data.exists && data.user) {
                     dispatch({ type: 'LOGIN', payload: data.user });
-                    router.push('/invite');
+                    if (data.needsPasswordSetup) {
+                        // Pre-fill email for setup if we know it
+                        if (authMode === 'email') setSetupEmail(email);
+                        setStep('setup-credentials');
+                    } else {
+                        router.push('/invite');
+                    }
                 } else {
                     if (data.phone) setVerifiedPhone(data.phone);
+                    if (data.email) setVerifiedEmail(data.email);
                     setStep('onboarding');
                 }
             } else {
@@ -124,6 +138,38 @@ export default function AuthPage() {
         } catch (err) {
             console.error("Verification error:", err);
             alert("An error occurred verifying your account.");
+        } finally {
+            setIsSending(false);
+        }
+    };
+
+    const handleSaveCredentials = async () => {
+        setCredError('');
+        const credEmail = authMode === 'email' ? (verifiedEmail || email) : setupEmail;
+        if (!credEmail || !credEmail.includes('@')) { setCredError('Enter a valid email address'); return; }
+        if (!setupPassword || setupPassword.length < 6) { setCredError('Password must be at least 6 characters'); return; }
+        if (setupPassword !== confirmPassword) { setCredError('Passwords do not match'); return; }
+
+        setIsSending(true);
+        try {
+            const user = state.currentUser;
+            await fetch('/api/users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: user?.name,
+                    email: credEmail,
+                    phone: verifiedPhone || user?.phone || null,
+                    photo: user?.photo || null,
+                    location: user?.location || null,
+                    sports: user?.sports || [],
+                    positions: user?.positions || {},
+                    password: setupPassword,
+                }),
+            });
+            router.push('/invite');
+        } catch (err) {
+            setCredError('Failed to save. Please try again.');
         } finally {
             setIsSending(false);
         }
@@ -201,17 +247,25 @@ export default function AuthPage() {
             const missing = profile.sports.filter(s => !profile.positions[s]);
             if (missing.length > 0) { setStepError(`Select your position for: ${missing.join(', ')}`); return false; }
         }
+        if (idx === 5) {
+            // Credentials step
+            const credEmail = authMode === 'email' ? (verifiedEmail || email) : setupEmail;
+            if (!credEmail || !credEmail.includes('@')) { setStepError('Enter a valid email address'); return false; }
+            if (!setupPassword || setupPassword.length < 6) { setStepError('Password must be at least 6 characters'); return false; }
+            if (setupPassword !== confirmPassword) { setStepError('Passwords do not match'); return false; }
+        }
         setStepError('');
         return true;
     };
 
     const handleComplete = async () => {
         const basePlayer = PLAYERS[0];
+        const credEmail = authMode === 'email' ? (verifiedEmail || email) : setupEmail;
         const newUser = {
             ...basePlayer,
             id: 'current',
             name: profile.name || 'Player',
-            email: authMode === 'email' ? email : null,
+            email: credEmail || (authMode === 'email' ? email : null),
             phone: authMode === 'phone' ? (verifiedPhone || phone) : null,
             photo: profile.photo,
             location: profile.location || 'Mumbai',
@@ -236,6 +290,7 @@ export default function AuthPage() {
                     location: newUser.location,
                     sports: newUser.sports,
                     positions: newUser.positions,
+                    password: setupPassword || undefined,
                 }),
             });
             const dbData = await dbRes.json();
@@ -327,6 +382,30 @@ export default function AuthPage() {
                         </div>
                     </div>
                 ))}
+            </div>
+        </div>,
+        <div key="credentials" className="animate-fade-in">
+            <h2 style={{ marginBottom: 8 }}>Secure your account</h2>
+            <p className="text-muted text-sm" style={{ marginBottom: 24 }}>Set an email and password to log in next time.</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Email Address</label>
+                    {authMode === 'email'
+                        ? <input type="email" value={verifiedEmail || email} readOnly style={{ fontSize: '1rem', padding: '14px 16px', width: '100%', opacity: 0.7 }} />
+                        : <input type="email" placeholder="name@example.com" value={setupEmail} onChange={e => setSetupEmail(e.target.value)} style={{ fontSize: '1rem', padding: '14px 16px', width: '100%' }} autoFocus />
+                    }
+                </div>
+                <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Password</label>
+                    <div style={{ position: 'relative' }}>
+                        <input type={showPassword ? 'text' : 'password'} placeholder="Min. 6 characters" value={setupPassword} onChange={e => setSetupPassword(e.target.value)} style={{ fontSize: '1rem', padding: '14px 48px 14px 16px', width: '100%' }} />
+                        <button type="button" onClick={() => setShowPassword(p => !p)} style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: 'var(--text-secondary)' }}>{showPassword ? '🙈' : '👁'}</button>
+                    </div>
+                </div>
+                <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Confirm Password</label>
+                    <input type={showPassword ? 'text' : 'password'} placeholder="Repeat password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} style={{ fontSize: '1rem', padding: '14px 16px', width: '100%' }} />
+                </div>
             </div>
         </div>,
     ];
@@ -444,15 +523,51 @@ export default function AuthPage() {
                     <div className="animate-slide-up">
                         <div className="glass-card no-hover" style={{ padding: 32 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                                <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.05em' }}>STEP {onboardStep + 1} OF 5</div>
+                                <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.05em' }}>STEP {onboardStep + 1} OF {onboardingSteps.length}</div>
                                 <div style={{ display: 'flex', gap: 4 }}>{onboardingSteps.map((_, i) => <div key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: i === onboardStep ? 'var(--primary-color)' : i < onboardStep ? 'rgba(99,102,241,0.3)' : 'var(--border-color)', transition: 'all 0.3s' }} />)}</div>
                             </div>
                             {onboardingSteps[onboardStep]}
                             {stepError && <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: 16, padding: '12px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: 8, border: '1px solid rgba(239, 68, 68, 0.2)' }}>⚠️ {stepError}</div>}
                             <div style={{ display: 'flex', gap: 12, marginTop: 32 }}>
                                 {onboardStep > 0 && <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => { setOnboardStep(s => s - 1); setStepError(''); }}>← Back</button>}
-                                <button className="btn btn-primary" style={{ flex: 2 }} onClick={() => { if (validateOnboardStep(onboardStep)) { if (onboardStep < onboardingSteps.length - 1) setOnboardStep(s => s + 1); else handleComplete(); } }}>{onboardStep < onboardingSteps.length - 1 ? 'Next →' : 'Complete Profile 🚀'}</button>
+                                <button className="btn btn-primary" style={{ flex: 2 }} onClick={() => { if (validateOnboardStep(onboardStep)) { if (onboardStep < onboardingSteps.length - 1) setOnboardStep(s => s + 1); else handleComplete(); } }}>{onboardStep < onboardingSteps.length - 1 ? 'Next →' : 'Create Account 🚀'}</button>
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {step === 'setup-credentials' && (
+                    <div className="animate-slide-up">
+                        <div className="glass-card no-hover" style={{ padding: 32 }}>
+                            <h3 style={{ marginBottom: 4 }}>Set your email & password</h3>
+                            <p className="text-muted text-sm" style={{ marginBottom: 24 }}>All your games and profile are linked to this.</p>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Email Address</label>
+                                    {authMode === 'email'
+                                        ? <input type="email" value={verifiedEmail || email} readOnly style={{ fontSize: '1rem', padding: '14px 16px', width: '100%', opacity: 0.7 }} />
+                                        : <input type="email" placeholder="name@example.com" value={setupEmail} onChange={e => setSetupEmail(e.target.value)} autoFocus style={{ fontSize: '1rem', padding: '14px 16px', width: '100%' }} />
+                                    }
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Password</label>
+                                    <div style={{ position: 'relative' }}>
+                                        <input type={showPassword ? 'text' : 'password'} placeholder="Min. 6 characters" value={setupPassword} onChange={e => setSetupPassword(e.target.value)} style={{ fontSize: '1rem', padding: '14px 48px 14px 16px', width: '100%' }} />
+                                        <button type="button" onClick={() => setShowPassword(p => !p)} style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: 'var(--text-secondary)' }}>{showPassword ? '🙈' : '👁'}</button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Confirm Password</label>
+                                    <input type={showPassword ? 'text' : 'password'} placeholder="Repeat password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} style={{ fontSize: '1rem', padding: '14px 16px', width: '100%' }} />
+                                </div>
+                            </div>
+                            {credError && <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: 16, padding: '12px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: 8, border: '1px solid rgba(239, 68, 68, 0.2)' }}>⚠️ {credError}</div>}
+                            <button className="btn btn-primary btn-block btn-lg" style={{ marginTop: 24 }} onClick={handleSaveCredentials} disabled={isSending}>
+                                {isSending ? 'Saving...' : 'Save & Continue →'}
+                            </button>
+                            <button className="btn btn-ghost btn-block" style={{ marginTop: 8, fontSize: '0.8rem', opacity: 0.6 }} onClick={() => router.push('/invite')}>
+                                Skip for now
+                            </button>
                         </div>
                     </div>
                 )}
