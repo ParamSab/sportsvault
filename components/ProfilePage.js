@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { SPORTS, RATING_ATTRIBUTES, getPlayer, getInitials, getTrustTier } from '@/lib/mockData';
 
@@ -7,6 +7,8 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
     const { state, dispatch } = useStore();
     const [activeSport, setActiveSport] = useState(null);
     const [thoughtText, setThoughtText] = useState('');
+    const [gameHistory, setGameHistory] = useState([]);
+    const [historyLoading, setHistoryLoading] = useState(false);
 
     const player = isOwn
         ? (state.currentUser || getPlayer('p1'))
@@ -22,6 +24,17 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
 
     const playerGames = state.games.filter(g => g.rsvps.some(r => r.playerId === player.id));
     const pastGames = playerGames.filter(g => g.status === 'completed');
+
+    // Fetch game history from Supabase (only for own profile)
+    useEffect(() => {
+        if (!isOwn || !player?.dbId) return;
+        setHistoryLoading(true);
+        fetch(`/api/games/history?userId=${player.dbId}`)
+            .then(r => r.json())
+            .then(data => setGameHistory(data.history || []))
+            .catch(() => setGameHistory([]))
+            .finally(() => setHistoryLoading(false));
+    }, [isOwn, player?.dbId]);
 
     const handleAddThought = () => {
         if (!thoughtText.trim()) return;
@@ -254,6 +267,65 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
                     </button>
                 )}
             </div>
+
+            {/* Game History (only own profile, loaded from Supabase) */}
+            {isOwn && (
+                <div className="glass-card no-hover" style={{ marginBottom: 16 }}>
+                    <h3 style={{ fontSize: '1rem', marginBottom: 12 }}>🕒 Game History</h3>
+                    {historyLoading ? (
+                        <p className="text-sm text-muted">Loading history…</p>
+                    ) : gameHistory.length === 0 ? (
+                        <p className="text-sm text-muted">No past games yet. Games appear here 24 hours after they are scheduled.</p>
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                            {gameHistory.map((g, i) => {
+                                const sport = SPORTS[g.sport];
+                                return (
+                                    <div
+                                        key={g.game_id || i}
+                                        style={{
+                                            background: 'var(--bg-input)',
+                                            borderRadius: 'var(--radius-md)',
+                                            padding: '12px 14px',
+                                            borderLeft: `3px solid ${sport?.color || '#6366f1'}`,
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                            <div>
+                                                <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: 2 }}>
+                                                    {sport?.emoji} {g.title}
+                                                </div>
+                                                <div className="text-xs text-muted">
+                                                    {g.game_date} · {g.game_time} · {g.location || g.address || 'Location TBD'}
+                                                </div>
+                                            </div>
+                                            <span
+                                                style={{
+                                                    fontSize: '0.7rem',
+                                                    fontWeight: 700,
+                                                    padding: '2px 8px',
+                                                    borderRadius: 99,
+                                                    background: 'var(--bg-card)',
+                                                    color: 'var(--text-secondary)',
+                                                    textTransform: 'uppercase',
+                                                    letterSpacing: '0.05em',
+                                                }}
+                                            >
+                                                {g.status}
+                                            </span>
+                                        </div>
+                                        {g.max_players && (
+                                            <div className="text-xs text-muted" style={{ marginTop: 4 }}>
+                                                {g.format} · Up to {g.max_players} players · {g.skill_level}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

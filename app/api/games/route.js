@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { getSupabase } from '@/lib/supabase';
 import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
 import { sessionOptions } from '@/lib/session';
@@ -126,6 +127,35 @@ export async function POST(req) {
                 organizer: { select: { id: true, name: true, photo: true } }
             },
         });
+
+        // Save to Supabase (fire-and-forget; does not block response)
+        const supabase = getSupabase();
+        if (supabase) {
+            supabase.from('saved_games').upsert({
+                game_id:      newGame.id,
+                organizer_id: userId,
+                title:        newGame.title,
+                sport:        newGame.sport,
+                format:       newGame.format,
+                game_date:    newGame.date,
+                game_time:    newGame.time,
+                duration:     newGame.duration,
+                location:     newGame.location,
+                address:      newGame.address || '',
+                lat:          newGame.lat,
+                lng:          newGame.lng,
+                max_players:  newGame.maxPlayers,
+                skill_level:  newGame.skillLevel,
+                status:       'open',
+                visibility:   newGame.visibility,
+                price:        newGame.price || 0,
+                gender:       newGame.gender || 'mixed',
+                pitch_type:   newGame.pitchType || null,
+                surface:      newGame.surface || null,
+            }, { onConflict: 'game_id' }).then(({ error }) => {
+                if (error) console.error('Supabase save_game error:', error.message);
+            });
+        }
 
         // Serialize for client
         const serialized = {
