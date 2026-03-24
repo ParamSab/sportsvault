@@ -1,12 +1,14 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { useStore } from '@/lib/store';
 import { SPORTS, POSITIONS, PLAYERS } from '@/lib/mockData';
 
 export default function AuthPage() {
     const { dispatch } = useStore();
+    const router = useRouter();
     const [step, setStep] = useState('login'); // login, otp, onboarding
-    const [authMode, setAuthMode] = useState('email'); // email, phone
+    const [authMode, setAuthMode] = useState('phone'); // email, phone (Default to phone as per user preference)
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
     const [rememberMe, setRememberMe] = useState(true);
@@ -111,6 +113,7 @@ export default function AuthPage() {
             if (res.status === 200) {
                 if (data.exists && data.user) {
                     dispatch({ type: 'LOGIN', payload: data.user });
+                    router.push('/invite');
                 } else {
                     if (data.phone) setVerifiedPhone(data.phone);
                     setStep('onboarding');
@@ -246,6 +249,7 @@ export default function AuthPage() {
         } catch (_) { /* continue fallback */ }
 
         dispatch({ type: 'LOGIN', payload: newUser });
+        router.push('/invite');
     };
 
     const switchMode = (mode) => {

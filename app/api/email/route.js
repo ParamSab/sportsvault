@@ -3,7 +3,12 @@ import { Resend } from 'resend';
 export async function POST(req) {
     try {
         const body = await req.json();
-        const resend = new Resend(process.env.RESEND_API_KEY);
+        const apiKey = process.env.RESEND_API_KEY;
+        if (!apiKey) {
+            console.error('RESEND_API_KEY is missing from environment variables.');
+            return Response.json({ error: 'Email service not configured.' }, { status: 500 });
+        }
+        const resend = new Resend(apiKey);
         const { action, to, code, payload } = body;
 
         let subject = '';

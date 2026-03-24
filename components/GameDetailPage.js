@@ -339,7 +339,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                                     </div>
                                     <div style={{ flex: 1 }}>
                                         <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{p.name}</div>
-                                        {p.ratings?.[game.sport]?.count >= 1 && <div className="text-xs text-muted">⭐ {p.ratings[game.sport].overall} Reliability</div>}
+                                        {p.ratings?.[game.sport]?.count >= 10 && <div className="text-xs text-muted">⭐ {p.ratings[game.sport].overall} Reliability</div>}
                                     </div>
                                     <div style={{ display: 'flex', gap: 6 }}>
                                         <button className="btn btn-sm btn-ghost" style={{ color: 'var(--danger)', padding: '4px 8px' }} onClick={() => handleHostAction(r.playerId, 'no')}>Deny</button>
