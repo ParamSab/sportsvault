@@ -4,12 +4,10 @@ import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
 import { sessionOptions } from '@/lib/session';
 
-// A game enters "history" 24 hours after its scheduled start time.
+// Returns true once 24 hours have elapsed since the game's scheduled start.
 function isHistory(game_date, game_time) {
-    const startISO = `${game_date}T${game_time || '00:00'}`;
-    const start = new Date(startISO);
-    const historyAt = new Date(start.getTime() + 24 * 60 * 60 * 1000);
-    return Date.now() > historyAt.getTime();
+    const start = new Date(`${game_date}T${game_time || '00:00'}`);
+    return Date.now() > start.getTime() + 24 * 60 * 60 * 1000;
 }
 
 export async function GET(req) {
@@ -24,11 +22,10 @@ export async function GET(req) {
         }
 
         const supabase = getSupabase();
-
-        let historyGames = [];
+        let saved = [];   // visible from creation until 24h after game start
+        let history = []; // 24h+ after game start
 
         if (supabase) {
-            // Fetch from Supabase saved_games
             const { data, error } = await supabase
                 .from('saved_games')
                 .select('*')
@@ -36,30 +33,30 @@ export async function GET(req) {
                 .order('created_at', { ascending: false });
 
             if (error) {
-                console.error('Supabase history fetch error:', error.message);
+                console.error('Supabase saved_games fetch error:', error.message);
             } else if (data) {
-                // Mark status as 'completed' in Supabase for games past 24h
+                // Auto-complete rows that have passed the 24h mark
                 const toComplete = data.filter(
                     g => g.status === 'open' && isHistory(g.game_date, g.game_time)
                 );
                 if (toComplete.length > 0) {
-                    const ids = toComplete.map(g => g.game_id);
                     await supabase
                         .from('saved_games')
                         .update({ status: 'completed' })
-                        .in('game_id', ids);
+                        .in('game_id', toComplete.map(g => g.game_id));
                 }
 
-                // Return only games that are now history (24h elapsed)
-                historyGames = data
-                    .map(g => ({
-                        ...g,
-                        status: toComplete.find(t => t.game_id === g.game_id) ? 'completed' : g.status,
-                    }))
-                    .filter(g => g.status === 'completed' || isHistory(g.game_date, g.game_time));
+                // Merge the updated status into the in-memory rows
+                const rows = data.map(g => ({
+                    ...g,
+                    status: toComplete.find(t => t.game_id === g.game_id) ? 'completed' : g.status,
+                }));
+
+                saved   = rows.filter(g => g.status === 'open');
+                history = rows.filter(g => g.status === 'completed');
             }
         } else {
-            // Fallback: query Prisma for completed games organised by this user
+            // Fallback: use Prisma when Supabase is not configured
             const games = await prisma.game.findMany({
                 where: { organizerId: userId },
                 include: {
@@ -73,43 +70,38 @@ export async function GET(req) {
                 orderBy: { createdAt: 'desc' },
             });
 
-            // Auto-expire and return games past 24h
-            historyGames = games
-                .map(g => {
-                    const gameStart = new Date(`${g.date}T${g.time || '00:00'}`);
-                    const historyAt = new Date(gameStart.getTime() + 24 * 60 * 60 * 1000);
-                    const pastHistory = Date.now() > historyAt.getTime();
-                    return {
-                        game_id:     g.id,
-                        organizer_id: g.organizerId,
-                        title:       g.title,
-                        sport:       g.sport,
-                        format:      g.format,
-                        game_date:   g.date,
-                        game_time:   g.time,
-                        duration:    g.duration,
-                        location:    g.location,
-                        address:     g.address,
-                        max_players: g.maxPlayers,
-                        skill_level: g.skillLevel,
-                        status:      pastHistory ? 'completed' : g.status,
-                        visibility:  g.visibility,
-                        price:       g.price,
-                        gender:      g.gender,
-                        created_at:  g.createdAt,
-                        rsvps:       g.rsvps.map(r => ({
-                            playerId: r.playerId,
-                            status:   r.status,
-                            player:   r.player,
-                        })),
-                    };
-                })
-                .filter(g => g.status === 'completed');
+            const mapped = games.map(g => ({
+                game_id:      g.id,
+                organizer_id: g.organizerId,
+                title:        g.title,
+                sport:        g.sport,
+                format:       g.format,
+                game_date:    g.date,
+                game_time:    g.time,
+                duration:     g.duration,
+                location:     g.location,
+                address:      g.address,
+                max_players:  g.maxPlayers,
+                skill_level:  g.skillLevel,
+                status:       isHistory(g.date, g.time) ? 'completed' : 'open',
+                visibility:   g.visibility,
+                price:        g.price,
+                gender:       g.gender,
+                created_at:   g.createdAt,
+                rsvps:        g.rsvps.map(r => ({
+                    playerId: r.playerId,
+                    status:   r.status,
+                    player:   r.player,
+                })),
+            }));
+
+            saved   = mapped.filter(g => g.status === 'open');
+            history = mapped.filter(g => g.status === 'completed');
         }
 
-        return Response.json({ history: historyGames });
+        return Response.json({ saved, history });
     } catch (err) {
         console.error('GET /api/games/history error:', err);
-        return Response.json({ history: [] });
+        return Response.json({ saved: [], history: [] });
     }
 }
