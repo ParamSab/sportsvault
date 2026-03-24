@@ -1,8 +1,8 @@
 import { prisma } from '@/lib/prisma';
-
+import bcrypt from 'bcryptjs';
 export async function POST(req) {
     try {
-        const { name, email, phone, photo, location, sports, positions } = await req.json();
+        const { name, password, email, phone, photo, location, sports, positions } = await req.json();
         if (!email && !phone) return Response.json({ error: 'Email or phone required' }, { status: 400 });
 
         // Try to find existing user by email first, then by phone
@@ -17,23 +17,35 @@ export async function POST(req) {
         let user;
         if (existingUser) {
             // Merge data: set email if missing, update other fields
+            let updateData = {
+                name,
+                email: email ?? existingUser.email,
+                phone: phone ?? existingUser.phone,
+                photo: photo ?? existingUser.photo,
+                location: location ?? existingUser.location,
+                sports: JSON.stringify(sports || []),
+                positions: JSON.stringify(positions || {}),
+            };
+
+            if (password) {
+                updateData.password = await bcrypt.hash(password, 10);
+            }
+
             user = await prisma.user.update({
                 where: { id: existingUser.id },
-                data: {
-                    name,
-                    email: email ?? existingUser.email,
-                    phone: phone ?? existingUser.phone,
-                    photo: photo ?? existingUser.photo,
-                    location: location ?? existingUser.location,
-                    sports: JSON.stringify(sports || []),
-                    positions: JSON.stringify(positions || {}),
-                },
+                data: updateData,
             });
         } else {
             // No existing user, create a new one
+            let hashedPassword = null;
+            if (password) {
+                hashedPassword = await bcrypt.hash(password, 10);
+            }
+
             user = await prisma.user.create({
                 data: {
                     name,
+                    password: hashedPassword,
                     email: email || null,
                     phone: phone || null,
                     photo: photo || null,

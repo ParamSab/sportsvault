@@ -25,7 +25,7 @@ export default function AuthPage() {
     const [onboardStep, setOnboardStep] = useState(0);
     const [stepError, setStepError] = useState('');
     const [profile, setProfile] = useState({
-        name: '', photo: null, location: '', sports: [], positions: {},
+        name: '', password: '', photo: null, location: '', sports: [], positions: {},
     });
 
     const startResendCountdown = () => {
@@ -194,10 +194,11 @@ export default function AuthPage() {
 
     const validateOnboardStep = (idx) => {
         if (idx === 0 && profile.name.trim().length < 2) { setStepError('Please enter your full name (at least 2 characters)'); return false; }
-        // idx 1 is photo (optional)
-        if (idx === 2 && !profile.location.trim()) { setStepError('Please enter your city or neighbourhood'); return false; }
-        if (idx === 3 && profile.sports.length === 0) { setStepError('Select at least one sport'); return false; }
-        if (idx === 4) {
+        if (idx === 1 && profile.password.length < 6) { setStepError('Password must be at least 6 characters'); return false; }
+        // idx 2 is photo (optional)
+        if (idx === 3 && !profile.location.trim()) { setStepError('Please enter your city or neighbourhood'); return false; }
+        if (idx === 4 && profile.sports.length === 0) { setStepError('Select at least one sport'); return false; }
+        if (idx === 5) {
             const missing = profile.sports.filter(s => !profile.positions[s]);
             if (missing.length > 0) { setStepError(`Select your position for: ${missing.join(', ')}`); return false; }
         }
@@ -230,6 +231,7 @@ export default function AuthPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     name: newUser.name,
+                    password: profile.password,
                     email: newUser.email,
                     phone: newUser.phone,
                     photo: newUser.photo,
@@ -264,7 +266,12 @@ export default function AuthPage() {
         <div key="name" className="animate-fade-in">
             <h2 style={{ marginBottom: 8 }}>What should we call you?</h2>
             <p className="text-muted text-sm" style={{ marginBottom: 24 }}>This is how other players will see you.</p>
-            <input type="text" placeholder="Your name" value={profile.name} onChange={e => setProfile(prev => ({ ...prev, name: e.target.value }))} style={{ fontSize: '1.125rem', padding: '16px 20px' }} autoFocus />
+            <input type="text" placeholder="Your name" value={profile.name} onChange={e => setProfile(prev => ({ ...prev, name: e.target.value }))} style={{ fontSize: '1.125rem', padding: '16px 20px', width: '100%' }} autoFocus />
+        </div>,
+        <div key="password" className="animate-fade-in">
+            <h2 style={{ marginBottom: 8 }}>Create a Password</h2>
+            <p className="text-muted text-sm" style={{ marginBottom: 24 }}>Secure your builder account.</p>
+            <input type="password" placeholder="Password (min 6 chars)" value={profile.password} onChange={e => setProfile(prev => ({ ...prev, password: e.target.value }))} style={{ fontSize: '1.125rem', padding: '16px 20px', width: '100%' }} autoFocus />
         </div>,
         <div key="photo" className="animate-fade-in">
             <h2 style={{ marginBottom: 8 }}>Add a Profile Photo</h2>
@@ -444,7 +451,7 @@ export default function AuthPage() {
                     <div className="animate-slide-up">
                         <div className="glass-card no-hover" style={{ padding: 32 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                                <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.05em' }}>STEP {onboardStep + 1} OF 5</div>
+                                <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.05em' }}>STEP {onboardStep + 1} OF 6</div>
                                 <div style={{ display: 'flex', gap: 4 }}>{onboardingSteps.map((_, i) => <div key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: i === onboardStep ? 'var(--primary-color)' : i < onboardStep ? 'rgba(99,102,241,0.3)' : 'var(--border-color)', transition: 'all 0.3s' }} />)}</div>
                             </div>
                             {onboardingSteps[onboardStep]}
