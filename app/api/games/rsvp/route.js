@@ -1,8 +1,17 @@
 import { prisma } from '@/lib/prisma';
+import { getIronSession } from 'iron-session';
+import { cookies } from 'next/headers';
+import { sessionOptions } from '@/lib/session';
 
 export async function POST(req) {
     try {
-        const { gameId, playerId, status, position } = await req.json();
+        const cookieStore = await cookies();
+        const session = await getIronSession(cookieStore, sessionOptions);
+        
+        const body = await req.json();
+        const { gameId, status, position } = body;
+        const playerId = body.playerId || session.user?.dbId || session.user?.id;
+
         if (!gameId || !playerId) return Response.json({ error: 'Missing required fields' }, { status: 400 });
 
         const rsvp = await prisma.rsvp.upsert({

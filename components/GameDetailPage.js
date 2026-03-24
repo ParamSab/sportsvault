@@ -36,7 +36,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     const privacyInfo = PRIVACY_LABELS[game.visibility || 'public'];
 
     const confirmedPlayers = confirmedRsvps.map(r => {
-        const p = getPlayer(r.playerId) || state.players?.find(pl => pl.id === r.playerId) || (r.playerId === currentUserId ? state.currentUser : null);
+        const p = r.player || getPlayer(r.playerId) || state.players?.find(pl => pl.id === r.playerId) || (r.playerId === currentUserId ? state.currentUser : null);
         return p ? { ...p, rsvpPosition: r.position || r.rsvpPosition } : null;
     }).filter(Boolean);
 
@@ -69,13 +69,21 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
 
         const pos = selectedPosition || state.currentUser?.positions?.[game.sport] || POSITIONS[game.sport]?.[0] || '';
         dispatch({ type: 'RSVP', payload: { gameId, playerId: currentUserId, status: finalStatus, position: pos } });
-        // Persist to DB
-        if (state.currentUser?.dbId) {
-            fetch('/api/games/rsvp', {
+        
+        // Persist to DB using session
+        try {
+            await fetch('/api/games/rsvp', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ gameId, playerId: state.currentUser.dbId, status: finalStatus, position: pos }),
-            }).catch(() => { });
+                body: JSON.stringify({ 
+                    gameId, 
+                    playerId: state.currentUser?.dbId || state.currentUser?.id, 
+                    status: finalStatus, 
+                    position: pos 
+                }),
+            });
+        } catch (err) {
+            console.error('RSVP persistence failed:', err);
         }
     };
 
@@ -109,15 +117,19 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
 
     const handleHostAction = async (playerId, status) => {
         dispatch({ type: 'RSVP', payload: { gameId, playerId, status } });
-        if (state.currentUser?.dbId) {
-            const dbPlayer = state.players?.find(p => p.id === playerId);
-            if (dbPlayer && dbPlayer.dbId) {
-                fetch('/api/games/rsvp', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ gameId, playerId: dbPlayer.dbId, status })
-                }).catch(()=>{});
-            }
+        
+        // Use either dbId or the id from the player object
+        const p = state.players?.find(pl => pl.id === playerId);
+        const actualPlayerId = p?.dbId || p?.id || playerId;
+
+        try {
+            await fetch('/api/games/rsvp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ gameId, playerId: actualPlayerId, status })
+            });
+        } catch (err) {
+            console.error('Host action persistence failed:', err);
         }
     };
     
@@ -370,7 +382,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                     <div style={{ marginBottom: 20 }}>
                         <div className="text-xs font-semibold" style={{ color: '#22c55e', letterSpacing: '0.5px', marginBottom: 10, borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 8 }}>✅ GOING ({confirmedRsvps.length})</div>
                         {confirmedRsvps.map(r => {
-                            const p = getPlayer(r.playerId) || state.players?.find(pl => pl.id === r.playerId) || (r.playerId === currentUserId ? state.currentUser : null);
+                            const p = r.player || getPlayer(r.playerId) || state.players?.find(pl => pl.id === r.playerId) || (r.playerId === currentUserId ? state.currentUser : null);
                             if (!p) return null;
                             return (
                                 <div key={r.playerId} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>

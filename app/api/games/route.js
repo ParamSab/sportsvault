@@ -1,4 +1,7 @@
 import { prisma } from '@/lib/prisma';
+import { getIronSession } from 'iron-session';
+import { cookies } from 'next/headers';
+import { sessionOptions } from '@/lib/session';
 
 export async function GET(req) {
     try {
@@ -36,7 +39,11 @@ export async function GET(req) {
             },
             include: {
                 organizer: { select: { id: true, name: true, photo: true } },
-                rsvps: true,
+                rsvps: {
+                    include: {
+                        player: { select: { id: true, name: true, photo: true, positions: true, ratings: true } }
+                    }
+                },
             },
             orderBy: { createdAt: 'desc' },
         });
@@ -48,6 +55,11 @@ export async function GET(req) {
                 playerId: r.playerId,
                 status: r.status,
                 position: r.position || '',
+                player: r.player ? {
+                    ...r.player,
+                    positions: JSON.parse(r.player.positions || '{}'),
+                    ratings: JSON.parse(r.player.ratings || '{}')
+                } : null
             })),
         }));
 
@@ -60,14 +72,19 @@ export async function GET(req) {
 
 export async function POST(req) {
     try {
+        const cookieStore = await cookies();
+        const session = await getIronSession(cookieStore, sessionOptions);
+        
         const body = await req.json();
-        const { game, userId } = body;
+        const { game } = body;
+        let userId = body.userId || session.user?.dbId || session.user?.id;
 
-        if (!userId) return Response.json({ error: 'Authentication required' }, { status: 401 });
+        if (!userId) {
+            return Response.json({ error: 'Authentication required' }, { status: 401 });
+        }
 
         const newGame = await prisma.game.create({
             data: {
-                id: game.id || undefined,
                 title: game.title,
                 sport: game.sport,
                 format: game.format,
@@ -90,7 +107,7 @@ export async function POST(req) {
                 footwear: game.footwear || '',
                 price: game.price ? parseFloat(game.price.toString()) : 0,
                 gender: game.gender || 'mixed',
-                amenities: game.amenities || '[]',
+                amenities: typeof game.amenities === 'string' ? game.amenities : JSON.stringify(game.amenities || []),
                 organizerId: userId,
                 rsvps: {
                     create: [{
@@ -100,10 +117,32 @@ export async function POST(req) {
                     }]
                 }
             },
-            include: { rsvps: true },
+            include: { 
+                rsvps: {
+                    include: {
+                        player: { select: { id: true, name: true, photo: true, positions: true, ratings: true } }
+                    }
+                },
+                organizer: { select: { id: true, name: true, photo: true } }
+            },
         });
 
-        return Response.json({ game: newGame });
+        // Serialize for client
+        const serialized = {
+            ...newGame,
+            rsvps: newGame.rsvps.map(r => ({
+                playerId: r.playerId,
+                status: r.status,
+                position: r.position || '',
+                player: r.player ? {
+                    ...r.player,
+                    positions: JSON.parse(r.player.positions || '{}'),
+                    ratings: JSON.parse(r.player.ratings || '{}')
+                } : null
+            }))
+        };
+
+        return Response.json({ game: serialized });
     } catch (err) {
         console.error('POST /api/games error:', err);
         return Response.json({ error: err.message }, { status: 500 });

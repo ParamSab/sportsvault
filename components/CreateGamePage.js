@@ -66,9 +66,10 @@ export default function CreateGamePage({ onComplete }) {
     };
 
     const handleCreate = async () => {
+        const tempId = `g${Date.now()}`;
         const newGame = {
             ...game,
-            id: `g${Date.now()}`,
+            id: tempId,
             organizer: state.currentUser?.id || 'current',
             rsvps: [{
                 playerId: state.currentUser?.id || 'current',
@@ -78,24 +79,32 @@ export default function CreateGamePage({ onComplete }) {
             status: 'open',
         };
 
-        // Save to DB if user has a real DB id
-        if (state.currentUser?.dbId) {
-            try {
-                await fetch('/api/games', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        game: {
-                            ...newGame,
-                            amenities: JSON.stringify(newGame.amenities)
-                        }, 
-                        userId: state.currentUser.dbId 
-                    }),
-                });
-            } catch (_) { /* fall through to local */ }
+        // Optimized for persistence
+        try {
+            const res = await fetch('/api/games', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    game: {
+                        ...newGame,
+                        amenities: JSON.stringify(newGame.amenities)
+                    }, 
+                    userId: state.currentUser?.dbId || state.currentUser?.id
+                }),
+            });
+            const data = await res.json();
+            if (data.game) {
+                // If saved successfully, use the real DB record which has UUIDs
+                dispatch({ type: 'CREATE_GAME', payload: data.game });
+            } else {
+                // Fallback to local if API failed but we want to show it (at least temporarily)
+                dispatch({ type: 'CREATE_GAME', payload: newGame });
+            }
+        } catch (err) {
+            console.error('Failed to save game to DB:', err);
+            dispatch({ type: 'CREATE_GAME', payload: newGame });
         }
 
-        dispatch({ type: 'CREATE_GAME', payload: newGame });
         onComplete();
     };
 
