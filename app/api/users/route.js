@@ -5,28 +5,44 @@ export async function POST(req) {
         const { name, email, phone, photo, location, sports, positions } = await req.json();
         if (!email && !phone) return Response.json({ error: 'Email or phone required' }, { status: 400 });
 
-        const whereClause = email ? { email } : { phone };
-        const user = await prisma.user.upsert({
-            where: whereClause,
-            update: {
-                name,
-                email: email || null,
-                phone: phone || null,
-                photo: photo || null,
-                location: location || null,
-                sports: JSON.stringify(sports || []),
-                positions: JSON.stringify(positions || {}),
-            },
-            create: {
-                name,
-                email: email || null,
-                phone: phone || null,
-                photo: photo || null,
-                location: location || null,
-                sports: JSON.stringify(sports || []),
-                positions: JSON.stringify(positions || {}),
-            },
-        });
+        // Try to find existing user by email first, then by phone
+        let existingUser = null;
+        if (email) {
+            existingUser = await prisma.user.findUnique({ where: { email } });
+        }
+        if (!existingUser && phone) {
+            existingUser = await prisma.user.findUnique({ where: { phone } });
+        }
+
+        let user;
+        if (existingUser) {
+            // Merge data: set email if missing, update other fields
+            user = await prisma.user.update({
+                where: { id: existingUser.id },
+                data: {
+                    name,
+                    email: email ?? existingUser.email,
+                    phone: phone ?? existingUser.phone,
+                    photo: photo ?? existingUser.photo,
+                    location: location ?? existingUser.location,
+                    sports: JSON.stringify(sports || []),
+                    positions: JSON.stringify(positions || {}),
+                },
+            });
+        } else {
+            // No existing user, create a new one
+            user = await prisma.user.create({
+                data: {
+                    name,
+                    email: email || null,
+                    phone: phone || null,
+                    photo: photo || null,
+                    location: location || null,
+                    sports: JSON.stringify(sports || []),
+                    positions: JSON.stringify(positions || {}),
+                },
+            });
+        }
 
         return Response.json({
             user: {
