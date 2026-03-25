@@ -105,20 +105,42 @@ export async function GET(req) {
     try {
         const supabase = getSupabase();
         if (supabase) {
-            const query = supabase
+            const { data, error } = await supabase
                 .from('saved_games')
                 .select('*')
                 .order('created_at', { ascending: false });
 
-            const { data, error } = await query;
             if (!error && data) {
-                // Filter to games visible to this user
                 const visible = data.filter(g =>
                     g.visibility === 'public' ||
                     g.organizer_id === userId ||
                     (g.visibility === 'friends' && friendIds.includes(g.organizer_id))
                 );
-                return Response.json({ games: visible.map(supabaseRowToGame) });
+
+                const gameIds = visible.map(g => g.game_id);
+
+                // Fetch RSVPs for these games
+                const { data: rsvps } = gameIds.length
+                    ? await supabase.from('game_rsvps').select('*').in('game_id', gameIds)
+                    : { data: [] };
+
+                // Fetch organizer names from users table
+                const organizerIds = [...new Set(visible.map(g => g.organizer_id))];
+                const { data: organizers } = organizerIds.length
+                    ? await supabase.from('users').select('id, name, photo').in('id', organizerIds)
+                    : { data: [] };
+                const organizerMap = {};
+                (organizers || []).forEach(u => { organizerMap[u.id] = u; });
+
+                const games = visible.map(g => ({
+                    ...supabaseRowToGame(g),
+                    organizer: organizerMap[g.organizer_id] || { id: g.organizer_id, name: '', photo: null },
+                    rsvps: (rsvps || [])
+                        .filter(r => r.game_id === g.game_id)
+                        .map(r => ({ playerId: r.player_id, status: r.status, position: r.position || '', player: null })),
+                }));
+
+                return Response.json({ games });
             }
             if (error) console.error('Supabase fallback GET error:', error.message);
         }

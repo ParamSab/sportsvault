@@ -55,3 +55,36 @@ CREATE TABLE IF NOT EXISTS otp_codes (
 );
 
 CREATE INDEX IF NOT EXISTS idx_otp_codes_email ON otp_codes (email);
+
+-- Users table (fallback when Prisma/PostgreSQL is not configured)
+CREATE TABLE IF NOT EXISTS users (
+  id         UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  name       TEXT        NOT NULL,
+  email      TEXT        UNIQUE,
+  phone      TEXT        UNIQUE,
+  photo      TEXT,
+  location   TEXT,
+  sports     TEXT        DEFAULT '[]',
+  positions  TEXT        DEFAULT '{}',
+  password   TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);
+CREATE INDEX IF NOT EXISTS idx_users_phone ON users (phone);
+
+-- RSVPs table (fallback when Prisma/PostgreSQL is not configured)
+CREATE TABLE IF NOT EXISTS game_rsvps (
+  id         UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  game_id    TEXT        NOT NULL,
+  player_id  TEXT        NOT NULL,
+  status     TEXT        NOT NULL,
+  position   TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT uq_game_rsvp UNIQUE (game_id, player_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_game_rsvps_game   ON game_rsvps (game_id);
+CREATE INDEX IF NOT EXISTS idx_game_rsvps_player ON game_rsvps (player_id);

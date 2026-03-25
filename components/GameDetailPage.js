@@ -30,9 +30,9 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     const maybeRsvps = game.rsvps.filter(r => r.status === 'maybe');
     const pendingRsvps = game.rsvps.filter(r => r.status === 'pending');
     const spots = spotsLeft(game);
-    const currentUserId = state.currentUser?.id || 'current';
+    const currentUserId = state.currentUser?.dbId || state.currentUser?.id || 'current';
     const myRsvp = game.rsvps.find(r => r.playerId === currentUserId);
-    const isOrganizer = game.organizer === currentUserId;
+    const isOrganizer = game.organizerId === currentUserId || game.organizer?.id === currentUserId;
     const privacyInfo = PRIVACY_LABELS[game.visibility || 'public'];
 
     const confirmedPlayers = confirmedRsvps.map(r => {

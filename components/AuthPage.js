@@ -294,7 +294,10 @@ export default function AuthPage() {
                 }),
             });
             const dbData = await dbRes.json();
-            if (dbData.user) newUser.dbId = dbData.user.id;
+            if (dbData.user) {
+                newUser.dbId = dbData.user.id;
+                newUser.id = dbData.user.id; // use real DB id so games/rsvps link correctly
+            }
 
             await fetch('/api/auth/session', {
                 method: 'POST',
