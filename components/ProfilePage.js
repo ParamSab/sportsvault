@@ -3,15 +3,19 @@ import { useState, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { SPORTS, RATING_ATTRIBUTES, getPlayer, getInitials, getTrustTier } from '@/lib/mockData';
 
-function GameRow({ g }) {
+function GameRow({ g, onClick }) {
     const sport = SPORTS[g.sport];
     return (
-        <div style={{
-            background: 'var(--bg-input)',
-            borderRadius: 'var(--radius-md)',
-            padding: '12px 14px',
-            borderLeft: `3px solid ${sport?.color || '#6366f1'}`,
-        }}>
+        <div 
+            onClick={onClick}
+            style={{
+                cursor: onClick ? 'pointer' : 'default',
+                background: 'var(--bg-input)',
+                borderRadius: 'var(--radius-md)',
+                padding: '12px 14px',
+                borderLeft: `3px solid ${sport?.color || '#6366f1'}`,
+            }}
+        >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
                     <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: 2 }}>
@@ -54,7 +58,7 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
     if (!player) return <div className="glass-card no-hover text-center" style={{ padding: 48 }}><h3>Player not found</h3></div>;
 
     const trust = getTrustTier(player.trustScore || 0);
-    const sports = player.sports || [];
+    const sports = Array.isArray(player.sports) ? player.sports : (typeof player.sports === 'string' ? JSON.parse(player.sports || '[]') : []);
     const currentSport = activeSport || sports[0] || 'football';
     const rating = player.ratings?.[currentSport];
     const hasRating = rating && rating.count >= 10;
@@ -320,7 +324,7 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
                             <p className="text-sm text-muted">No active saved games. Games you create appear here instantly.</p>
                         ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                                {savedGames.map((g, i) => <GameRow key={g.game_id || i} g={g} />)}
+                                {savedGames.map((g, i) => <GameRow key={g.game_id || i} g={g} onClick={() => onViewGame(g.game_id)} />)}
                             </div>
                         )}
                     </div>
@@ -334,7 +338,7 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
                             <p className="text-sm text-muted">No past games yet. Games move here 24 hours after their scheduled time.</p>
                         ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                                {gameHistory.map((g, i) => <GameRow key={g.game_id || i} g={g} />)}
+                                {gameHistory.map((g, i) => <GameRow key={g.game_id || i} g={g} onClick={() => onViewGame(g.game_id)} />)}
                             </div>
                         )}
                     </div>

@@ -29,8 +29,8 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
             .filter(g => {
                 const vis = g.visibility || 'public';
                 if (vis === 'public') return true;
-                if (g.organizer === currentUserId) return true;  // always show own games
-                if (vis === 'friends') return friendIds.has(g.organizer);
+                if (g.organizerId === currentUserId) return true;  // always show own games
+                if (vis === 'friends') return friendIds.has(g.organizerId);
                 return false; // private
             })
             .filter(g => sportFilter === 'all' || g.sport === sportFilter)
@@ -140,7 +140,7 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
                 {upcomingGames.map(game => {
                     const spots = spotsLeft(game);
                     const sportColor = SPORTS[game.sport]?.color;
-                    const organizer = getPlayer(game.organizer);
+                    const organizer = getPlayer(game.organizerId || game.organizer?.id) || game.organizer;
                     return (
                         <button
                             key={game.id}

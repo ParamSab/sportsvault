@@ -29,7 +29,13 @@ export async function POST(req) {
         const cookieStore = await cookies();
         const session = await getIronSession(cookieStore, sessionOptions);
         const { user } = await req.json();
-        session.user = user;
+        const parsedUser = {
+            ...user,
+            sports: Array.isArray(user.sports) ? user.sports : (typeof user.sports === 'string' ? JSON.parse(user.sports || '[]') : []),
+            positions: typeof user.positions === 'object' ? user.positions : (typeof user.positions === 'string' ? JSON.parse(user.positions || '{}') : {}),
+            ratings: typeof user.ratings === 'object' ? user.ratings : (typeof user.ratings === 'string' ? JSON.parse(user.ratings || '{}') : {}),
+        };
+        session.user = parsedUser;
         await session.save();
         return Response.json({ success: true });
     } catch (err) {

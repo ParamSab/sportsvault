@@ -63,9 +63,9 @@ export async function POST(req) {
 
             const userData = {
                 ...user,
-                sports: JSON.parse(user.sports || '[]'),
-                positions: JSON.parse(user.positions || '{}'),
-                ratings: JSON.parse(user.ratings || '{}'),
+                sports: Array.isArray(user.sports) ? user.sports : (typeof user.sports === 'string' ? JSON.parse(user.sports || '[]') : []),
+                positions: typeof user.positions === 'object' ? user.positions : (typeof user.positions === 'string' ? JSON.parse(user.positions || '{}') : {}),
+                ratings: typeof user.ratings === 'object' ? user.ratings : (typeof user.ratings === 'string' ? JSON.parse(user.ratings || '{}') : {}),
                 dbId: user.id,
             };
             delete userData.password;
