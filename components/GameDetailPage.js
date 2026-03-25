@@ -127,7 +127,10 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     };
 
     const handleHostAction = async (playerId, status) => {
-        dispatch({ type: 'RSVP', payload: { gameId, playerId, status } });
+        const existingRsvp = game.rsvps.find(r => r.playerId === playerId);
+        const pos = existingRsvp?.position || '';
+        
+        dispatch({ type: 'RSVP', payload: { gameId, playerId, status, position: pos } });
         
         // Use either dbId or the id from the player object
         const p = state.players?.find(pl => pl.id === playerId);
@@ -137,7 +140,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
             await fetch('/api/games/rsvp', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ gameId, playerId: actualPlayerId, status })
+                body: JSON.stringify({ gameId, playerId: actualPlayerId, status, position: pos })
             });
         } catch (err) {
             console.error('Host action persistence failed:', err);

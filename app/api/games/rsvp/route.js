@@ -7,12 +7,30 @@ import { sessionOptions } from '@/lib/session';
 export async function POST(req) {
     const cookieStore = await cookies();
     const session = await getIronSession(cookieStore, sessionOptions);
+    const sessionUserId = session.user?.dbId || session.user?.id;
+
+    if (!sessionUserId) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json();
     const { gameId, status, position } = body;
-    const playerId = body.playerId || session.user?.dbId || session.user?.id;
+    const playerId = body.playerId || sessionUserId;
 
     if (!gameId || !playerId) return Response.json({ error: 'Missing required fields' }, { status: 400 });
+
+    // Verify authorization: Player themselves or the Game Organizer
+    const game = await prisma.game.findUnique({
+        where: { id: gameId },
+        select: { organizerId: true, title: true }
+    });
+
+    if (!game) return Response.json({ error: 'Game not found' }, { status: 404 });
+
+    const isSelf = sessionUserId === playerId;
+    const isOrganizer = sessionUserId === game.organizerId;
+
+    if (!isSelf && !isOrganizer) {
+        return Response.json({ error: 'Forbidden: You cannot RSVP for others' }, { status: 403 });
+    }
 
     // --- Try Prisma first ---
     try {
@@ -25,10 +43,6 @@ export async function POST(req) {
         // Create notification for organizer if it's a pending request
         if (status === 'pending') {
             try {
-                const game = await prisma.game.findUnique({
-                    where: { id: gameId },
-                    select: { title: true, organizerId: true }
-                });
                 const player = await prisma.user.findUnique({
                     where: { id: playerId },
                     select: { name: true }

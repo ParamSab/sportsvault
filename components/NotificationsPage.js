@@ -1,4 +1,5 @@
 'use client';
+import { useState, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { SPORTS } from '@/lib/mockData';
 
