@@ -1,54 +1,52 @@
-import { prisma } from '@/lib/prisma';
+import { Resend } from 'resend';
+import { getSupabase } from '@/lib/supabase';
 
 export async function POST(req) {
     try {
         const { email } = await req.json();
-
-        if (!email) {
-            return Response.json({ error: 'Email is required.' }, { status: 400 });
+        if (!email || !email.includes('@')) {
+            return Response.json({ error: 'Valid email address is required.' }, { status: 400 });
         }
 
-        // Generate 6-digit code
         const code = Math.floor(100000 + Math.random() * 900000).toString();
-        const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-        await prisma.otpCode.create({
-            data: { email, code, expiresAt },
-        });
-
-        const resendKey = process.env.RESEND_API_KEY;
-        if (!resendKey) {
-            console.log(`[AUTH DEV] Resend key missing, code for ${email} is ${code}`);
-            return Response.json({ success: true, devMode: true, message: 'Resend API key missing, use 990770' });
+        // Store OTP in Supabase (invalidate old codes first)
+        const supabase = getSupabase();
+        if (supabase) {
+            await supabase.from('otp_codes').update({ used: true }).eq('email', email).eq('used', false);
+            await supabase.from('otp_codes').insert({ email, code, expires_at: expiresAt.toISOString() });
         }
 
-        const resBody = {
-            from: "SportsVault <noreply@resend.dev>",
+        // Send via Resend
+        const apiKey = process.env.RESEND_API_KEY;
+        if (!apiKey) {
+            console.log(`[AUTH DEV] RESEND not configured — use bypass code 990770 for ${email}`);
+            return Response.json({ success: true, devMode: true });
+        }
+
+        const resend = new Resend(apiKey);
+        await resend.emails.send({
+            from: 'SportsVault <onboarding@resend.dev>',
             to: [email],
-            subject: "Your SportsVault Login Code",
-            html: `<p>Your login code is <strong>${code}</strong></p><p>It expires in 15 minutes.</p>`
-        };
-
-        const response = await fetch('https://api.resend.com/emails', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${resendKey}`
-            },
-            body: JSON.stringify(resBody)
+            subject: 'Your SportsVault Login Code',
+            html: `
+                <div style="font-family: sans-serif; text-align: center; padding: 40px; background: #f8fafc; border-radius: 12px; max-width: 480px; margin: 0 auto;">
+                    <h2 style="color: #0f172a; margin-bottom: 8px;">SportsVault Login</h2>
+                    <p style="color: #475569; margin-bottom: 24px;">Your verification code:</p>
+                    <div style="font-size: 36px; font-weight: 800; letter-spacing: 10px; color: #6366f1; background: #fff; padding: 20px 32px; border-radius: 10px; border: 1px solid #e2e8f0; display: inline-block;">
+                        ${code}
+                    </div>
+                    <p style="color: #94a3b8; margin-top: 24px; font-size: 14px;">Expires in 10 minutes. Do not share this code.</p>
+                </div>
+            `,
         });
 
-        const resendData = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(resendData.message || 'Failed to send email via Resend');
-        }
-
-        console.log(`[AUTH] Resend email sent to ${email}`);
-        return Response.json({ success: true, method: 'email' });
+        console.log(`[AUTH] Email OTP sent to ${email}`);
+        return Response.json({ success: true });
 
     } catch (err) {
-        console.error('[OTP SEND ERROR]', err);
+        console.error('[EMAIL OTP SEND ERROR]', err);
         return Response.json({ error: err.message || 'Failed to send verification code' }, { status: 500 });
     }
 }

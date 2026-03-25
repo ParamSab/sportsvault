@@ -1,23 +1,23 @@
 import { prisma } from '@/lib/prisma';
+import { getSupabase } from '@/lib/supabase';
 import bcrypt from 'bcryptjs';
-export async function POST(req) {
-    try {
-        const { name, password, email, phone, photo, location, sports, positions } = await req.json();
-        if (!email && !phone) return Response.json({ error: 'Email or phone required' }, { status: 400 });
 
-        // Try to find existing user by email first, then by phone
+export async function POST(req) {
+    const { name, email, phone, photo, location, sports, positions, password } = await req.json();
+    if (!email && !phone) return Response.json({ error: 'Email or phone required' }, { status: 400 });
+
+    const hashedPassword = password ? await bcrypt.hash(password, 10) : undefined;
+
+    // --- Try Prisma first ---
+    try {
+        // Find existing user by email or phone
         let existingUser = null;
-        if (email) {
-            existingUser = await prisma.user.findUnique({ where: { email } });
-        }
-        if (!existingUser && phone) {
-            existingUser = await prisma.user.findUnique({ where: { phone } });
-        }
+        if (email) existingUser = await prisma.user.findUnique({ where: { email } });
+        if (!existingUser && phone) existingUser = await prisma.user.findUnique({ where: { phone } });
 
         let user;
         if (existingUser) {
-            // Merge data: set email if missing, update other fields
-            let updateData = {
+            const updateData = {
                 name,
                 email: email ?? existingUser.email,
                 phone: phone ?? existingUser.phone,
@@ -25,48 +25,80 @@ export async function POST(req) {
                 location: location ?? existingUser.location,
                 sports: JSON.stringify(sports || []),
                 positions: JSON.stringify(positions || {}),
+                ...(hashedPassword && { password: hashedPassword }),
             };
-
-            if (password) {
-                updateData.password = await bcrypt.hash(password, 10);
-            }
-
-            user = await prisma.user.update({
-                where: { id: existingUser.id },
-                data: updateData,
-            });
+            user = await prisma.user.update({ where: { id: existingUser.id }, data: updateData });
         } else {
-            // No existing user, create a new one
-            let hashedPassword = null;
-            if (password) {
-                hashedPassword = await bcrypt.hash(password, 10);
-            }
-
             user = await prisma.user.create({
                 data: {
                     name,
-                    password: hashedPassword,
                     email: email || null,
                     phone: phone || null,
                     photo: photo || null,
                     location: location || null,
                     sports: JSON.stringify(sports || []),
                     positions: JSON.stringify(positions || {}),
+                    ...(hashedPassword && { password: hashedPassword }),
                 },
             });
         }
 
+        const { password: _pw, ...safeUser } = user;
         return Response.json({
             user: {
-                ...user,
-                sports: JSON.parse(user.sports || '[]'),
-                positions: JSON.parse(user.positions || '{}'),
-                ratings: JSON.parse(user.ratings || '{}'),
+                ...safeUser,
+                sports: JSON.parse(safeUser.sports || '[]'),
+                positions: JSON.parse(safeUser.positions || '{}'),
+                ratings: JSON.parse(safeUser.ratings || '{}'),
             }
         });
-    } catch (err) {
-        console.error('POST /api/users error:', err);
-        return Response.json({ error: err.message }, { status: 500 });
+    } catch (prismaErr) {
+        console.error('POST /api/users Prisma error — falling back to Supabase:', prismaErr.message);
+    }
+
+    // --- Supabase fallback ---
+    try {
+        const supabase = getSupabase();
+        if (!supabase) return Response.json({ error: 'No database available' }, { status: 503 });
+
+        const lookupCol = email ? 'email' : 'phone';
+        const lookupVal = email || phone;
+        const { data: existing } = await supabase.from('users').select('*').eq(lookupCol, lookupVal).maybeSingle();
+
+        let userData;
+        if (existing) {
+            const { data: updated } = await supabase
+                .from('users')
+                .update({
+                    name,
+                    photo: photo || null,
+                    location: location || null,
+                    sports: JSON.stringify(sports || []),
+                    positions: JSON.stringify(positions || {}),
+                    ...(hashedPassword && { password: hashedPassword }),
+                })
+                .eq('id', existing.id)
+                .select()
+                .single();
+            userData = updated || existing;
+        } else {
+            const { data: created, error } = await supabase
+                .from('users')
+                .insert({ name, email: email || null, phone: phone || null, photo: photo || null, location: location || null, sports: JSON.stringify(sports || []), positions: JSON.stringify(positions || {}), ...(hashedPassword && { password: hashedPassword }) })
+                .select()
+                .single();
+            if (error) throw new Error(error.message);
+            userData = created;
+        }
+
+        if (!userData) return Response.json({ error: 'Failed to save user' }, { status: 500 });
+        const { password: _pw, ...safeUser } = userData;
+        return Response.json({
+            user: { ...safeUser, sports: JSON.parse(safeUser.sports || '[]'), positions: JSON.parse(safeUser.positions || '{}'), ratings: {} }
+        });
+    } catch (supaErr) {
+        console.error('POST /api/users Supabase fallback error:', supaErr.message);
+        return Response.json({ error: supaErr.message }, { status: 500 });
     }
 }
 
