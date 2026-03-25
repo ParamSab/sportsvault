@@ -4,20 +4,11 @@ import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
 import { sessionOptions } from '@/lib/session';
 
-export async function DELETE(req, { params }) {
+export async function DELETE(req, props) {
+    const params = await props.params;
     try {
         const cookieStore = await cookies();
         const session = await getIronSession(cookieStore, sessionOptions);
-        
-        // Some robust checking for params
-        let idParam = params.id;
-        // next.js 15+ sometimes requires awaiting params if they are asynchronous
-        if (params instanceof Promise) {
-            const resolved = await params;
-            idParam = resolved.id;
-        }
-
-        const gameId = idParam;
         
         // Allow passing userId for API-only clients, but fallback to secure session
         const { searchParams } = new URL(req.url);
