@@ -1,4 +1,4 @@
-import twilio from 'twilio';
+// MSG91 Auth Route
 
 function normalizePhone(phone) {
     const cleaned = phone.trim();
@@ -28,18 +28,27 @@ export async function POST(req) {
             return Response.json({ error: 'Invalid phone number. Please enter a valid 10-digit number.' }, { status: 400 });
         }
 
-        if (!accountSid || !authToken || !serviceSid) {
-            // Dev mode: skip actual SMS — use bypass code 990770 to verify
-            console.log(`[AUTH DEV] Twilio not configured — use bypass code 990770 for ${normalized}`);
+        // MSG91 implementation
+        const authKey = process.env.MSG91_AUTH_KEY;
+        const templateId = process.env.MSG91_OTP_TEMPLATE_ID || '';
+        
+        if (!authKey) {
+            console.log(`[AUTH DEV] MSG91 not configured — use bypass code 990770 for ${normalized}`);
             return Response.json({ success: true, devMode: true });
         }
 
-        const client = twilio(accountSid, authToken);
-        const verification = await client.verify.v2.services(serviceSid)
-            .verifications
-            .create({ to: normalized, channel: 'sms' });
+        const msgString = normalized.replace('+', ''); // MSG91 expects mobile without +
+        const url = `https://control.msg91.com/api/v5/otp?mobile=${msgString}&authkey=${authKey}${templateId ? '&template_id=' + templateId : ''}`;
+        
+        const response = await fetch(url, { method: 'POST' });
+        const data = await response.json();
 
-        console.log(`[AUTH] Twilio Verify sent to ${normalized}, status: ${verification.status}`);
+        if (data.type === 'error') {
+            console.error('[MSG91 SEND ERROR]', data);
+            throw new Error(data.message || 'Failed to dispatch MSG91 OTP');
+        }
+
+        console.log(`[AUTH] MSG91 Verify sent to ${normalized}, reqId: ${data.request_id}`);
         return Response.json({ success: true });
 
     } catch (err) {

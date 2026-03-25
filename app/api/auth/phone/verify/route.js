@@ -1,4 +1,3 @@
-import twilio from 'twilio';
 import { prisma } from '@/lib/prisma';
 import { getSupabase } from '@/lib/supabase';
 import { getIronSession } from 'iron-session';
@@ -55,20 +54,21 @@ export async function POST(req) {
         const MASTER_BYPASS = '990770';
 
         if (code !== MASTER_BYPASS) {
-            const accountSid = process.env.TWILIO_ACCOUNT_SID;
-            const authToken = process.env.TWILIO_AUTH_TOKEN;
-            const serviceSid = process.env.TWILIO_VERIFY_SERVICE_SID;
-
-            if (!accountSid || !authToken || !serviceSid) {
+            const authKey = process.env.MSG91_AUTH_KEY;
+            
+            if (!authKey) {
                 return Response.json({ error: 'SMS service not configured' }, { status: 500 });
             }
 
-            const client = twilio(accountSid, authToken);
-            const check = await client.verify.v2.services(serviceSid)
-                .verificationChecks.create({ to: normalized, code });
+            const msgString = normalized.replace('+', '');
+            const url = `https://control.msg91.com/api/v5/otp/verify?otp=${code}&mobile=${msgString}&authkey=${authKey}`;
+            
+            const response = await fetch(url, { method: 'GET' });
+            const check = await response.json();
 
-            if (check.status !== 'approved') {
-                return Response.json({ error: 'Incorrect verification code. Please try again.' }, { status: 401 });
+            // MSG91 returns type: 'success' and type: 'error'
+            if (check.type === 'error') {
+                return Response.json({ error: check.message || 'Incorrect verification code. Please try again.' }, { status: 401 });
             }
         }
 

@@ -1,6 +1,5 @@
 import { prisma } from '@/lib/prisma';
 import { getSupabase } from '@/lib/supabase';
-import twilio from 'twilio';
 
 // Disable edge runtime because Twilio Node SDK requires Node features
 export const dynamic = 'force-dynamic';
@@ -42,34 +41,47 @@ export async function GET(req) {
             return Response.json({ success: true, sent: 0, msg: "No active un-reminded games." });
         }
 
-        const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+        const authKey = process.env.MSG91_AUTH_KEY;
+        const templateId = process.env.MSG91_REMINDER_TEMPLATE_ID || '';
 
         for (const game of activeGames) {
-            // Standardize game ISO string target with explicit +05:30 (IST) offset
-            // otherwise Vercel's Edge (UTC) runtime will treat 15:00 local as 15:00 UTC (which is 20:30 IST)
             const gameStart = new Date(`${game.date}T${game.time}+05:30`);
             if (isNaN(gameStart.getTime())) continue;
 
             const reminderThreshold = new Date(gameStart.getTime() - (game.reminderHours * 60 * 60 * 1000));
             
-            // Check if current time has passed the reminder barrier but game hasn't started yet
-            // If now is past gameStart, we shouldn't send reminders since the game is over
             if (now >= reminderThreshold && now < gameStart) {
                 const playersToSms = game.rsvps.map(r => r.player).filter(p => p && p.phone);
 
-                await Promise.all(playersToSms.map(async (player) => {
+                if (authKey && templateId && playersToSms.length > 0) {
+                    const recipients = playersToSms.map(player => ({
+                        mobiles: String(player.phone).replace(/[^0-9]/g, ''),
+                        var1: game.title,
+                        var2: game.reminderHours.toString(),
+                        var3: game.location
+                    }));
+
                     try {
-                        const msg = `[SportsVault]\nReminder: Your ${game.sport} game "${game.title}" at ${game.location} starts in exactly ${game.reminderHours} hours (at ${game.time})! See you on the pitch.`;
-                        await twilioClient.messages.create({
-                            body: msg,
-                            from: process.env.TWILIO_PHONE_NUMBER,
-                            to: player.phone,
+                        const url = 'https://control.msg91.com/api/v5/flow/';
+                        const response = await fetch(url, {
+                            method: 'POST',
+                            headers: { 'authkey': authKey, 'content-type': 'application/json' },
+                            body: JSON.stringify({
+                                template_id: templateId,
+                                short_url: '0',
+                                recipients: recipients
+                            })
                         });
-                        sentCount++;
+                        const msgData = await response.json();
+                        if (msgData.type === 'error') {
+                            console.error('MSG91 Flow Error:', msgData.message);
+                        } else {
+                            sentCount += recipients.length;
+                        }
                     } catch (smsErr) {
-                        console.error('Twilio Error for phone', player.phone, smsErr.message);
+                        console.error('MSG91 JSON SDK Error', smsErr.message);
                     }
-                }));
+                }
 
                 // Atomically lock this game from future reminders
                 try {
