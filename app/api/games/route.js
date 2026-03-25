@@ -36,6 +36,8 @@ function supabaseRowToGame(g) {
     };
 }
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req) {
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get('userId');
