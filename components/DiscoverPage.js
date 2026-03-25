@@ -9,6 +9,7 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
     const [sportFilter, setSportFilter] = useState('all');
     const [viewMode, setViewMode] = useState('list');
     const [skillFilter, setSkillFilter] = useState('all');
+    const [dateFilter, setDateFilter] = useState('');
 
     const Map = useMemo(() => dynamic(() => import('./MapPicker').then(mod => {
         return function SimpleMap({ games, onViewGame, center }) {
@@ -35,6 +36,7 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
             })
             .filter(g => sportFilter === 'all' || g.sport === sportFilter)
             .filter(g => skillFilter === 'all' || g.skillLevel === skillFilter)
+            .filter(g => !dateFilter || g.date === dateFilter)
             .sort((a, b) => new Date(a.date) - new Date(b.date));
     }, [state.games, sportFilter, skillFilter, state.friends, state.currentUser]);
 
@@ -78,6 +80,30 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
                     <button className={`tab-item ${viewMode === 'map' ? 'active' : ''}`} onClick={() => setViewMode('map')}>
                         🗺️ Map
                     </button>
+                </div>
+                
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input
+                        type="date"
+                        value={dateFilter}
+                        onChange={e => setDateFilter(e.target.value)}
+                        style={{
+                            padding: '8px 12px', fontSize: '0.8125rem',
+                            background: 'var(--bg-card)', borderRadius: 'var(--radius-full)',
+                            border: '1px solid var(--border-color)', width: 'auto',
+                            color: 'var(--text-primary)',
+                            colorScheme: 'dark'
+                        }}
+                    />
+                    {dateFilter && (
+                        <button 
+                            onClick={() => setDateFilter('')}
+                            className="btn btn-xs btn-ghost"
+                            style={{ padding: '0 8px' }}
+                        >
+                            ✕
+                        </button>
+                    )}
                 </div>
                 <select
                     value={skillFilter}

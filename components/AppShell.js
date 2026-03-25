@@ -28,10 +28,23 @@ export default function AppShell() {
             const gameId = params.get('game');
             if (gameId) {
                 setViewingGame(gameId);
+                // If guest, save as pending action for post-login
+                if (isGuest) {
+                    localStorage.setItem('sportsvault_pending_game', gameId);
+                }
                 window.history.replaceState({}, document.title, window.location.pathname);
             }
+            
+            // Re-check for pending game after becoming authenticated
+            if (!isGuest) {
+                const pending = localStorage.getItem('sportsvault_pending_game');
+                if (pending) {
+                    setViewingGame(pending);
+                    localStorage.removeItem('sportsvault_pending_game');
+                }
+            }
         }
-    }, []);
+    }, [isGuest]);
 
     const navigate = (tab) => {
         if (isGuest && tab !== 'discover' && tab !== 'profile') {

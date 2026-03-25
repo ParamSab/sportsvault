@@ -36,6 +36,7 @@ export async function GET(req) {
         });
 
         let sentCount = 0;
+        let skipReasons = [];
         
         if (activeGames.length === 0) {
             return Response.json({ success: true, sent: 0, msg: "No active un-reminded games." });
@@ -46,12 +47,19 @@ export async function GET(req) {
 
         for (const game of activeGames) {
             const gameStart = new Date(`${game.date}T${game.time}+05:30`);
-            if (isNaN(gameStart.getTime())) continue;
+            if (isNaN(gameStart.getTime())) {
+                skipReasons.push(`Game ${game.id}: Invalid format (${game.date}T${game.time})`);
+                continue;
+            }
 
             const reminderThreshold = new Date(gameStart.getTime() - (game.reminderHours * 60 * 60 * 1000));
             
             if (now >= reminderThreshold && now < gameStart) {
                 const playersToSms = game.rsvps.map(r => r.player).filter(p => p && p.phone);
+
+                if (playersToSms.length === 0) {
+                    skipReasons.push(`Game ${game.id}: 0 participants with phone numbers`);
+                }
 
                 if (authKey && templateId && playersToSms.length > 0) {
                     const recipients = playersToSms.map(player => ({
@@ -75,15 +83,17 @@ export async function GET(req) {
                         const msgData = await response.json();
                         if (msgData.type === 'error') {
                             console.error('MSG91 Flow Error:', msgData.message);
+                            skipReasons.push(`Game ${game.id}: MSG91 Error: ${msgData.message}`);
                         } else {
                             sentCount += recipients.length;
                         }
                     } catch (smsErr) {
                         console.error('MSG91 JSON SDK Error', smsErr.message);
+                        skipReasons.push(`Game ${game.id}: Fetch Exception: ${smsErr.message}`);
                     }
                 }
 
-                // Atomically lock this game from future reminders
+                // Atomically lock this game from future reminders once we've crossed the threshold
                 try {
                     await prisma.game.update({
                         where: { id: game.id },
@@ -97,10 +107,18 @@ export async function GET(req) {
                         await supabase.from('saved_games').update({ reminders_sent: true }).eq('game_id', game.id);
                     }
                 } catch (se) { console.error('Supabase backup flag update failed', se.message); }
+            } else {
+                const diffMin = Math.round((gameStart.getTime() - now.getTime()) / 60000);
+                skipReasons.push(`Game ${game.id}: Outside window (Starts in ${diffMin} min, Threshold is ${game.reminderHours}h)`);
             }
         }
 
-        return Response.json({ success: true, sent: sentCount, processedGames: activeGames.length });
+        return Response.json({ 
+            success: true, 
+            sent: sentCount, 
+            processedGames: activeGames.length,
+            skipReasons: skipReasons 
+        });
     } catch (err) {
         console.error('CRON Reminders fatal error:', err);
         return Response.json({ error: err.message }, { status: 500 });

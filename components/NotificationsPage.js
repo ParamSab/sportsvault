@@ -13,11 +13,38 @@ export default function NotificationsPage({ onViewGame }) {
         return SPORTS[sport] ? `${SPORTS[sport].color}20` : 'rgba(99,102,241,0.15)';
     };
 
-    const handleClick = (notif) => {
+    const handleClick = async (notif) => {
+        // Mark individual read in store immediately
         dispatch({ type: 'READ_NOTIFICATION', payload: notif.id });
-        if (notif.type === 'game_reminder' || notif.type === 'game_created' || notif.type === 'maybe_reminder') {
-            // Would navigate to game
+        
+        if (notif.gameId) {
+            onViewGame(notif.gameId);
+        } else if (notif.action && notif.action.includes('game=')) {
+            const id = notif.action.split('game=')[1];
+            onViewGame(id);
         }
+    };
+
+    // Mark all as read when page is opened
+    useEffect(() => {
+        const markRead = async () => {
+            if (unread.length > 0) {
+                try {
+                    const res = await fetch('/api/notifications', { method: 'POST' });
+                    if (res.ok) {
+                        // Optionally update local state too if polling hasn't hit yet
+                        // but polling will catch up.
+                    }
+                } catch (_) {}
+            }
+        };
+        markRead();
+    }, [unread.length]);
+
+    const formatTime = (dateStr) => {
+        if (!dateStr) return '';
+        const d = new Date(dateStr);
+        return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
     };
 
     return (
@@ -52,12 +79,12 @@ export default function NotificationsPage({ onViewGame }) {
                                 style={{ cursor: 'pointer', textAlign: 'left', width: '100%' }}
                             >
                                 <div className="notif-icon" style={{ background: sportBgColor(notif.sport) }}>
-                                    {notif.icon}
+                                    {notif.icon || (notif.title?.includes('Join') ? '🤝' : '🔔')}
                                 </div>
                                 <div className="notif-content">
                                     <div className="notif-title">{notif.title}</div>
-                                    <div className="notif-desc">{notif.desc}</div>
-                                    <div className="notif-time">{notif.time}</div>
+                                    <div className="notif-desc">{notif.message || notif.desc}</div>
+                                    <div className="notif-time">{formatTime(notif.createdAt || notif.time)}</div>
                                 </div>
                             </button>
                         ))}
@@ -80,12 +107,12 @@ export default function NotificationsPage({ onViewGame }) {
                                 style={{ cursor: 'pointer', textAlign: 'left', width: '100%', opacity: 0.7 }}
                             >
                                 <div className="notif-icon" style={{ background: sportBgColor(notif.sport) }}>
-                                    {notif.icon}
+                                    {notif.icon || (notif.title?.includes('Join') ? '🤝' : '🔔')}
                                 </div>
                                 <div className="notif-content">
                                     <div className="notif-title">{notif.title}</div>
-                                    <div className="notif-desc">{notif.desc}</div>
-                                    <div className="notif-time">{notif.time}</div>
+                                    <div className="notif-desc">{notif.message || notif.desc}</div>
+                                    <div className="notif-time">{formatTime(notif.createdAt || notif.time)}</div>
                                 </div>
                             </button>
                         ))}

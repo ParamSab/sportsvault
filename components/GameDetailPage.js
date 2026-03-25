@@ -22,7 +22,18 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     const [broadcastResult, setBroadcastResult] = useState(null);
 
     const game = state.games.find(g => g.id === gameId);
-    if (!game) return <div className="glass-card no-hover text-center" style={{ padding: 48 }}><h3>Game not found</h3><button className="btn btn-outline mt-md" onClick={onBack}>← Back</button></div>;
+    
+    if (!game) {
+        if (!state.isLoaded) {
+            return (
+                <div className="glass-card no-hover text-center" style={{ padding: 48 }}>
+                    <div className="spinner" style={{ margin: '0 auto 16px' }}></div>
+                    <h3>Loading game details...</h3>
+                </div>
+            );
+        }
+        return <div className="glass-card no-hover text-center" style={{ padding: 48 }}><h3>Game not found</h3><button className="btn btn-outline mt-md" onClick={onBack}>← Back</button></div>;
+    }
 
     const sport = SPORTS[game.sport];
     const confirmedRsvps = game.rsvps.filter(r => r.status === 'yes');

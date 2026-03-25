@@ -33,7 +33,7 @@ export default function AuthPage() {
     const [onboardStep, setOnboardStep] = useState(0);
     const [stepError, setStepError] = useState('');
     const [profile, setProfile] = useState({
-        name: '', password: '', photo: null, location: '', sports: [], positions: {},
+        name: '', phone: '', password: '', photo: null, location: '', sports: [], positions: {},
     });
 
     const startResendCountdown = () => {
@@ -266,8 +266,9 @@ export default function AuthPage() {
 
     const validateOnboardStep = (idx) => {
         if (idx === 0 && profile.name.trim().length < 2) { setStepError('Please enter your full name (at least 2 characters)'); return false; }
-        // idx 1 is photo (optional)
-        if (idx === 2 && !profile.location.trim()) { setStepError('Please enter your city or neighbourhood'); return false; }
+        if (idx === 1 && authMode === 'email' && (!profile.phone || profile.phone.replace(/\D/g, '').length < 10)) { setStepError('Please enter a valid phone number for game reminders'); return false; }
+        // idx 2 is photo (optional)
+        if (idx === 3 && !profile.location.trim()) { setStepError('Please enter your city or neighbourhood'); return false; }
         if (idx === 3 && profile.sports.length === 0) { setStepError('Select at least one sport'); return false; }
         if (idx === 4) {
             const missing = profile.sports.filter(s => !profile.positions[s]);
@@ -292,7 +293,7 @@ export default function AuthPage() {
             id: 'current',
             name: profile.name || 'Player',
             email: credEmail || (authMode === 'email' ? email : null),
-            phone: authMode === 'phone' ? (verifiedPhone || phone) : null,
+            phone: authMode === 'phone' ? (verifiedPhone || phone) : (profile.phone || null),
             photo: profile.photo,
             location: profile.location || 'Mumbai',
             sports: profile.sports.length > 0 ? profile.sports : ['football'],
@@ -349,6 +350,19 @@ export default function AuthPage() {
             <h2 style={{ marginBottom: 8 }}>What should we call you?</h2>
             <p className="text-muted text-sm" style={{ marginBottom: 24 }}>This is how other players will see you.</p>
             <input type="text" placeholder="Your name" value={profile.name} onChange={e => setProfile(prev => ({ ...prev, name: e.target.value }))} style={{ fontSize: '1.125rem', padding: '16px 20px', width: '100%' }} autoFocus />
+        </div>,
+        <div key="phone-capture" className="animate-fade-in">
+            <h2 style={{ marginBottom: 8 }}>Game Reminders</h2>
+            <p className="text-muted text-sm" style={{ marginBottom: 24 }}>We'll send you SMS game reminders. Enter your WhatsApp/Mobile number.</p>
+            <input 
+                type="tel" 
+                placeholder="e.g. 917904008139" 
+                value={profile.phone} 
+                onChange={e => setProfile(prev => ({ ...prev, phone: e.target.value }))} 
+                style={{ fontSize: '1.25rem', padding: '16px 20px', width: '100%', border: '1px solid var(--primary-color)' }} 
+                autoFocus 
+            />
+            <p className="text-xs text-muted" style={{ marginTop: 12 }}>Include country code (e.g. 91 for India).</p>
         </div>,
         <div key="photo" className="animate-fade-in">
             <h2 style={{ marginBottom: 8 }}>Add a Profile Photo</h2>
@@ -550,7 +564,7 @@ export default function AuthPage() {
                             </p>
                             {isDevMode && (
                                 <div style={{ background: '#fffbeb', border: '1px solid #f59e0b', borderRadius: 8, padding: '10px 14px', marginBottom: 20, fontSize: '0.82rem', color: '#92400e' }}>
-                                    <strong>Dev mode</strong> — Twilio not configured. Use code <strong style={{ letterSpacing: 2 }}>990770</strong> to continue.
+                                    <strong>Dev mode</strong> — SMS service not configured. Use code <strong style={{ letterSpacing: 2 }}>990770</strong> to continue.
                                 </div>
                             )}
                             <div className="otp-container" style={{ marginBottom: 24 }}>
