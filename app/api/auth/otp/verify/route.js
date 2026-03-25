@@ -56,6 +56,11 @@ export async function POST(req) {
         const session = await getIronSession(cookieStore, opts);
 
         if (user) {
+            if (!user.password) {
+                // Force user through onboarding to set password
+                return Response.json({ exists: false, email, existingProfile: user });
+            }
+
             const userData = {
                 ...user,
                 sports: JSON.parse(user.sports || '[]'),
@@ -66,7 +71,7 @@ export async function POST(req) {
             delete userData.password;
             session.user = userData;
             await session.save();
-            return Response.json({ user: userData, exists: true, needsPasswordSetup: !user.password });
+            return Response.json({ user: userData, exists: true });
         }
 
         // New user — show onboarding

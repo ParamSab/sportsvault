@@ -83,6 +83,10 @@ export async function POST(req) {
         const session = await getIronSession(cookieStore, opts);
 
         if (user) {
+            if (!user.password) {
+                return Response.json({ exists: false, phone: normalized, existingProfile: user });
+            }
+
             const userData = {
                 ...user,
                 sports: JSON.parse(user.sports || '[]'),
