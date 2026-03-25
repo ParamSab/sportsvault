@@ -45,8 +45,9 @@ export async function GET(req) {
         const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 
         for (const game of activeGames) {
-            // Standardize game ISO string target
-            const gameStart = new Date(`${game.date}T${game.time}`);
+            // Standardize game ISO string target with explicit +05:30 (IST) offset
+            // otherwise Vercel's Edge (UTC) runtime will treat 15:00 local as 15:00 UTC (which is 20:30 IST)
+            const gameStart = new Date(`${game.date}T${game.time}+05:30`);
             if (isNaN(gameStart.getTime())) continue;
 
             const reminderThreshold = new Date(gameStart.getTime() - (game.reminderHours * 60 * 60 * 1000));
