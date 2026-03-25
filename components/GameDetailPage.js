@@ -623,6 +623,31 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                     style={{ background: '#25D366', color: '#fff', padding: '14px 24px', fontSize: '0.9375rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 'var(--radius-full)', textDecoration: 'none' }}>
                     📤 Share on WhatsApp
                 </a>
+
+                {/* Delete Game (Organizer Only) */}
+                {isOrganizer && (
+                    <button 
+                        className="btn btn-block btn-outline" 
+                        style={{ marginTop: 12, color: 'var(--danger)', borderColor: 'rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.05)' }}
+                        onClick={async () => {
+                            if (window.confirm("Are you sure you want to delete this game? This cannot be undone.")) {
+                                try {
+                                    const res = await fetch(`/api/games/${game.id}`, { method: 'DELETE' });
+                                    if (res.ok) {
+                                        dispatch({ type: 'LOAD_STATE', payload: { games: state.games.filter(g => g.id !== game.id) } });
+                                        onBack();
+                                    } else {
+                                        alert("Failed to delete game");
+                                    }
+                                } catch (e) {
+                                    alert("Error deleting game");
+                                }
+                            }
+                        }}
+                    >
+                        🗑️ Delete Game
+                    </button>
+                )}
             </div>
         </div>
     );

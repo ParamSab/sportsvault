@@ -4,6 +4,8 @@ import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
 import { sessionOptions } from '@/lib/session';
 
+export const dynamic = 'force-dynamic';
+
 // Returns true once 24 hours have elapsed since the game's scheduled start.
 function isHistory(game_date, game_time) {
     const start = new Date(`${game_date}T${game_time || '00:00'}`);
