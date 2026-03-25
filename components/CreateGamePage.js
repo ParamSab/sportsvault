@@ -41,6 +41,7 @@ export default function CreateGamePage({ onComplete }) {
         price: 0,
         gender: 'mixed',
         amenities: [],
+        reminderHours: 2,
     });
 
     const update = (key, val) => setGame(prev => ({ ...prev, [key]: val }));
@@ -340,6 +341,19 @@ export default function CreateGamePage({ onComplete }) {
                     <input type="checkbox" checked={game.approvalRequired} onChange={e => update('approvalRequired', e.target.checked)} />
                     <span className="ts-slider round"></span>
                 </label>
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+                <label style={labelStyle}>Send Auto-SMS Reminder</label>
+                <div className="text-muted text-xs" style={{ marginBottom: 12 }}>Text messages will be sent to confirmed players.</div>
+                <select value={game.reminderHours} onChange={e => update('reminderHours', +e.target.value)} style={inputStyle}>
+                    <option value={0}>Do not send reminders</option>
+                    <option value={1}>1 Hour Before</option>
+                    <option value={2}>2 Hours Before (Recommended)</option>
+                    <option value={3}>3 Hours Before</option>
+                    <option value={12}>12 Hours Before</option>
+                    <option value={24}>24 Hours Before</option>
+                </select>
             </div>
         </div>,
 
