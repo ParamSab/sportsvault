@@ -41,7 +41,8 @@ export default function NotificationsPage({ onViewGame }) {
         const existingRsvp = game.rsvps.find(r => r.playerId === playerId);
         const pos = existingRsvp?.position || '';
         
-        const p = r.player || getPlayer(playerId) || state.players?.find(pl => pl.id === playerId);
+        // Resolve actual player id — existingRsvp.player is the populated player object
+        const p = existingRsvp?.player || getPlayer(playerId) || state.players?.find(pl => pl.id === playerId);
         const actualPlayerId = p?.dbId || p?.id || playerId;
         
         dispatch({ type: 'RSVP', payload: { gameId, playerId: actualPlayerId, status, position: pos } });
@@ -192,21 +193,23 @@ export default function NotificationsPage({ onViewGame }) {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                             {pendingApprovals.map(r => {
                                 const p = r.player || getPlayer(r.playerId) || state.players?.find(pl => pl.id === r.playerId);
-                                if (!p) return null;
+                                const displayName = p?.name || r.playerName || r.playerId?.slice(0, 8) || 'Unknown Player';
+                                const sport = r.game?.sport;
+                                const sportEmoji = SPORTS[sport]?.emoji || '🏅';
                                 return (
                                     <div key={`${r.game.id}-${r.playerId}`} className="glass-card no-hover" style={{ padding: 16 }}>
                                         <div className="text-xs text-muted" style={{ marginBottom: 8, cursor: 'pointer' }} onClick={() => onViewGame(r.game.id)}>
-                                            ⚽ <span style={{ textDecoration: 'underline' }}>{r.game.title} - {formatDate(r.game.date)}</span>
+                                            {sportEmoji} <span style={{ textDecoration: 'underline' }}>{r.game.title} - {formatDate(r.game.date)}</span>
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                            <div className="avatar" style={{ width: 40, height: 40, background: p.photo ? `url(${p.photo}) center/cover` : undefined, fontSize: p.photo ? '0' : '1rem' }}>
-                                                {p.photo ? '' : getInitials(p.name)}
+                                            <div className="avatar" style={{ width: 40, height: 40, background: p?.photo ? `url(${p.photo}) center/cover` : 'var(--bg-input)', fontSize: '1rem', flexShrink: 0 }}>
+                                                {p?.photo ? '' : getInitials(displayName)}
                                             </div>
                                             <div style={{ flex: 1 }}>
-                                                <div style={{ fontWeight: 600 }}>{p.name}</div>
-                                                {p.ratings?.[r.game.sport]?.count >= 10 && <div className="text-xs text-muted">⭐ {p.ratings[r.game.sport].overall} Reliability</div>}
+                                                <div style={{ fontWeight: 600 }}>{displayName}</div>
+                                                {p?.ratings?.[sport]?.count >= 10 && <div className="text-xs text-muted">⭐ {p.ratings[sport].overall} Reliability</div>}
                                             </div>
-                                            <div style={{ display: 'flex', gap: 8 }}>
+                                            <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
                                                 <button className="btn btn-sm btn-ghost" style={{ color: 'var(--danger)' }} onClick={() => handleHostAction(r.game.id, r.playerId, 'no')}>Deny</button>
                                                 <button className="btn btn-sm btn-primary" onClick={() => handleHostAction(r.game.id, r.playerId, 'yes')}>Accept</button>
                                             </div>

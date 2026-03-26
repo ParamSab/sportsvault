@@ -1,18 +1,15 @@
+// Cron job: Send reminders via Twilio SMS to confirmed game attendees
 import { prisma } from '@/lib/prisma';
 import { getSupabase } from '@/lib/supabase';
+import twilio from 'twilio';
 
-// Disable edge runtime because Twilio Node SDK requires Node features
 export const dynamic = 'force-dynamic';
 
 export async function GET(req) {
-    // Basic Cron Authentication
-    // Vercel auto-injects CRON_SECRET header if configured
     const authHeader = req.headers.get('authorization');
     const secret = process.env.CRON_SECRET;
     
-    // Allow local testing if secret is bypassing (e.g. dev mode)
     if (secret && authHeader !== `Bearer ${secret}`) {
-        // Log unauthorized attempt
         console.warn('Unauthorized CRON attempt');
         return new Response('Unauthorized', { status: 401 });
     }
@@ -20,7 +17,6 @@ export async function GET(req) {
     try {
         const now = new Date();
         
-        // Find games that are 'open', have reminders enabled, and haven't triggered sent yet
         const activeGames = await prisma.game.findMany({
             where: {
                 status: 'open',
@@ -42,8 +38,15 @@ export async function GET(req) {
             return Response.json({ success: true, sent: 0, msg: "No active un-reminded games." });
         }
 
-        const authKey = process.env.MSG91_AUTH_KEY;
-        const templateId = process.env.MSG91_REMINDER_TEMPLATE_ID || '';
+        const twilioSid = process.env.TWILIO_ACCOUNT_SID;
+        const twilioAuth = process.env.TWILIO_AUTH_TOKEN;
+        const twilioFrom = process.env.TWILIO_PHONE_NUMBER;
+        
+        const twilioAvailable = twilioSid && twilioAuth && twilioFrom;
+        let client = null;
+        if (twilioAvailable) {
+            client = twilio(twilioSid, twilioAuth);
+        }
 
         for (const game of activeGames) {
             const gameStart = new Date(`${game.date}T${game.time}+05:30`);
@@ -61,39 +64,33 @@ export async function GET(req) {
                     skipReasons.push(`Game ${game.id}: 0 participants with phone numbers`);
                 }
 
-                if (authKey && templateId && playersToSms.length > 0) {
-                    const recipients = playersToSms.map(player => ({
-                        mobiles: String(player.phone).replace(/[^0-9]/g, ''),
-                        var1: game.title,
-                        var2: game.reminderHours.toString(),
-                        var3: game.location
-                    }));
-
-                    try {
-                        const url = 'https://control.msg91.com/api/v5/flow/';
-                        const response = await fetch(url, {
-                            method: 'POST',
-                            headers: { 'authkey': authKey, 'content-type': 'application/json' },
-                            body: JSON.stringify({
-                                template_id: templateId,
-                                short_url: '0',
-                                recipients: recipients
-                            })
-                        });
-                        const msgData = await response.json();
-                        if (msgData.type === 'error') {
-                            console.error('MSG91 Flow Error:', msgData.message);
-                            skipReasons.push(`Game ${game.id}: MSG91 Error: ${msgData.message}`);
-                        } else {
-                            sentCount += recipients.length;
+                if (client && playersToSms.length > 0) {
+                    for (const player of playersToSms) {
+                        let phone = String(player.phone).replace(/[^0-9+]/g, '');
+                        // Ensure E.164 format (add Indian country code if needed)
+                        if (!phone.startsWith('+')) {
+                            phone = phone.length === 10 ? `+91${phone}` : `+${phone}`;
                         }
-                    } catch (smsErr) {
-                        console.error('MSG91 JSON SDK Error', smsErr.message);
-                        skipReasons.push(`Game ${game.id}: Fetch Exception: ${smsErr.message}`);
+                        
+                        const message = `⚽ SportsVault Reminder: "${game.title}" starts in ${game.reminderHours}h at ${game.location}. See you on the pitch!`;
+                        
+                        try {
+                            await client.messages.create({
+                                body: message,
+                                from: twilioFrom,
+                                to: phone
+                            });
+                            sentCount++;
+                        } catch (smsErr) {
+                            console.error(`Twilio SMS error for player ${player.id}:`, smsErr.message);
+                            skipReasons.push(`Game ${game.id}, Player ${player.id}: ${smsErr.message}`);
+                        }
                     }
+                } else if (!client) {
+                    skipReasons.push(`Game ${game.id}: Twilio not configured (missing env vars)`);
                 }
 
-                // Atomically lock this game from future reminders once we've crossed the threshold
+                // Mark reminders sent regardless of SMS success
                 try {
                     await prisma.game.update({
                         where: { id: game.id },

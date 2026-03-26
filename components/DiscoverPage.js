@@ -1,7 +1,7 @@
 'use client';
 import { useState, useMemo } from 'react';
 import { useStore } from '@/lib/store';
-import { SPORTS, getPlayer, getSportEmoji, spotsLeft, formatDate, getInitials } from '@/lib/mockData';
+import { SPORTS, getPlayer, getSportEmoji, spotsLeft, formatDate, getInitials, PLAYERS } from '@/lib/mockData';
 import dynamic from 'next/dynamic';
 
 export default function DiscoverPage({ onViewGame, onViewProfile }) {
@@ -10,6 +10,7 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
     const [viewMode, setViewMode] = useState('list');
     const [skillFilter, setSkillFilter] = useState('all');
     const [dateFilter, setDateFilter] = useState('');
+    const [friendActionLoading, setFriendActionLoading] = useState(null);
 
     const Map = useMemo(() => dynamic(() => import('./MapPicker').then(mod => {
         return function SimpleMap({ games, onViewGame, center }) {
@@ -23,7 +24,7 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
     }), { ssr: false }), []);
 
     const upcomingGames = useMemo(() => {
-        const currentUserId = state.currentUser?.id || 'current';
+        const currentUserId = state.currentUser?.dbId || state.currentUser?.id || 'current';
         const friendIds = new Set(state.friends || []);
         return state.games
             .filter(g => g.status === 'open')
@@ -32,13 +33,53 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
                 if (vis === 'public') return true;
                 if (g.organizerId === currentUserId) return true;  // always show own games
                 if (vis === 'friends') return friendIds.has(g.organizerId);
-                return false; // private
+                return false; // private but not yours
             })
             .filter(g => sportFilter === 'all' || g.sport === sportFilter)
             .filter(g => skillFilter === 'all' || g.skillLevel === skillFilter)
             .filter(g => !dateFilter || g.date === dateFilter)
             .sort((a, b) => new Date(a.date) - new Date(b.date));
-    }, [state.games, sportFilter, skillFilter, state.friends, state.currentUser]);
+    }, [state.games, sportFilter, skillFilter, dateFilter, state.friends, state.currentUser]);
+
+    // Compute friend suggestions: real players (from DB) that the user doesn't know yet
+    const currentUserId = state.currentUser?.dbId || state.currentUser?.id;
+    const friendSuggestions = useMemo(() => {
+        const knownIds = new Set([...(state.friends || []), currentUserId]);
+        // Players loaded from API (non-mock) that the user isn't already friends with
+        const apiPlayers = state.players?.filter(p => p.id && !p.id.startsWith('p') && !knownIds.has(p.id)) || [];
+        // Also include mock players as fallback suggestions
+        const mockPlayers = PLAYERS.filter(p => !knownIds.has(p.id) && p.id !== 'current').slice(0, 3);
+        const combined = [...apiPlayers, ...mockPlayers];
+        // Deduplicate by id
+        return combined.filter((p, i, a) => a.findIndex(x => x.id === p.id) === i).slice(0, 5);
+    }, [state.players, state.friends, currentUserId]);
+
+    const handleFriendRequest = async (friendId) => {
+        setFriendActionLoading(friendId);
+        try {
+            await fetch('/api/friends/request', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ friendId, action: 'send' })
+            });
+            // Refresh friend state
+            const fRes = await fetch('/api/friends');
+            if (fRes.ok) {
+                const fData = await fRes.json();
+                const tiers = {};
+                fData.tiers?.forEach(t => { if (!tiers[t.friendId]) tiers[t.friendId] = {}; tiers[t.friendId][t.sport] = t.tier; });
+                dispatch({ type: 'LOAD_STATE', payload: { 
+                    friends: fData.friends.map(f => f.id), 
+                    pendingFriends: fData.pendingRequests || [],
+                    friendTiers: tiers 
+                } });
+            }
+        } catch (err) {
+            console.error('Friend request failed', err);
+        } finally {
+            setFriendActionLoading(null);
+        }
+    };
 
     return (
         <div className="animate-fade-in">
@@ -243,6 +284,57 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
                     );
                 })}
             </div>
+
+            {/* People You May Know */}
+            {friendSuggestions.length > 0 && state.isAuthenticated && (
+                <div style={{ marginTop: 32 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                        <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
+                        <span className="text-xs text-muted" style={{ textTransform: 'uppercase', letterSpacing: 1, whiteSpace: 'nowrap', padding: '0 8px' }}>
+                            👥 People You May Know
+                        </span>
+                        <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {friendSuggestions.map(player => {
+                            const isFriend = state.friends.includes(player.id);
+                            const isPending = state.pendingFriends?.some(f => f.id === player.id);
+                            const isLoading = friendActionLoading === player.id;
+                            return (
+                                <div key={player.id} className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14 }}>
+                                    <div className="avatar avatar-sm" style={{
+                                        background: player.photo ? `url(${player.photo}) center/cover` : 'var(--bg-input)',
+                                        fontSize: '0.9rem', cursor: 'pointer', flexShrink: 0
+                                    }} onClick={() => onViewProfile && onViewProfile(player.id)}>
+                                        {player.photo ? '' : getInitials(player.name || '?')}
+                                    </div>
+                                    <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => onViewProfile && onViewProfile(player.id)}>
+                                        <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{player.name}</div>
+                                        <div className="text-xs text-muted">
+                                            {(player.sports || []).map(s => getSportEmoji(s)).join(' ')}
+                                            {player.gamesPlayed > 0 && ` · ${player.gamesPlayed} games`}
+                                        </div>
+                                    </div>
+                                    {isFriend ? (
+                                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>✓ Friends</span>
+                                    ) : isPending ? (
+                                        <button className="btn btn-sm btn-outline" disabled style={{ fontSize: '0.8rem' }}>Requested</button>
+                                    ) : (
+                                        <button 
+                                            className="btn btn-sm btn-primary" 
+                                            style={{ fontSize: '0.8rem', padding: '6px 14px' }}
+                                            disabled={isLoading}
+                                            onClick={() => handleFriendRequest(player.id)}
+                                        >
+                                            {isLoading ? '...' : '+ Add'}
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
