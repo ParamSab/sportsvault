@@ -13,6 +13,7 @@ export async function DELETE(req, props) {
         // Allow passing userId for API-only clients, but fallback to secure session
         const { searchParams } = new URL(req.url);
         const userId = searchParams.get('userId') || session.user?.dbId || session.user?.id;
+        const gameId = params.id;
 
         if (!userId) {
             return Response.json({ error: 'Authentication required' }, { status: 401 });

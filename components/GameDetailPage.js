@@ -73,7 +73,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
         if (status === 'yes') {
             if (spots <= 0 && myRsvp?.status !== 'yes' && myRsvp?.status !== 'checked_in') {
                 finalStatus = 'backup';
-            } else if (game.approvalRequired && myRsvp?.status !== 'yes' && myRsvp?.status !== 'checked_in') {
+            } else if (game.approvalRequired && !isOrganizer && myRsvp?.status !== 'yes' && myRsvp?.status !== 'checked_in') {
                 finalStatus = 'pending';
             }
         }
@@ -374,7 +374,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                     </h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                         {pendingRsvps.map(r => {
-                            const p = getPlayer(r.playerId) || state.players?.find(pl => pl.id === r.playerId);
+                            const p = r.player || getPlayer(r.playerId) || state.players?.find(pl => pl.id === r.playerId) || (r.playerId === currentUserId ? state.currentUser : null);
                             if (!p) return null;
                             return (
                                 <div key={r.playerId} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg-body)', padding: '10px 12px', borderRadius: 8 }}>
