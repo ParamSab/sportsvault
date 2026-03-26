@@ -227,7 +227,13 @@ export default function CreateGamePage({ onComplete }) {
                     <div>
                         <label style={labelStyle}>Max Players</label>
                         <input type="number" value={game.maxPlayers} min={2} max={100}
-                            onChange={e => update('maxPlayers', +e.target.value)} style={inputStyle} />
+                            onChange={e => {
+                                const maxP = +e.target.value;
+                                update('maxPlayers', maxP);
+                                if (game.totalCost) {
+                                    update('price', Math.ceil(game.totalCost / maxP));
+                                }
+                            }} style={inputStyle} />
                     </div>
                 </div>
 
@@ -276,9 +282,25 @@ export default function CreateGamePage({ onComplete }) {
                     </div>
                 </div>
 
-                <div>
-                    <label style={labelStyle}>Price per player (Rs)</label>
-                    <input type="number" value={game.price} onChange={e => update('price', +e.target.value)} style={inputStyle} />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div>
+                        <label style={labelStyle}>Total Pitch Cost (₹)</label>
+                        <input type="number" value={game.totalCost || ''} placeholder="e.g. 2000"
+                            onChange={e => {
+                                const total = +e.target.value;
+                                update('totalCost', total);
+                                update('price', Math.ceil(total / game.maxPlayers));
+                            }} style={inputStyle} />
+                    </div>
+                    <div>
+                        <label style={labelStyle}>Price per player (₹)</label>
+                        <div style={{
+                            ...inputStyle, background: 'var(--bg-card)', color: 'var(--success)', 
+                            fontWeight: 700, display: 'flex', alignItems: 'center'
+                        }}>
+                            {game.price > 0 ? `₹${game.price}` : 'Free'}
+                        </div>
+                    </div>
                 </div>
 
                 <div>

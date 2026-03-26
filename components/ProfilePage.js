@@ -177,32 +177,32 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
                 </div>
                 {hasRating ? (
                     <>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                            <span style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--warning)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+                            <span style={{ fontSize: '2.5rem', fontWeight: 800, color: 'var(--warning)', lineHeight: 1 }}>
                                 {rating.overall}
                             </span>
                             <div>
-                                <div className="stars">
-                                    {[1, 2, 3, 4, 5].map(i => (
-                                        <span key={i} className={`star ${i <= Math.round(rating.overall) ? 'filled' : ''}`}>★</span>
-                                    ))}
+                                <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                                    / 10
                                 </div>
-                                <div className="text-xs text-muted">{rating.count} ratings</div>
+                                <div className="text-xs text-muted" style={{ marginTop: 2 }}>{rating.count} ratings</div>
                             </div>
                         </div>
                         {rating.attrs && Object.keys(rating.attrs).length > 0 && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                                 {Object.entries(rating.attrs).map(([attr, val]) => (
                                     <div key={attr} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                         <span className="text-xs" style={{ width: 100, color: 'var(--text-secondary)' }}>{attr}</span>
-                                        <div style={{ flex: 1, height: 6, background: 'var(--bg-input)', borderRadius: 3, overflow: 'hidden' }}>
+                                        <div style={{ flex: 1, height: 8, background: 'var(--bg-input)', borderRadius: 4, overflow: 'hidden' }}>
                                             <div style={{
-                                                width: `${(val / 5) * 100}%`, height: '100%',
+                                                width: `${(val / 10) * 100}%`, height: '100%',
                                                 background: SPORTS[currentSport]?.gradient,
-                                                borderRadius: 3, transition: 'width 0.5s ease',
+                                                borderRadius: 4, transition: 'width 0.5s ease',
                                             }} />
                                         </div>
-                                        <span className="text-xs font-semibold" style={{ width: 28 }}>{val}</span>
+                                        <span className="text-xs font-semibold" style={{ width: 32, textAlign: 'right' }}>
+                                            {val.toFixed(1)}
+                                        </span>
                                     </div>
                                 ))}
                             </div>

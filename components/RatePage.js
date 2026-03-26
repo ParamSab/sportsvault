@@ -115,29 +115,45 @@ export default function RatePage({ gameId, onBack }) {
 
             {/* Attribute Ratings */}
             <div className="glass-card no-hover" style={{ marginBottom: 16 }}>
-                <h3 style={{ fontSize: '0.9375rem', marginBottom: 16 }}>
-                    {SPORTS[sport]?.emoji} Skill Ratings <span className="text-xs text-muted">(anonymous)</span>
+                <h3 style={{ fontSize: '1.125rem', marginBottom: 20, textAlign: 'center' }}>
+                    {SPORTS[sport]?.emoji} Performance <span className="text-xs text-muted" style={{ display: 'block', marginTop: 4 }}>(out of 10, anonymous)</span>
                 </h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
                     {attrs.map(attr => (
                         <div key={attr}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                                <span className="text-sm">{attr}</span>
-                                <span className="text-sm font-semibold" style={{ color: 'var(--warning)' }}>
-                                    {currentRatings[attr] || 0}/5
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10, alignItems: 'center' }}>
+                                <span style={{ fontSize: '0.9375rem', fontWeight: 600 }}>{attr}</span>
+                                <span style={{ 
+                                    fontSize: '1.125rem', fontWeight: 800, 
+                                    color: currentRatings[attr] >= 8 ? 'var(--success)' : (currentRatings[attr] >= 5 ? 'var(--warning)' : 'var(--danger)'),
+                                    background: 'var(--bg-input)', padding: '2px 10px', borderRadius: 8
+                                }}>
+                                    {currentRatings[attr] ? `${currentRatings[attr]}/10` : '-/10'}
                                 </span>
                             </div>
-                            <div className="stars" style={{ fontSize: '1.5rem' }}>
-                                {[1, 2, 3, 4, 5].map(star => (
-                                    <span
-                                        key={star}
-                                        className={`star ${star <= (currentRatings[attr] || 0) ? 'filled' : ''}`}
-                                        onClick={() => setAttrRating(attr, star)}
-                                        style={{ cursor: 'pointer' }}
-                                    >
-                                        ★
-                                    </span>
-                                ))}
+                            <div style={{ display: 'flex', gap: 4, justifyContent: 'space-between' }}>
+                                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(val => {
+                                    const isFilled = val <= (currentRatings[attr] || 0);
+                                    let color = '#3b82f6';
+                                    if (currentRatings[attr] >= 8) color = '#22c55e';
+                                    else if (currentRatings[attr] >= 5) color = '#eab308';
+                                    else if (currentRatings[attr] > 0) color = '#ef4444';
+                                    
+                                    return (
+                                        <button
+                                            key={val}
+                                            onClick={() => setAttrRating(attr, val)}
+                                            style={{
+                                                flex: 1, height: 36,
+                                                background: isFilled ? color : 'var(--bg-input)',
+                                                border: `1px solid ${isFilled ? color : 'var(--border-color)'}`,
+                                                borderRadius: 6, cursor: 'pointer',
+                                                transition: 'all 0.2s ease',
+                                                transform: isFilled && val === currentRatings[attr] ? 'scale(1.05)' : 'scale(1)',
+                                            }}
+                                        />
+                                    );
+                                })}
                             </div>
                         </div>
                     ))}
