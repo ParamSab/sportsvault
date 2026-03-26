@@ -177,6 +177,22 @@ export default function CreateGamePage({ onComplete }) {
             <p className="text-muted text-sm" style={{ marginBottom: 20 }}>Pin your venue and set the time</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
 
+                {/* Recent Venues */}
+                {state.history && state.history.length > 0 && (
+                    <div style={{ marginBottom: 4 }}>
+                        <label style={labelStyle}>Recent Venues</label>
+                        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 8, WebkitOverflowScrolling: 'touch' }}>
+                            {Array.from(new Map(state.history.filter(g => g.location).map(g => [g.location, g])).values()).slice(0, 5).map(v => (
+                                <button key={v.location} type="button" className="chip" 
+                                    style={{ whiteSpace: 'nowrap', background: game.location === v.location ? `${SPORTS[game.sport]?.color}30` : 'var(--bg-input)' }}
+                                    onClick={() => update('location', v.location) || update('address', v.address || '') || update('lat', v.lat || game.lat) || update('lng', v.lng || game.lng)}>
+                                    📍 {v.location}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {/* Interactive Leaflet Map */}
                 <div>
                     <label style={labelStyle}>📍 Drop a Pin</label>

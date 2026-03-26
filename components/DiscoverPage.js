@@ -26,7 +26,7 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
     const upcomingGames = useMemo(() => {
         const currentUserId = state.currentUser?.dbId || state.currentUser?.id || 'current';
         const friendIds = new Set(state.friends || []);
-        return state.games
+        return (state.games || [])
             .filter(g => g.status === 'open')
             .filter(g => {
                 const vis = g.visibility || 'public';
@@ -46,13 +46,26 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
     const friendSuggestions = useMemo(() => {
         const knownIds = new Set([...(state.friends || []), currentUserId]);
         // Players loaded from API (non-mock) that the user isn't already friends with
-        const apiPlayers = state.players?.filter(p => p.id && !p.id.startsWith('p') && !knownIds.has(p.id)) || [];
+        const apiPlayers = (state.players || []).filter(p => p?.id && !p.id.startsWith('p') && !knownIds.has(p.id));
         // Also include mock players as fallback suggestions
         const mockPlayers = PLAYERS.filter(p => !knownIds.has(p.id) && p.id !== 'current').slice(0, 3);
         const combined = [...apiPlayers, ...mockPlayers];
         // Deduplicate by id
         return combined.filter((p, i, a) => a.findIndex(x => x.id === p.id) === i).slice(0, 5);
     }, [state.players, state.friends, currentUserId]);
+
+    const pastTeammates = useMemo(() => {
+        const knownIds = new Set([...(state.friends || []), currentUserId]);
+        const teammates = new Set();
+        (state.history || []).forEach(g => {
+            (g.rsvps || []).forEach(r => {
+                if (r.playerId !== currentUserId && !knownIds.has(r.playerId)) {
+                    teammates.add(r.playerId);
+                }
+            });
+        });
+        return Array.from(teammates).map(id => getPlayer(id) || (state.players || []).find(p => p?.id === id)).filter(Boolean).slice(0, 5);
+    }, [state.history, state.players, state.friends, currentUserId]);
 
     const handleFriendRequest = async (friendId) => {
         setFriendActionLoading(friendId);
@@ -297,6 +310,57 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         {friendSuggestions.map(player => {
+                            const isFriend = (state.friends || []).includes(player.id);
+                            const isPending = (state.pendingFriends || []).some(f => f.id === player.id);
+                            const isLoading = friendActionLoading === player.id;
+                            return (
+                                <div key={player.id} className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14 }}>
+                                    <div className="avatar avatar-sm" style={{
+                                        background: player.photo ? `url(${player.photo}) center/cover` : 'var(--bg-input)',
+                                        fontSize: '0.9rem', cursor: 'pointer', flexShrink: 0
+                                    }} onClick={() => onViewProfile && onViewProfile(player.id)}>
+                                        {player.photo ? '' : getInitials(player.name || '?')}
+                                    </div>
+                                    <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => onViewProfile && onViewProfile(player.id)}>
+                                        <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{player.name}</div>
+                                        <div className="text-xs text-muted">
+                                            {(player.sports || []).map(s => getSportEmoji(s)).join(' ')}
+                                            {player.gamesPlayed > 0 && ` · ${player.gamesPlayed} games`}
+                                        </div>
+                                    </div>
+                                    {isFriend ? (
+                                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>✓ Friends</span>
+                                    ) : isPending ? (
+                                        <button className="btn btn-sm btn-outline" disabled style={{ fontSize: '0.8rem' }}>Requested</button>
+                                    ) : (
+                                        <button 
+                                            className="btn btn-sm btn-primary" 
+                                            style={{ fontSize: '0.8rem', padding: '6px 14px' }}
+                                            disabled={isLoading}
+                                            onClick={() => handleFriendRequest(player.id)}
+                                        >
+                                            {isLoading ? '...' : '+ Add'}
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* Past Teammates */}
+            {pastTeammates.length > 0 && state.isAuthenticated && (
+                <div style={{ marginTop: 24 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                        <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
+                        <span className="text-xs text-muted" style={{ textTransform: 'uppercase', letterSpacing: 1, whiteSpace: 'nowrap', padding: '0 8px' }}>
+                            🏏 Played With
+                        </span>
+                        <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {pastTeammates.map(player => {
                             const isFriend = (state.friends || []).includes(player.id);
                             const isPending = (state.pendingFriends || []).some(f => f.id === player.id);
                             const isLoading = friendActionLoading === player.id;

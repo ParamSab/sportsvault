@@ -20,6 +20,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     const [broadcastTier, setBroadcastTier] = useState(null);
     const [broadcastStatus, setBroadcastStatus] = useState(null); // null | 'sending' | 'sent' | 'error'
     const [broadcastResult, setBroadcastResult] = useState(null);
+    const [nudgedPlayers, setNudgedPlayers] = useState(new Set());
 
     const [notFound, setNotFound] = useState(false);
     const game = state.games.find(g => g.id === gameId);
@@ -434,7 +435,35 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
 
                 {confirmedRsvps.length > 0 && (
                     <div style={{ marginBottom: 20 }}>
-                        <div className="text-xs font-semibold" style={{ color: '#22c55e', letterSpacing: '0.5px', marginBottom: 10, borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 8 }}>✅ GOING ({confirmedRsvps.length})</div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 8 }}>
+                            <div className="text-xs font-semibold" style={{ color: '#22c55e', letterSpacing: '0.5px' }}>✅ GOING ({confirmedRsvps.length})</div>
+                            {isOrganizer && confirmedRsvps.length > 1 && (
+                                <button className="btn btn-xs btn-outline"
+                                    style={{ fontSize: '0.65rem', padding: '4px 10px', color: 'var(--text-secondary)', borderColor: 'var(--border-color)' }}
+                                    onClick={async (e) => {
+                                        e.stopPropagation();
+                                        const unCheckedIn = confirmedRsvps.filter(r => r.playerId !== currentUserId && r.status !== 'checked_in' && !nudgedPlayers.has(r.playerId));
+                                        if (unCheckedIn.length === 0) return alert('All players are checked in or have already been nudged!');
+                                        if (!window.confirm(`Send an automated nudge SMS to ${unCheckedIn.length} unchecked players?`)) return;
+                                        
+                                        unCheckedIn.forEach(r => {
+                                            fetch('/api/games/reminder', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ gameId: game.id, playerId: r.playerId, type: 'nudge' })
+                                            }).then(res => {
+                                                if (res.ok) {
+                                                    setNudgedPlayers(prev => { const next = new Set(prev); next.add(r.playerId); return next; });
+                                                }
+                                            });
+                                        });
+                                        alert(`🔔 Nudges pushed to ${unCheckedIn.length} players!`);
+                                    }}
+                                >
+                                    Nudge All ({confirmedRsvps.filter(r => r.playerId !== currentUserId && r.status !== 'checked_in' && !nudgedPlayers.has(r.playerId)).length})
+                                </button>
+                            )}
+                        </div>
                         {confirmedRsvps.map(r => {
                             const p = r.player || getPlayer(r.playerId) || state.players?.find(pl => pl.id === r.playerId) || (r.playerId === currentUserId ? state.currentUser : null);
                             if (!p) return null;
@@ -467,7 +496,8 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                                         {isOrganizer && r.playerId !== currentUserId && (
                                             <button 
                                                 className="btn btn-xs btn-ghost" 
-                                                style={{ color: 'var(--primary-color)', fontSize: '0.65rem', padding: '4px 8px' }}
+                                                style={{ color: nudgedPlayers.has(r.playerId) ? 'var(--text-muted)' : 'var(--primary-color)', fontSize: '0.65rem', padding: '4px 8px' }}
+                                                disabled={nudgedPlayers.has(r.playerId)}
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     fetch('/api/games/reminder', {
@@ -475,11 +505,14 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                                                         headers: { 'Content-Type': 'application/json' },
                                                         body: JSON.stringify({ gameId: game.id, playerId: r.playerId, type: 'nudge' })
                                                     }).then(res => {
-                                                        if(res.ok) alert('Nudge sent!');
+                                                        if(res.ok) {
+                                                            alert('Nudge sent!');
+                                                            setNudgedPlayers(prev => { const next = new Set(prev); next.add(r.playerId); return next; });
+                                                        }
                                                     });
                                                 }}
                                             >
-                                                🔔 Nudge
+                                                {nudgedPlayers.has(r.playerId) ? '🔔 Sent' : '🔔 Nudge'}
                                             </button>
                                         )}
 
