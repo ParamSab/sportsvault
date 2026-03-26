@@ -9,19 +9,27 @@ export async function GET(req, props) {
     const gameId = params.id;
     
     try {
-        const game = await prisma.game.findUnique({
-            where: { id: gameId },
-            include: {
-                organizer: { select: { id: true, name: true, photo: true } },
-                rsvps: {
-                    include: {
-                        player: { select: { id: true, name: true, phone: true, photo: true, positions: true, ratings: true } }
-                    }
-                },
-            }
-        });
+        let game = null;
+        let prismaError = false;
 
-        if (!game) {
+        try {
+            game = await prisma.game.findUnique({
+                where: { id: gameId },
+                include: {
+                    organizer: { select: { id: true, name: true, photo: true } },
+                    rsvps: {
+                        include: {
+                            player: { select: { id: true, name: true, phone: true, photo: true, positions: true, ratings: true } }
+                        }
+                    },
+                }
+            });
+        } catch (e) {
+            console.error('Prisma fetch failed, falling back:', e.message);
+            prismaError = true;
+        }
+
+        if (!game || prismaError) {
             // Try Supabase fallback
             const supabase = getSupabase();
             if (supabase) {
