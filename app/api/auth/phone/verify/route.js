@@ -45,21 +45,21 @@ export async function POST(req) {
         const MASTER_BYPASS = '990770';
 
         if (code !== MASTER_BYPASS) {
-            const authKey = process.env.MSG91_AUTH_KEY;
+            const accountSid = process.env.TWILIO_ACCOUNT_SID;
+            const authToken = process.env.TWILIO_AUTH_TOKEN;
+            const serviceSid = process.env.TWILIO_VERIFY_SERVICE_SID;
             
-            if (!authKey) {
+            if (!accountSid || !authToken || !serviceSid) {
                 return Response.json({ error: 'SMS service not configured' }, { status: 500 });
             }
 
-            const msgString = normalized.replace('+', '');
-            const url = `https://control.msg91.com/api/v5/otp/verify?otp=${code}&mobile=${msgString}&authkey=${authKey}`;
-            
-            const response = await fetch(url, { method: 'GET' });
-            const check = await response.json();
+            const client = require('twilio')(accountSid, authToken);
+            const verificationCheck = await client.verify.v2.services(serviceSid)
+                .verificationChecks
+                .create({ to: normalized, code });
 
-            // MSG91 returns type: 'success' and type: 'error'
-            if (check.type === 'error') {
-                return Response.json({ error: check.message || 'Incorrect verification code. Please try again.' }, { status: 401 });
+            if (verificationCheck.status !== 'approved') {
+                return Response.json({ error: 'Incorrect verification code. Please try again.' }, { status: 401 });
             }
         }
 
