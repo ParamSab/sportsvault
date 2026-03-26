@@ -447,13 +447,49 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                                         <div style={{ fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer' }} onClick={() => onViewProfile(r.playerId)}>{p.name}</div>
                                         <div className="text-xs text-muted">{r.position || r.rsvpPosition}</div>
                                     </div>
-                                    {p.ratings?.[game.sport]?.count >= 10 && <span className="text-xs" style={{ color: 'var(--warning)' }}>⭐ {p.ratings[game.sport].overall}</span>}
-                                    {isOrganizer && r.status !== 'checked_in' && (
-                                        <button className="btn btn-sm btn-outline" style={{ padding: '4px 10px', fontSize: '0.7rem' }} onClick={() => handleHostAction(r.playerId, 'checked_in')}>Check In</button>
-                                    )}
-                                    {r.status === 'checked_in' && (
-                                        <span className="text-xs" style={{ color: 'var(--success)', fontWeight: 700, padding: '4px 8px', background: 'rgba(34,197,94,0.1)', borderRadius: 4 }}>✓ Checked In</span>
-                                    )}
+
+                                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                        {isOrganizer && r.playerId !== currentUserId && (
+                                            <button 
+                                                className="btn btn-xs btn-ghost" 
+                                                style={{ color: 'var(--primary-color)', fontSize: '0.65rem', padding: '4px 8px' }}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    fetch('/api/games/reminder', {
+                                                        method: 'POST',
+                                                        headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({ gameId: game.id, playerId: r.playerId, type: 'nudge' })
+                                                    }).then(res => {
+                                                        if(res.ok) alert('Nudge sent!');
+                                                    });
+                                                }}
+                                            >
+                                                🔔 Nudge
+                                            </button>
+                                        )}
+
+                                        {p.ratings?.[game.sport]?.count >= 10 && (
+                                            <span className="text-xs" style={{ color: 'var(--warning)' }}>
+                                                ⭐ {p.ratings[game.sport].overall}
+                                            </span>
+                                        )}
+
+                                        {isOrganizer && r.status !== 'checked_in' && (
+                                            <button 
+                                                className="btn btn-sm btn-outline" 
+                                                style={{ padding: '4px 10px', fontSize: '0.7rem' }} 
+                                                onClick={() => handleHostAction(r.playerId, 'checked_in')}
+                                            >
+                                                Check In
+                                            </button>
+                                        )}
+
+                                        {r.status === 'checked_in' && (
+                                            <span className="text-xs" style={{ color: 'var(--success)', fontWeight: 700, padding: '4px 8px', background: 'rgba(34,197,94,0.1)', borderRadius: 4 }}>
+                                                ✓ Checked In
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                             );
                         })}
