@@ -401,7 +401,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                             return (
                                 <div key={r.playerId} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg-body)', padding: '10px 12px', borderRadius: 8 }}>
                                     <div className="avatar" style={{ width: 32, height: 32, background: p.photo ? `url(${p.photo}) center/cover` : undefined, fontSize: p.photo ? '0' : '0.6875rem' }}>
-                                        {p.photo ? '' : getInitials(p.name)}
+                                        {p.photo ? '' : getInitials(p?.name || 'Unknown')}
                                     </div>
                                     <div style={{ flex: 1 }}>
                                         <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{p.name}</div>
@@ -441,7 +441,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                             return (
                                 <div key={r.playerId} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
                                     <div className="avatar avatar-sm" style={{ borderColor: sport?.color, cursor: 'pointer', background: p.photo ? `url(${p.photo}) center/cover` : undefined, fontSize: p.photo ? '0' : undefined }} onClick={() => onViewProfile(r.playerId)}>
-                                        {p.photo ? '' : getInitials(p.name)}
+                                        {p.photo ? '' : getInitials(p?.name || 'Unknown')}
                                     </div>
                                     <div style={{ flex: 1 }}>
                                         <div style={{ fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer' }} onClick={() => onViewProfile(r.playerId)}>{p.name}</div>

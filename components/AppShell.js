@@ -24,6 +24,7 @@ export default function AppShell() {
 
     useEffect(() => {
         if (typeof window !== 'undefined') {
+            console.log('AppShell version: 16.5 - Crash fixes enabled');
             const params = new URLSearchParams(window.location.search);
             const gameId = params.get('game');
             if (gameId) {
