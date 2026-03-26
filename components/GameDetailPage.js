@@ -1,5 +1,5 @@
 'use client';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { SPORTS, POSITIONS, getPlayer, getSportEmoji, spotsLeft, formatDate, getInitials, getTrustTier } from '@/lib/mockData';
 import { balanceTeams, generateWhatsAppMessage, getWhatsAppUrl } from '@/lib/teamBalancer';
@@ -449,6 +449,21 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                                     </div>
 
                                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                        {!(state.friends || []).includes(r.playerId) && !(state.pendingFriends || []).includes(r.playerId) && r.playerId !== currentUserId && state.isAuthenticated && (
+                                            <button 
+                                                className="btn btn-xs btn-outline"
+                                                style={{ fontSize: '0.65rem', padding: '4px 8px' }}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleFriendRequest(r.playerId);
+                                                }}
+                                            >
+                                                + Friend
+                                            </button>
+                                        )}
+                                        {((state.pendingFriends || []).includes(r.playerId) && r.playerId !== currentUserId) && (
+                                            <span className="text-xs text-muted" style={{ fontWeight: 600 }}>Sent ✓</span>
+                                        )}
                                         {isOrganizer && r.playerId !== currentUserId && (
                                             <button 
                                                 className="btn btn-xs btn-ghost" 
@@ -510,6 +525,23 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                                     <div style={{ flex: 1 }}>
                                         <div style={{ fontWeight: 500, fontSize: '0.875rem' }}>{p.name}</div>
                                         <div className="text-xs text-muted">{r.position}</div>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                        {!(state.friends || []).includes(r.playerId) && !(state.pendingFriends || []).includes(r.playerId) && r.playerId !== currentUserId && state.isAuthenticated && (
+                                            <button 
+                                                className="btn btn-xs btn-outline"
+                                                style={{ fontSize: '0.65rem', padding: '4px 8px' }}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleFriendRequest(r.playerId);
+                                                }}
+                                            >
+                                                + Friend
+                                            </button>
+                                        )}
+                                        {((state.pendingFriends || []).includes(r.playerId) && r.playerId !== currentUserId) && (
+                                            <span className="text-xs text-muted" style={{ fontWeight: 600 }}>Sent ✓</span>
+                                        )}
                                     </div>
                                 </div>
                             );
