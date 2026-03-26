@@ -50,12 +50,32 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
     const [gameHistory, setGameHistory] = useState([]);
     const [savedGames, setSavedGames] = useState([]);
     const [historyLoading, setHistoryLoading] = useState(false);
+    const [fetchedPlayer, setFetchedPlayer] = useState(null);
+    const [isLoadingPlayer, setIsLoadingPlayer] = useState(false);
 
     const player = isOwn
         ? (state.currentUser || getPlayer('p1'))
-        : (getPlayer(playerId) || state.players.find(p => p.id === playerId));
+        : (getPlayer(playerId) || state.players?.find(p => p.id === playerId) || state.friends?.find(p => p.id === playerId) || fetchedPlayer);
 
-    if (!player) return <div className="glass-card no-hover text-center" style={{ padding: 48 }}><h3>Player not found</h3></div>;
+    useEffect(() => {
+        if (!isOwn && !getPlayer(playerId) && !state.players?.find(p => p.id === playerId) && !state.friends?.find(p => p.id === playerId) && playerId) {
+            setIsLoadingPlayer(true);
+            fetch(`/api/users?id=${playerId}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.user) {
+                        setFetchedPlayer({ ...data.user, trustScore: 50, gamesPlayed: 0, wins: 0, losses: 0 });
+                    }
+                })
+                .catch(err => console.error(err))
+                .finally(() => setIsLoadingPlayer(false));
+        }
+    }, [playerId, isOwn, state.players, state.friends]);
+
+    if (!player) {
+        if (isLoadingPlayer) return <div className="glass-card no-hover text-center" style={{ padding: 48 }}><h3>Loading profile...</h3></div>;
+        return <div className="glass-card no-hover text-center" style={{ padding: 48 }}><h3>Player not found</h3></div>;
+    }
 
     const trust = getTrustTier(player.trustScore || 0);
     const sports = Array.isArray(player.sports) ? player.sports : (typeof player.sports === 'string' ? JSON.parse(player.sports || '[]') : []);

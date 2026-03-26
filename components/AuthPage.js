@@ -73,6 +73,7 @@ export default function AuthPage() {
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || "Failed to send verification code");
+                if (data.devMode) setIsDevMode(true);
             } else {
                 if (!phone || phone.replace(/\D/g, '').length < 10) {
                     alert("Enter a valid phone number");

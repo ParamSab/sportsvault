@@ -28,10 +28,12 @@ export default function AppShell() {
             const params = new URLSearchParams(window.location.search);
             const gameId = params.get('game');
             if (gameId) {
-                setViewingGame(gameId);
-                // If guest, save as pending action for post-login
                 if (isGuest) {
                     localStorage.setItem('sportsvault_pending_game', gameId);
+                    setShowAuthGate(true);
+                    setActiveTab('profile'); // Force render AuthPage
+                } else {
+                    setViewingGame(gameId);
                 }
                 window.history.replaceState({}, document.title, window.location.pathname);
             }

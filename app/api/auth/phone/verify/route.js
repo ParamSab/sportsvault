@@ -4,15 +4,6 @@ import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
 import { sessionOptions } from '@/lib/session';
 
-const localSessionOptions = {
-    password: process.env.SESSION_SECRET || 'sportsvault-super-secret-key-min-32-chars!!',
-    cookieName: 'sportsvault_session',
-    cookieOptions: {
-        secure: process.env.NODE_ENV === 'production',
-        httpOnly: true,
-        maxAge: 60 * 60 * 24 * 30,
-    },
-};
 
 function normalizePhone(phone) {
     const cleaned = phone.trim();
@@ -75,7 +66,7 @@ export async function POST(req) {
         const user = await findUserByPhone(normalized);
 
         const cookieStore = await cookies();
-        const opts = { ...(sessionOptions || localSessionOptions) };
+        const opts = { ...sessionOptions };
         if (!rememberMe) {
             opts.cookieOptions = { ...opts.cookieOptions };
             delete opts.cookieOptions.maxAge;

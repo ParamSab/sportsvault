@@ -9,9 +9,10 @@ const MASTER_BYPASS = '990770';
 export async function POST(req) {
     try {
         const { email, code, rememberMe } = await req.json();
-        if (!email || !code) {
+        if (!email || typeof email !== 'string' || !code) {
             return Response.json({ error: 'Email and code are required.' }, { status: 400 });
         }
+        const normalizedEmail = email.toLowerCase().trim();
 
         if (code !== MASTER_BYPASS) {
             const supabase = getSupabase();
@@ -22,11 +23,11 @@ export async function POST(req) {
             const { data: otpRecord } = await supabase
                 .from('otp_codes')
                 .select('*')
-                .eq('email', email)
+                .eq('email', normalizedEmail)
                 .eq('used', false)
                 .order('created_at', { ascending: false })
                 .limit(1)
-                .single();
+                .maybeSingle();
 
             if (!otpRecord) {
                 return Response.json({ error: 'Code not found. Request a new one.' }, { status: 401 });
@@ -44,7 +45,7 @@ export async function POST(req) {
         // Look up user by email
         let user = null;
         try {
-            user = await prisma.user.findUnique({ where: { email } });
+            user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
         } catch (_) { /* DB may not be configured */ }
 
         const cookieStore = await cookies();
@@ -58,7 +59,7 @@ export async function POST(req) {
         if (user) {
             if (!user.password) {
                 // Force user through onboarding to set password
-                return Response.json({ exists: false, email, existingProfile: user });
+                return Response.json({ exists: false, email: normalizedEmail, existingProfile: user });
             }
 
             const userData = {
@@ -75,7 +76,7 @@ export async function POST(req) {
         }
 
         // New user — show onboarding
-        return Response.json({ exists: false, email });
+        return Response.json({ exists: false, email: normalizedEmail });
 
     } catch (err) {
         console.error('[EMAIL OTP VERIFY ERROR]', err);

@@ -106,6 +106,48 @@ export async function GET(req) {
     try {
         const { searchParams } = new URL(req.url);
         const q = searchParams.get('q');
+        const id = searchParams.get('id');
+
+        if (id) {
+            let user = null;
+            try {
+                user = await prisma.user.findUnique({ where: { id } });
+            } catch (_) {}
+
+            if (user) {
+                const { password: _pw, ...safeUser } = user;
+                return Response.json({
+                    user: {
+                        ...safeUser,
+                        sports: typeof safeUser.sports === 'string' ? JSON.parse(safeUser.sports || '[]') : (safeUser.sports || []),
+                        positions: typeof safeUser.positions === 'string' ? JSON.parse(safeUser.positions || '{}') : (safeUser.positions || {}),
+                        ratings: typeof safeUser.ratings === 'string' ? JSON.parse(safeUser.ratings || '{}') : (safeUser.ratings || {}),
+                    }
+                });
+            }
+
+            // Supabase fallback
+            try {
+                const supabase = getSupabase();
+                if (supabase) {
+                    const { data } = await supabase.from('users').select('*').eq('id', id).maybeSingle();
+                    if (data) {
+                        const { password: _pw, ...safeUser } = data;
+                        return Response.json({
+                            user: {
+                                ...safeUser,
+                                sports: typeof safeUser.sports === 'string' ? JSON.parse(safeUser.sports || '[]') : (safeUser.sports || []),
+                                positions: typeof safeUser.positions === 'string' ? JSON.parse(safeUser.positions || '{}') : (safeUser.positions || {}),
+                                ratings: typeof safeUser.ratings === 'string' ? JSON.parse(safeUser.ratings || '{}') : (safeUser.ratings || {}),
+                            }
+                        });
+                    }
+                }
+            } catch (_) {}
+            
+            return Response.json({ error: 'Player not found' }, { status: 404 });
+        }
+
         if (!q || q.length < 2) return Response.json({ users: [] });
 
         const users = await prisma.user.findMany({
