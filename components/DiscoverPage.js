@@ -82,7 +82,7 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
                 const tiers = {};
                 fData.tiers?.forEach(t => { if (!tiers[t.friendId]) tiers[t.friendId] = {}; tiers[t.friendId][t.sport] = t.tier; });
                 dispatch({ type: 'LOAD_STATE', payload: { 
-                    friends: fData.friends.map(f => f.id), 
+                    friends: (fData.friends || []).map(f => f.id || f), 
                     pendingFriends: fData.pendingRequests || [],
                     friendTiers: tiers 
                 } });

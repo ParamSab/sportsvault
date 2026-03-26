@@ -38,7 +38,13 @@ export async function GET(req) {
                 select: { id: true, name: true, photo: true, sports: true, positions: true, ratings: true },
                 take: 20
             });
-            return Response.json({ users });
+            const serialized = users.map(u => ({
+                ...u,
+                sports: typeof u.sports === 'string' ? JSON.parse(u.sports || '[]') : (u.sports || []),
+                positions: typeof u.positions === 'string' ? JSON.parse(u.positions || '{}') : (u.positions || {}),
+                ratings: typeof u.ratings === 'string' ? JSON.parse(u.ratings || '{}') : (u.ratings || {})
+            }));
+            return Response.json({ users: serialized });
         } catch (prismaErr) {
             console.error('Prisma search failed, trying Supabase:', prismaErr.message);
         }
@@ -54,7 +60,13 @@ export async function GET(req) {
                 .limit(20);
 
             if (data) {
-                return Response.json({ users: data });
+                const serialized = data.map(u => ({
+                    ...u,
+                    sports: typeof u.sports === 'string' ? JSON.parse(u.sports || '[]') : (u.sports || []),
+                    positions: typeof u.positions === 'string' ? JSON.parse(u.positions || '{}') : (u.positions || {}),
+                    ratings: typeof u.ratings === 'string' ? JSON.parse(u.ratings || '{}') : (u.ratings || {})
+                }));
+                return Response.json({ users: serialized });
             }
         }
 

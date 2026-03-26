@@ -63,7 +63,7 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
     const rating = player.ratings?.[currentSport];
     const hasRating = rating && rating.count >= 10;
 
-    const playerGames = state.games.filter(g => g.rsvps.some(r => r.playerId === player.id));
+    const playerGames = (state.games || []).filter(g => (g.rsvps || []).some(r => r.playerId === player.id));
     const pastGames = playerGames.filter(g => g.status === 'completed');
 
     // Fetch game history from Supabase (only for own profile)

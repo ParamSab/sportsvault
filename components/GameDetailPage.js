@@ -55,16 +55,17 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
         return <div className="glass-card no-hover text-center" style={{ padding: 48 }}><h3>Game not found</h3><button className="btn btn-outline mt-md" onClick={onBack}>← Back</button></div>;
     }
 
-    const sport = SPORTS[game.sport];
-    const confirmedRsvps = game.rsvps.filter(r => r.status === 'yes');
-    const backupRsvps = game.rsvps.filter(r => r.status === 'backup');
-    const maybeRsvps = game.rsvps.filter(r => r.status === 'maybe');
-    const pendingRsvps = game.rsvps.filter(r => r.status === 'pending');
+    const sport = SPORTS[game.sport] || { name: 'Unknown', emoji: '🏅', color: '#6366f1', gradient: 'linear-gradient(135deg, #6366f1, #4f46e5)' };
+    const confirmedRsvps = (game.rsvps || []).filter(r => r.status === 'yes' || r.status === 'checked_in');
+    const backupRsvps = (game.rsvps || []).filter(r => r.status === 'backup');
+    const maybeRsvps = (game.rsvps || []).filter(r => r.status === 'maybe');
+    const pendingRsvps = (game.rsvps || []).filter(r => r.status === 'pending');
     const spots = spotsLeft(game);
     const currentUserId = state.currentUser?.dbId || state.currentUser?.id || 'current';
-    const myRsvp = game.rsvps.find(r => r.playerId === currentUserId);
-    const isOrganizer = game.organizerId === currentUserId || game.organizer?.id === currentUserId;
-    const privacyInfo = PRIVACY_LABELS[game.visibility || 'public'];
+    const myRsvp = (game.rsvps || []).find(r => r.playerId === currentUserId);
+    const organizerId = game.organizerId || game.organizer?.id || game.organizer;
+    const isOrganizer = organizerId === currentUserId;
+    const privacyInfo = PRIVACY_LABELS[game.visibility || 'public'] || PRIVACY_LABELS.public;
 
     const confirmedPlayers = confirmedRsvps.map(r => {
         const p = r.player || getPlayer(r.playerId) || state.players?.find(pl => pl.id === r.playerId) || (r.playerId === currentUserId ? state.currentUser : null);
@@ -147,7 +148,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     };
 
     const handleHostAction = async (playerId, status) => {
-        const existingRsvp = game.rsvps.find(r => r.playerId === playerId);
+        const existingRsvp = (game.rsvps || []).find(r => r.playerId === playerId);
         const pos = existingRsvp?.position || '';
         
         // Use either dbId or the id from the player object
@@ -226,7 +227,12 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
         setBroadcastResult(null);
     };
 
-    const whatsappMsg = generateWhatsAppMessage(game, state.players, showTeams ? teams : null);
+    let whatsappMsg = '';
+    try {
+        whatsappMsg = generateWhatsAppMessage(game, state.players, showTeams ? teams : null);
+    } catch (e) {
+        console.error('WhatsApp msg generation failed:', e);
+    }
 
     const amenList = useMemo(() => {
         try {
@@ -318,7 +324,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
                             <span style={{ fontSize: '1.125rem' }}>👤</span>
-                            <span className="text-sm">Organized by <span style={{ fontWeight: 600, color: sport?.color, cursor: 'pointer' }} onClick={() => onViewProfile(game.organizer)}>{getPlayer(game.organizer)?.name || state.currentUser?.name || 'You'}</span></span>
+                        <span className="text-sm">Organized by <span style={{ fontWeight: 600, color: sport?.color, cursor: 'pointer' }} onClick={() => onViewProfile(organizerId)}>{(game.organizer?.name || getPlayer(organizerId)?.name || state.currentUser?.name || 'You')}</span></span>
                         </div>
                     </div>
                 </div>
