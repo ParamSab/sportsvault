@@ -21,10 +21,29 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     const [broadcastStatus, setBroadcastStatus] = useState(null); // null | 'sending' | 'sent' | 'error'
     const [broadcastResult, setBroadcastResult] = useState(null);
 
+    const [notFound, setNotFound] = useState(false);
     const game = state.games.find(g => g.id === gameId);
     
+    useEffect(() => {
+        if (!game && state.isLoaded && !notFound) {
+            fetch(`/api/games/${gameId}`)
+                .then(r => r.json())
+                .then(d => {
+                    if (d.game) {
+                        dispatch({ type: 'LOAD_STATE', payload: { games: [...state.games, d.game] } });
+                    } else {
+                        setNotFound(true);
+                    }
+                })
+                .catch(e => {
+                    console.error('Failed fetching individual game:', e);
+                    setNotFound(true);
+                });
+        }
+    }, [gameId, game, state.isLoaded, notFound, dispatch, state.games]);
+
     if (!game) {
-        if (!state.isLoaded) {
+        if (!state.isLoaded || (!notFound && state.isLoaded)) {
             return (
                 <div className="glass-card no-hover text-center" style={{ padding: 48 }}>
                     <div className="spinner" style={{ margin: '0 auto 16px' }}></div>
@@ -152,16 +171,19 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
             }
         } catch (err) {
             console.error('Host action persistence failed:', err);
+        }
+        
         // Refresh game data to reflect updated RSVP status
         try {
           const res = await fetch(`/api/games/${gameId}`);
           if (res.ok) {
             const data = await res.json();
-            dispatch({ type: 'LOAD_STATE', payload: { games: state.games.map(g => g.id === gameId ? data.game : g) } });
+            if (data.game) {
+                dispatch({ type: 'LOAD_STATE', payload: { games: state.games.map(g => g.id === gameId ? data.game : g) } });
+            }
           }
         } catch (refreshErr) {
           console.error('Failed to refresh game after host action:', refreshErr);
-        }
         }
     };
     

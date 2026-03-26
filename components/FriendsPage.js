@@ -22,6 +22,58 @@ export default function FriendsPage({ onViewProfile, onViewGame }) {
         .filter(p => !state.friends.includes(p.id) && p.id !== state.currentUser?.id && p.id !== 'current')
         .slice(0, 5);
 
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState([]);
+    const [isSearching, setIsSearching] = useState(false);
+
+    const pendingReceived = state.pendingFriends?.filter(f => !f.isSender) || [];
+
+    const handleSearch = async (e) => {
+        const query = e.target.value;
+        setSearchQuery(query);
+        if (query.length < 3) {
+            setSearchResults([]);
+            return;
+        }
+        setIsSearching(true);
+        try {
+            const res = await fetch(`/api/users/search?q=${encodeURIComponent(query)}`);
+            if (res.ok) {
+                const data = await res.json();
+                setSearchResults(data.users || []);
+            }
+        } catch (err) {
+            console.error('Search error', err);
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    const handleFriendAction = async (friendId, action) => {
+        try {
+            await fetch('/api/friends/request', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ friendId, action })
+            });
+            
+            const fRes = await fetch('/api/friends');
+            if (fRes.ok) {
+                const fData = await fRes.json();
+                const tiers = {};
+                fData.tiers?.forEach(t => { if(!tiers[t.friendId]) tiers[t.friendId] = {}; tiers[t.friendId][t.sport] = t.tier; });
+                dispatch({ type: 'LOAD_STATE', payload: { 
+                    friends: fData.friends.map(f => f.id), 
+                    pendingFriends: fData.pendingRequests || [],
+                    players: [...fData.friends, ...(fData.pendingRequests || []), ...PLAYERS],
+                    friendTiers: tiers 
+                } });
+            }
+        } catch (err) {
+            console.error('Friend action failed', err);
+        }
+    };
+
     const handleAddByPhone = async () => {
         if (searchPhone.length < 10) return;
 
@@ -288,38 +340,86 @@ export default function FriendsPage({ onViewProfile, onViewGame }) {
 
             {/* Discover People */}
             {activeView === 'discover' && (
-                <div className="stagger" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {suggestedPlayers.map(player => {
-                        const trust = getTrustTier(player.trustScore || 0);
-                        const isFriend = state.friends.includes(player.id);
-                        return (
-                            <div key={player.id} className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14 }}>
-                                <div className="avatar" style={{
-                                    borderColor: trust.color, cursor: 'pointer',
-                                    background: player.photo ? `url(${player.photo}) center/cover` : undefined,
-                                    fontSize: player.photo ? '0' : undefined,
-                                }} onClick={() => onViewProfile(player.id)}>
-                                    {player.photo ? '' : getInitials(player.name)}
-                                </div>
-                                <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => onViewProfile(player.id)}>
-                                    <div style={{ fontWeight: 600, fontSize: '0.9375rem' }}>{player.name}</div>
-                                    <div className="text-xs text-muted">
-                                        {player.sports.map(s => getSportEmoji(s)).join(' ')} · {player.gamesPlayed} games
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    
+                    {/* Pending Requests */}
+                    {pendingReceived.length > 0 && (
+                        <div className="glass-card no-hover" style={{ border: '1px solid var(--primary-color)', padding: 16 }}>
+                            <div style={{ fontSize: '0.9375rem', marginBottom: 12, fontWeight: 700, color: 'var(--primary-color)' }}>New Friend Requests</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                {pendingReceived.map(player => (
+                                    <div key={player.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                        <div className="avatar" style={{ background: player.photo ? `url(${player.photo}) center/cover` : undefined, fontSize: player.photo ? '0' : undefined }} onClick={() => onViewProfile(player.id)}>
+                                            {player.photo ? '' : getInitials(player.name)}
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ fontWeight: 600, fontSize: '0.9375rem' }}>{player.name}</div>
+                                            <div className="text-xs text-muted">Wants to connect</div>
+                                        </div>
+                                        <button className="btn btn-sm btn-ghost" style={{ padding: '6px 12px', border: '1px solid var(--border-color)', color: 'var(--danger)' }} onClick={() => handleFriendAction(player.id, 'reject')}>Ignore</button>
+                                        <button className="btn btn-sm btn-primary" style={{ padding: '6px 16px' }} onClick={() => handleFriendAction(player.id, 'accept')}>Accept</button>
                                     </div>
-                                </div>
-                                <button
-                                    className={`btn btn-sm ${isFriend ? 'btn-outline' : 'btn-primary'}`}
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (isFriend) dispatch({ type: 'REMOVE_FRIEND', payload: player.id });
-                                        else dispatch({ type: 'ADD_FRIEND', payload: player.id });
-                                    }}
-                                >
-                                    {isFriend ? '✓' : '+ Add'}
-                                </button>
+                                ))}
                             </div>
-                        );
-                    })}
+                        </div>
+                    )}
+
+                    {/* Search Bar */}
+                    <div style={{ position: 'relative' }}>
+                        <input 
+                            type="text" 
+                            className="input" 
+                            placeholder="Find players by name or phone..." 
+                            value={searchQuery}
+                            onChange={handleSearch}
+                            style={{ paddingLeft: 36, width: '100%', fontSize: '0.9375rem' }}
+                        />
+                        <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', opacity: 0.5, fontSize: '1rem' }}>🔍</span>
+                    </div>
+
+                    {isSearching && <div className="text-center text-sm text-muted">Searching...</div>}
+
+                    {searchQuery.length >= 3 && !isSearching && searchResults.length === 0 && (
+                        <div className="text-center text-sm text-muted" style={{ padding: 20 }}>No users found for "{searchQuery}".</div>
+                    )}
+
+                    <div className="stagger" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {(searchQuery.length >= 3 ? searchResults : suggestedPlayers).map(player => {
+                            const trust = getTrustTier(player.trustScore || 0);
+                            const isFriend = state.friends.includes(player.id);
+                            const isPendingSent = state.pendingFriends?.some(f => f.id === player.id && f.isSender);
+                            const isPendingReceived = state.pendingFriends?.some(f => f.id === player.id && !f.isSender);
+                            
+                            return (
+                                <div key={player.id} className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14 }}>
+                                    <div className="avatar" style={{
+                                        borderColor: trust.color, cursor: 'pointer',
+                                        background: player.photo ? `url(${player.photo}) center/cover` : undefined,
+                                        fontSize: player.photo ? '0' : undefined,
+                                    }} onClick={() => onViewProfile(player.id)}>
+                                        {player.photo ? '' : getInitials(player.name)}
+                                    </div>
+                                    <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => onViewProfile(player.id)}>
+                                        <div style={{ fontWeight: 600, fontSize: '0.9375rem' }}>{player.name}</div>
+                                        <div className="text-xs text-muted">
+                                            {(player.sports || []).map(s => getSportEmoji(s)).join(' ')} 
+                                            {player.gamesPlayed > 0 && ` · ${player.gamesPlayed} games`}
+                                        </div>
+                                    </div>
+                                    
+                                    {isFriend ? (
+                                        <button className="btn btn-sm btn-ghost" style={{ color: 'var(--primary-color)', border: '1px solid var(--primary-color)' }} disabled>✓ Friends</button>
+                                    ) : isPendingSent ? (
+                                        <button className="btn btn-sm btn-outline" onClick={() => handleFriendAction(player.id, 'cancel')}>Requested</button>
+                                    ) : isPendingReceived ? (
+                                        <button className="btn btn-sm btn-primary" onClick={() => handleFriendAction(player.id, 'accept')}>Accept</button>
+                                    ) : (
+                                        <button className="btn btn-sm btn-primary" onClick={() => handleFriendAction(player.id, 'send')}>+ Add</button>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
                 </div>
             )}
         </div>

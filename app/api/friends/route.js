@@ -43,11 +43,15 @@ export async function GET(req) {
             where: { userId: session.user.dbId }
         });
 
-        // Map friendships to flat user objects
-        const friends = friendships.map(f => {
+        const accepted = friendships.filter(f => f.status === 'accepted');
+        const pending = friendships.filter(f => f.status === 'pending');
+
+        const formatFriend = (f) => {
             const friendData = f.userId === session.user.dbId ? f.friend : f.user;
             return {
                 ...friendData,
+                friendshipStatus: f.status,
+                isSender: f.userId === session.user.dbId,
                 sports: JSON.parse(friendData.sports || '[]'),
                 positions: JSON.parse(friendData.positions || '{}'),
                 ratings: JSON.parse(friendData.ratings || '{}'),
@@ -58,9 +62,12 @@ export async function GET(req) {
                     date: t.date.toISOString().split('T')[0]
                 }))
             };
-        });
+        };
 
-        return Response.json({ friends, tiers: friendTiers });
+        const friends = accepted.map(formatFriend);
+        const pendingRequests = pending.map(formatFriend);
+
+        return Response.json({ friends, pendingRequests, tiers: friendTiers });
     } catch (err) {
         return Response.json({ error: err.message }, { status: 500 });
     }

@@ -4,6 +4,70 @@ import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
 import { sessionOptions } from '@/lib/session';
 
+export async function GET(req, props) {
+    const params = await props.params;
+    const gameId = params.id;
+    
+    try {
+        const game = await prisma.game.findUnique({
+            where: { id: gameId },
+            include: {
+                organizer: { select: { id: true, name: true, photo: true } },
+                rsvps: {
+                    include: {
+                        player: { select: { id: true, name: true, phone: true, photo: true, positions: true, ratings: true } }
+                    }
+                },
+            }
+        });
+
+        if (!game) {
+            // Try Supabase fallback
+            const supabase = getSupabase();
+            if (supabase) {
+                const { data: g } = await supabase.from('saved_games').select('*').eq('game_id', gameId).single();
+                if (g) {
+                    const { data: rsvps } = await supabase.from('game_rsvps').select('*').eq('game_id', gameId);
+                    const { data: org } = await supabase.from('users').select('id, name, photo').eq('id', g.organizer_id).single();
+                    
+                    const supaGame = {
+                        id: g.game_id, title: g.title, sport: g.sport, format: g.format || '',
+                        date: g.game_date, time: g.game_time, duration: g.duration || 90,
+                        location: g.location || '', address: g.address || '', lat: g.lat, lng: g.lng,
+                        maxPlayers: g.max_players || 10, skillLevel: g.skill_level || 'All Levels',
+                        status: g.status, visibility: g.visibility || 'public', approvalRequired: false,
+                        price: g.price || 0, gender: g.gender || 'mixed', amenities: '[]',
+                        organizerId: g.organizer_id,
+                        organizer: org || { id: g.organizer_id, name: '', photo: null },
+                        rsvps: (rsvps || []).map(r => ({ playerId: r.player_id, status: r.status, position: r.position || '', player: null })),
+                        createdAt: g.created_at,
+                    };
+                    return Response.json({ game: supaGame });
+                }
+            }
+            return Response.json({ error: 'Game not found' }, { status: 404 });
+        }
+
+        const serialized = {
+            ...game,
+            rsvps: game.rsvps.map(r => ({
+                playerId: r.playerId,
+                status: r.status,
+                position: r.position || '',
+                player: r.player ? {
+                    ...r.player,
+                    positions: typeof r.player.positions === 'string' ? JSON.parse(r.player.positions || '{}') : (r.player.positions || {}),
+                    ratings: typeof r.player.ratings === 'string' ? JSON.parse(r.player.ratings || '{}') : (r.player.ratings || {})
+                } : null
+            }))
+        };
+
+        return Response.json({ game: serialized });
+    } catch (err) {
+        console.error('GET /api/games/[id] error:', err);
+        return Response.json({ error: 'Database error' }, { status: 500 });
+    }
+}
 export async function DELETE(req, props) {
     const params = await props.params;
     try {
