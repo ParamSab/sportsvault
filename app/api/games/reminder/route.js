@@ -53,7 +53,7 @@ export async function POST(req) {
     }
 
     const messageBody = type === 'approval'
-      ? `🎉 You're in! Your spot for "${game.title}" has been confirmed. See you at ${game.location}!`
+      ? `🎉 You're in! Your spot for "${game.title}" has been confirmed. See you at ${game.location}! Game info: https://sportsvault.co.in/?game=${game.id}`
       : type === 'nudge'
       ? `👋 Quick nudge from the organizer of "${game.title}"! We're looking forward to seeing you at ${game.location}. Join here: https://sportsvault.co.in/?game=${game.id}`
       : `⚽ SportsVault Reminder: "${game.title}" starts in ${game.reminderHours || 2}h at ${game.location}. Don't be late!`;

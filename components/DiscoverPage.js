@@ -297,8 +297,8 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         {friendSuggestions.map(player => {
-                            const isFriend = state.friends.includes(player.id);
-                            const isPending = state.pendingFriends?.some(f => f.id === player.id);
+                            const isFriend = (state.friends || []).includes(player.id);
+                            const isPending = (state.pendingFriends || []).some(f => f.id === player.id);
                             const isLoading = friendActionLoading === player.id;
                             return (
                                 <div key={player.id} className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14 }}>

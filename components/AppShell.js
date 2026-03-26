@@ -59,7 +59,7 @@ export default function AppShell() {
         setRatingGame(null);
     };
 
-    const unreadCount = state.notifications.filter(n => !n.read).length;
+    const unreadCount = (state.notifications || []).filter(n => !n.read).length;
 
     const renderContent = () => {
         if (showAuthGate) {
