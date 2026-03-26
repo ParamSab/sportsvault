@@ -130,11 +130,11 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
         const existingRsvp = game.rsvps.find(r => r.playerId === playerId);
         const pos = existingRsvp?.position || '';
         
-        dispatch({ type: 'RSVP', payload: { gameId, playerId, status, position: pos } });
-        
         // Use either dbId or the id from the player object
         const p = state.players?.find(pl => pl.id === playerId);
         const actualPlayerId = p?.dbId || p?.id || playerId;
+        
+        dispatch({ type: 'RSVP', payload: { gameId, playerId: actualPlayerId, status, position: pos } });
 
         try {
             await fetch('/api/games/rsvp', {
@@ -142,8 +142,26 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ gameId, playerId: actualPlayerId, status, position: pos })
             });
+            // Send immediate reminder if RSVP approved
+            if (status === 'yes') {
+              fetch('/api/games/reminder', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ gameId, playerId: actualPlayerId })
+              }).catch(err => console.error('Reminder send failed:', err));
+            }
         } catch (err) {
             console.error('Host action persistence failed:', err);
+        // Refresh game data to reflect updated RSVP status
+        try {
+          const res = await fetch(`/api/games/${gameId}`);
+          if (res.ok) {
+            const data = await res.json();
+            dispatch({ type: 'LOAD_STATE', payload: { games: state.games.map(g => g.id === gameId ? data.game : g) } });
+          }
+        } catch (refreshErr) {
+          console.error('Failed to refresh game after host action:', refreshErr);
+        }
         }
     };
     
