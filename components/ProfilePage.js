@@ -55,10 +55,10 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
 
     const player = isOwn
         ? (state.currentUser || getPlayer('p1'))
-        : (getPlayer(playerId) || state.players?.find(p => p.id === playerId) || state.friends?.find(p => p.id === playerId) || fetchedPlayer);
+        : (getPlayer(playerId) || state.players?.find(p => p && p.id === playerId) || state.friends?.find(p => p && p.id === playerId) || fetchedPlayer);
 
     useEffect(() => {
-        if (!isOwn && !getPlayer(playerId) && !state.players?.find(p => p.id === playerId) && !state.friends?.find(p => p.id === playerId) && playerId) {
+        if (!isOwn && !getPlayer(playerId) && !state.players?.find(p => p && p.id === playerId) && !state.friends?.find(p => p && p.id === playerId) && playerId) {
             setIsLoadingPlayer(true);
             fetch(`/api/users?id=${playerId}`)
                 .then(r => r.json())
@@ -238,7 +238,7 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
                                             }} />
                                         </div>
                                         <span className="text-xs font-semibold" style={{ width: 32, textAlign: 'right' }}>
-                                            {val.toFixed(1)}
+                                            {!isNaN(Number(val)) && val !== null ? Number(val).toFixed(1) : 'N/A'}
                                         </span>
                                     </div>
                                 ))}
@@ -286,7 +286,7 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
             {/* Written Thoughts */}
             <div className="glass-card no-hover" style={{ marginBottom: 16 }}>
                 <h3 style={{ fontSize: '1rem', marginBottom: 12 }}>💬 Written Thoughts</h3>
-                {(player.thoughts || []).length === 0 ? (
+                {!Array.isArray(player.thoughts) || player.thoughts.length === 0 ? (
                     <p className="text-sm text-muted">No thoughts yet.</p>
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
