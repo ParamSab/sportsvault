@@ -1,5 +1,5 @@
 'use client';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { SPORTS, POSITIONS, getPlayer, getSportEmoji, spotsLeft, formatDate, getInitials, getTrustTier } from '@/lib/mockData';
 import { balanceTeams, generateWhatsAppMessage, getWhatsAppUrl } from '@/lib/teamBalancer';
@@ -20,20 +20,52 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     const [broadcastTier, setBroadcastTier] = useState(null);
     const [broadcastStatus, setBroadcastStatus] = useState(null); // null | 'sending' | 'sent' | 'error'
     const [broadcastResult, setBroadcastResult] = useState(null);
+    const [nudgedPlayers, setNudgedPlayers] = useState(new Set());
 
+    const [notFound, setNotFound] = useState(false);
     const game = state.games.find(g => g.id === gameId);
-    if (!game) return <div className="glass-card no-hover text-center" style={{ padding: 48 }}><h3>Game not found</h3><button className="btn btn-outline mt-md" onClick={onBack}>← Back</button></div>;
+    
+    useEffect(() => {
+        if (!game && state.isLoaded && !notFound) {
+            fetch(`/api/games/${gameId}`)
+                .then(r => r.json())
+                .then(d => {
+                    if (d.game) {
+                        dispatch({ type: 'LOAD_STATE', payload: { games: [...state.games, d.game] } });
+                    } else {
+                        setNotFound(true);
+                    }
+                })
+                .catch(e => {
+                    console.error('Failed fetching individual game:', e);
+                    setNotFound(true);
+                });
+        }
+    }, [gameId, game, state.isLoaded, notFound, dispatch, state.games]);
 
-    const sport = SPORTS[game.sport];
-    const confirmedRsvps = game.rsvps.filter(r => r.status === 'yes');
-    const backupRsvps = game.rsvps.filter(r => r.status === 'backup');
-    const maybeRsvps = game.rsvps.filter(r => r.status === 'maybe');
-    const pendingRsvps = game.rsvps.filter(r => r.status === 'pending');
+    if (!game) {
+        if (!state.isLoaded || (!notFound && state.isLoaded)) {
+            return (
+                <div className="glass-card no-hover text-center" style={{ padding: 48 }}>
+                    <div className="spinner" style={{ margin: '0 auto 16px' }}></div>
+                    <h3>Loading game details...</h3>
+                </div>
+            );
+        }
+        return <div className="glass-card no-hover text-center" style={{ padding: 48 }}><h3>Game not found</h3><button className="btn btn-outline mt-md" onClick={onBack}>← Back</button></div>;
+    }
+
+    const sport = SPORTS[game.sport] || { name: 'Unknown', emoji: '🏅', color: '#6366f1', gradient: 'linear-gradient(135deg, #6366f1, #4f46e5)' };
+    const confirmedRsvps = (game.rsvps || []).filter(r => r.status === 'yes' || r.status === 'checked_in');
+    const backupRsvps = (game.rsvps || []).filter(r => r.status === 'backup');
+    const maybeRsvps = (game.rsvps || []).filter(r => r.status === 'maybe');
+    const pendingRsvps = (game.rsvps || []).filter(r => r.status === 'pending');
     const spots = spotsLeft(game);
     const currentUserId = state.currentUser?.dbId || state.currentUser?.id || 'current';
-    const myRsvp = game.rsvps.find(r => r.playerId === currentUserId);
-    const isOrganizer = game.organizerId === currentUserId || game.organizer?.id === currentUserId;
-    const privacyInfo = PRIVACY_LABELS[game.visibility || 'public'];
+    const myRsvp = (game.rsvps || []).find(r => r.playerId === currentUserId);
+    const organizerId = game.organizerId || game.organizer?.id || game.organizer;
+    const isOrganizer = organizerId === currentUserId;
+    const privacyInfo = PRIVACY_LABELS[game.visibility || 'public'] || PRIVACY_LABELS.public;
 
     const confirmedPlayers = confirmedRsvps.map(r => {
         const p = r.player || getPlayer(r.playerId) || state.players?.find(pl => pl.id === r.playerId) || (r.playerId === currentUserId ? state.currentUser : null);
@@ -62,7 +94,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
         if (status === 'yes') {
             if (spots <= 0 && myRsvp?.status !== 'yes' && myRsvp?.status !== 'checked_in') {
                 finalStatus = 'backup';
-            } else if (game.approvalRequired && myRsvp?.status !== 'yes' && myRsvp?.status !== 'checked_in') {
+            } else if (game.approvalRequired && !isOrganizer && myRsvp?.status !== 'yes' && myRsvp?.status !== 'checked_in') {
                 finalStatus = 'pending';
             }
         }
@@ -116,20 +148,44 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     };
 
     const handleHostAction = async (playerId, status) => {
-        dispatch({ type: 'RSVP', payload: { gameId, playerId, status } });
+        const existingRsvp = (game.rsvps || []).find(r => r.playerId === playerId);
+        const pos = existingRsvp?.position || '';
         
         // Use either dbId or the id from the player object
         const p = state.players?.find(pl => pl.id === playerId);
         const actualPlayerId = p?.dbId || p?.id || playerId;
+        
+        dispatch({ type: 'RSVP', payload: { gameId, playerId: actualPlayerId, status, position: pos } });
 
         try {
             await fetch('/api/games/rsvp', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ gameId, playerId: actualPlayerId, status })
+                body: JSON.stringify({ gameId, playerId: actualPlayerId, status, position: pos })
             });
+            // Send immediate reminder if RSVP approved
+            if (status === 'yes') {
+              fetch('/api/games/reminder', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ gameId, playerId: actualPlayerId })
+              }).catch(err => console.error('Reminder send failed:', err));
+            }
         } catch (err) {
             console.error('Host action persistence failed:', err);
+        }
+        
+        // Refresh game data to reflect updated RSVP status
+        try {
+          const res = await fetch(`/api/games/${gameId}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.game) {
+                dispatch({ type: 'LOAD_STATE', payload: { games: state.games.map(g => g.id === gameId ? data.game : g) } });
+            }
+          }
+        } catch (refreshErr) {
+          console.error('Failed to refresh game after host action:', refreshErr);
         }
     };
     
@@ -171,7 +227,12 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
         setBroadcastResult(null);
     };
 
-    const whatsappMsg = generateWhatsAppMessage(game, state.players, showTeams ? teams : null);
+    let whatsappMsg = '';
+    try {
+        whatsappMsg = generateWhatsAppMessage(game, state.players, showTeams ? teams : null);
+    } catch (e) {
+        console.error('WhatsApp msg generation failed:', e);
+    }
 
     const amenList = useMemo(() => {
         try {
@@ -263,7 +324,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
                             <span style={{ fontSize: '1.125rem' }}>👤</span>
-                            <span className="text-sm">Organized by <span style={{ fontWeight: 600, color: sport?.color, cursor: 'pointer' }} onClick={() => onViewProfile(game.organizer)}>{getPlayer(game.organizer)?.name || state.currentUser?.name || 'You'}</span></span>
+                        <span className="text-sm">Organized by <span style={{ fontWeight: 600, color: sport?.color, cursor: 'pointer' }} onClick={() => onViewProfile(organizerId)}>{(game.organizer?.name || getPlayer(organizerId)?.name || state.currentUser?.name || 'You')}</span></span>
                         </div>
                     </div>
                 </div>
@@ -342,12 +403,12 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                     </h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                         {pendingRsvps.map(r => {
-                            const p = getPlayer(r.playerId) || state.players?.find(pl => pl.id === r.playerId);
+                            const p = r.player || getPlayer(r.playerId) || state.players?.find(pl => pl.id === r.playerId) || (r.playerId === currentUserId ? state.currentUser : null);
                             if (!p) return null;
                             return (
                                 <div key={r.playerId} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg-body)', padding: '10px 12px', borderRadius: 8 }}>
                                     <div className="avatar" style={{ width: 32, height: 32, background: p.photo ? `url(${p.photo}) center/cover` : undefined, fontSize: p.photo ? '0' : '0.6875rem' }}>
-                                        {p.photo ? '' : getInitials(p.name)}
+                                        {p.photo ? '' : getInitials(p?.name || 'Unknown')}
                                     </div>
                                     <div style={{ flex: 1 }}>
                                         <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{p.name}</div>
@@ -380,26 +441,119 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
 
                 {confirmedRsvps.length > 0 && (
                     <div style={{ marginBottom: 20 }}>
-                        <div className="text-xs font-semibold" style={{ color: '#22c55e', letterSpacing: '0.5px', marginBottom: 10, borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 8 }}>✅ GOING ({confirmedRsvps.length})</div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 8 }}>
+                            <div className="text-xs font-semibold" style={{ color: '#22c55e', letterSpacing: '0.5px' }}>✅ GOING ({confirmedRsvps.length})</div>
+                            {isOrganizer && confirmedRsvps.length > 1 && (
+                                <button className="btn btn-xs btn-outline"
+                                    style={{ fontSize: '0.65rem', padding: '4px 10px', color: 'var(--text-secondary)', borderColor: 'var(--border-color)' }}
+                                    onClick={async (e) => {
+                                        e.stopPropagation();
+                                        const unCheckedIn = confirmedRsvps.filter(r => r.playerId !== currentUserId && r.status !== 'checked_in' && !nudgedPlayers.has(r.playerId));
+                                        if (unCheckedIn.length === 0) return alert('All players are checked in or have already been nudged!');
+                                        if (!window.confirm(`Send an automated nudge SMS to ${unCheckedIn.length} unchecked players?`)) return;
+                                        
+                                        let sentCount = 0;
+                                        let failedTwilio = false;
+                                        await Promise.all(unCheckedIn.map(async r => {
+                                            const res = await fetch('/api/games/reminder', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ gameId: game.id, playerId: r.playerId, type: 'nudge' })
+                                            });
+                                            const data = await res.json();
+                                            setNudgedPlayers(prev => { const next = new Set(prev); next.add(r.playerId); return next; });
+                                            if (data.success) sentCount++;
+                                            else if (data.reason === 'Twilio not configured') failedTwilio = true;
+                                        }));
+                                        if (failedTwilio) {
+                                            alert('SMS not configured. Ask your admin to add Twilio credentials.');
+                                        } else {
+                                            alert(`🔔 Nudges sent via SMS to ${sentCount} player${sentCount !== 1 ? 's' : ''}!`);
+                                        }
+                                    }}
+                                >
+                                    Nudge All ({confirmedRsvps.filter(r => r.playerId !== currentUserId && r.status !== 'checked_in' && !nudgedPlayers.has(r.playerId)).length})
+                                </button>
+                            )}
+                        </div>
                         {confirmedRsvps.map(r => {
                             const p = r.player || getPlayer(r.playerId) || state.players?.find(pl => pl.id === r.playerId) || (r.playerId === currentUserId ? state.currentUser : null);
                             if (!p) return null;
                             return (
                                 <div key={r.playerId} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
                                     <div className="avatar avatar-sm" style={{ borderColor: sport?.color, cursor: 'pointer', background: p.photo ? `url(${p.photo}) center/cover` : undefined, fontSize: p.photo ? '0' : undefined }} onClick={() => onViewProfile(r.playerId)}>
-                                        {p.photo ? '' : getInitials(p.name)}
+                                        {p.photo ? '' : getInitials(p?.name || 'Unknown')}
                                     </div>
                                     <div style={{ flex: 1 }}>
                                         <div style={{ fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer' }} onClick={() => onViewProfile(r.playerId)}>{p.name}</div>
                                         <div className="text-xs text-muted">{r.position || r.rsvpPosition}</div>
                                     </div>
-                                    {p.ratings?.[game.sport]?.count >= 10 && <span className="text-xs" style={{ color: 'var(--warning)' }}>⭐ {p.ratings[game.sport].overall}</span>}
-                                    {isOrganizer && r.status !== 'checked_in' && (
-                                        <button className="btn btn-sm btn-outline" style={{ padding: '4px 10px', fontSize: '0.7rem' }} onClick={() => handleHostAction(r.playerId, 'checked_in')}>Check In</button>
-                                    )}
-                                    {r.status === 'checked_in' && (
-                                        <span className="text-xs" style={{ color: 'var(--success)', fontWeight: 700, padding: '4px 8px', background: 'rgba(34,197,94,0.1)', borderRadius: 4 }}>✓ Checked In</span>
-                                    )}
+
+                                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                        {!(state.friends || []).includes(r.playerId) && !(state.pendingFriends || []).includes(r.playerId) && r.playerId !== currentUserId && state.isAuthenticated && (
+                                            <button 
+                                                className="btn btn-xs btn-outline"
+                                                style={{ fontSize: '0.65rem', padding: '4px 8px' }}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleFriendRequest(r.playerId);
+                                                }}
+                                            >
+                                                + Friend
+                                            </button>
+                                        )}
+                                        {((state.pendingFriends || []).includes(r.playerId) && r.playerId !== currentUserId) && (
+                                            <span className="text-xs text-muted" style={{ fontWeight: 600 }}>Sent ✓</span>
+                                        )}
+                                        {isOrganizer && r.playerId !== currentUserId && (
+                                            <button 
+                                                className="btn btn-xs btn-ghost" 
+                                                style={{ color: nudgedPlayers.has(r.playerId) ? 'var(--text-muted)' : 'var(--primary-color)', fontSize: '0.65rem', padding: '4px 8px' }}
+                                                disabled={nudgedPlayers.has(r.playerId)}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    fetch('/api/games/reminder', {
+                                                        method: 'POST',
+                                                        headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({ gameId: game.id, playerId: r.playerId, type: 'nudge' })
+                                                    }).then(res => res.json()).then(data => {
+                                                        if (data.success) {
+                                                            alert('Nudge sent via SMS!');
+                                                        } else if (data.reason === 'Twilio not configured') {
+                                                            alert('SMS not configured. Ask your admin to add Twilio credentials in settings.');
+                                                        } else {
+                                                            alert(data.error || 'Could not send nudge');
+                                                        }
+                                                        setNudgedPlayers(prev => { const next = new Set(prev); next.add(r.playerId); return next; });
+                                                    });
+                                                }}
+                                            >
+                                                {nudgedPlayers.has(r.playerId) ? '🔔 Sent' : '🔔 Nudge'}
+                                            </button>
+                                        )}
+
+                                        {p.ratings?.[game.sport]?.count >= 10 && (
+                                            <span className="text-xs" style={{ color: 'var(--warning)' }}>
+                                                ⭐ {p.ratings[game.sport].overall}
+                                            </span>
+                                        )}
+
+                                        {isOrganizer && r.status !== 'checked_in' && (
+                                            <button 
+                                                className="btn btn-sm btn-outline" 
+                                                style={{ padding: '4px 10px', fontSize: '0.7rem' }} 
+                                                onClick={() => handleHostAction(r.playerId, 'checked_in')}
+                                            >
+                                                Check In
+                                            </button>
+                                        )}
+
+                                        {r.status === 'checked_in' && (
+                                            <span className="text-xs" style={{ color: 'var(--success)', fontWeight: 700, padding: '4px 8px', background: 'rgba(34,197,94,0.1)', borderRadius: 4 }}>
+                                                ✓ Checked In
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                             );
                         })}
@@ -420,6 +574,23 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                                     <div style={{ flex: 1 }}>
                                         <div style={{ fontWeight: 500, fontSize: '0.875rem' }}>{p.name}</div>
                                         <div className="text-xs text-muted">{r.position}</div>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                        {!(state.friends || []).includes(r.playerId) && !(state.pendingFriends || []).includes(r.playerId) && r.playerId !== currentUserId && state.isAuthenticated && (
+                                            <button 
+                                                className="btn btn-xs btn-outline"
+                                                style={{ fontSize: '0.65rem', padding: '4px 8px' }}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleFriendRequest(r.playerId);
+                                                }}
+                                            >
+                                                + Friend
+                                            </button>
+                                        )}
+                                        {((state.pendingFriends || []).includes(r.playerId) && r.playerId !== currentUserId) && (
+                                            <span className="text-xs text-muted" style={{ fontWeight: 600 }}>Sent ✓</span>
+                                        )}
                                     </div>
                                 </div>
                             );
@@ -623,6 +794,31 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                     style={{ background: '#25D366', color: '#fff', padding: '14px 24px', fontSize: '0.9375rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 'var(--radius-full)', textDecoration: 'none' }}>
                     📤 Share on WhatsApp
                 </a>
+
+                {/* Delete Game (Organizer Only) */}
+                {isOrganizer && (
+                    <button 
+                        className="btn btn-block btn-outline" 
+                        style={{ marginTop: 12, color: 'var(--danger)', borderColor: 'rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.05)' }}
+                        onClick={async () => {
+                            if (window.confirm("Are you sure you want to delete this game? This cannot be undone.")) {
+                                try {
+                                    const res = await fetch(`/api/games/${game.id}`, { method: 'DELETE' });
+                                    if (res.ok) {
+                                        dispatch({ type: 'LOAD_STATE', payload: { games: state.games.filter(g => g.id !== game.id) } });
+                                        onBack();
+                                    } else {
+                                        alert("Failed to delete game");
+                                    }
+                                } catch (e) {
+                                    alert("Error deleting game");
+                                }
+                            }
+                        }}
+                    >
+                        🗑️ Delete Game
+                    </button>
+                )}
             </div>
         </div>
     );
