@@ -36,6 +36,8 @@ function supabaseRowToGame(g) {
     };
 }
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req) {
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get('userId');
@@ -183,6 +185,8 @@ export async function POST(req) {
                 status: 'open',
                 visibility: game.visibility || 'public',
                 approvalRequired: !!game.approvalRequired,
+                reminderHours: game.reminderHours !== undefined ? parseInt(game.reminderHours) : 2,
+                remindersSent: false,
                 bookingImage: game.bookingImage || null,
                 pitchType: game.pitchType || '5-a-side',
                 surface: game.surface || '3G Astro',
@@ -233,6 +237,8 @@ export async function POST(req) {
                 gender:       newGame.gender || 'mixed',
                 pitch_type:   newGame.pitchType || null,
                 surface:      newGame.surface || null,
+                reminder_hours: newGame.reminderHours,
+                reminders_sent: false,
             }, { onConflict: 'game_id' }).then(({ error }) => {
                 if (error) console.error('Supabase backup save error:', error.message);
             });
@@ -286,6 +292,8 @@ export async function POST(req) {
             gender:       game.gender || 'mixed',
             pitch_type:   game.pitchType || null,
             surface:      game.surface || null,
+            reminder_hours: game.reminderHours !== undefined ? parseInt(game.reminderHours) : 2,
+            reminders_sent: false,
         });
 
         if (error) {
@@ -318,6 +326,8 @@ export async function POST(req) {
             price: game.price ? parseFloat(game.price.toString()) : 0,
             gender: game.gender || 'mixed',
             amenities: typeof game.amenities === 'string' ? game.amenities : JSON.stringify(game.amenities || []),
+            reminderHours: game.reminderHours !== undefined ? parseInt(game.reminderHours) : 2,
+            remindersSent: false,
             organizerId: userId,
             organizer: { id: userId, name: '', photo: null },
             rsvps: [{ playerId: userId, status: 'yes', position: game.organizerPosition || '', player: null }],

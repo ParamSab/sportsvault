@@ -41,6 +41,7 @@ export default function CreateGamePage({ onComplete }) {
         price: 0,
         gender: 'mixed',
         amenities: [],
+        reminderHours: 2,
     });
 
     const update = (key, val) => setGame(prev => ({ ...prev, [key]: val }));
@@ -176,6 +177,22 @@ export default function CreateGamePage({ onComplete }) {
             <p className="text-muted text-sm" style={{ marginBottom: 20 }}>Pin your venue and set the time</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
 
+                {/* Recent Venues */}
+                {state.history && state.history.length > 0 && (
+                    <div style={{ marginBottom: 4 }}>
+                        <label style={labelStyle}>Recent Venues</label>
+                        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 8, WebkitOverflowScrolling: 'touch' }}>
+                            {Array.from(new Map(state.history.filter(g => g.location).map(g => [g.location, g])).values()).slice(0, 5).map(v => (
+                                <button key={v.location} type="button" className="chip" 
+                                    style={{ whiteSpace: 'nowrap', background: game.location === v.location ? `${SPORTS[game.sport]?.color}30` : 'var(--bg-input)' }}
+                                    onClick={() => update('location', v.location) || update('address', v.address || '') || update('lat', v.lat || game.lat) || update('lng', v.lng || game.lng)}>
+                                    📍 {v.location}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {/* Interactive Leaflet Map */}
                 <div>
                     <label style={labelStyle}>📍 Drop a Pin</label>
@@ -226,7 +243,13 @@ export default function CreateGamePage({ onComplete }) {
                     <div>
                         <label style={labelStyle}>Max Players</label>
                         <input type="number" value={game.maxPlayers} min={2} max={100}
-                            onChange={e => update('maxPlayers', +e.target.value)} style={inputStyle} />
+                            onChange={e => {
+                                const maxP = +e.target.value;
+                                update('maxPlayers', maxP);
+                                if (game.totalCost) {
+                                    update('price', Math.ceil(game.totalCost / maxP));
+                                }
+                            }} style={inputStyle} />
                     </div>
                 </div>
 
@@ -275,9 +298,25 @@ export default function CreateGamePage({ onComplete }) {
                     </div>
                 </div>
 
-                <div>
-                    <label style={labelStyle}>Price per player (Rs)</label>
-                    <input type="number" value={game.price} onChange={e => update('price', +e.target.value)} style={inputStyle} />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div>
+                        <label style={labelStyle}>Total Pitch Cost (₹)</label>
+                        <input type="number" value={game.totalCost || ''} placeholder="e.g. 2000"
+                            onChange={e => {
+                                const total = +e.target.value;
+                                update('totalCost', total);
+                                update('price', Math.ceil(total / game.maxPlayers));
+                            }} style={inputStyle} />
+                    </div>
+                    <div>
+                        <label style={labelStyle}>Price per player (₹)</label>
+                        <div style={{
+                            ...inputStyle, background: 'var(--bg-card)', color: 'var(--success)', 
+                            fontWeight: 700, display: 'flex', alignItems: 'center'
+                        }}>
+                            {game.price > 0 ? `₹${game.price}` : 'Free'}
+                        </div>
+                    </div>
                 </div>
 
                 <div>
@@ -340,6 +379,19 @@ export default function CreateGamePage({ onComplete }) {
                     <input type="checkbox" checked={game.approvalRequired} onChange={e => update('approvalRequired', e.target.checked)} />
                     <span className="ts-slider round"></span>
                 </label>
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+                <label style={labelStyle}>Send Auto-SMS Reminder</label>
+                <div className="text-muted text-xs" style={{ marginBottom: 12 }}>Text messages will be sent to confirmed players.</div>
+                <select value={game.reminderHours} onChange={e => update('reminderHours', +e.target.value)} style={inputStyle}>
+                    <option value={0}>Do not send reminders</option>
+                    <option value={1}>1 Hour Before</option>
+                    <option value={2}>2 Hours Before (Recommended)</option>
+                    <option value={3}>3 Hours Before</option>
+                    <option value={12}>12 Hours Before</option>
+                    <option value={24}>24 Hours Before</option>
+                </select>
             </div>
         </div>,
 

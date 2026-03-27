@@ -140,6 +140,9 @@ model Game {
   gender    String  @default("mixed") // mixed, male, female
   amenities String? // JSON string: ["bibs", "water", "changing_rooms", "showers", "parking"]
 
+  reminderHours Int     @default(2)
+  remindersSent Boolean @default(false)
+
   organizerId String
   organizer   User   @relation("Organizer", fields: [organizerId], references: [id], onDelete: Cascade)
 

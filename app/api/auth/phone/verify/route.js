@@ -1,19 +1,9 @@
-import twilio from 'twilio';
 import { prisma } from '@/lib/prisma';
 import { getSupabase } from '@/lib/supabase';
 import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
 import { sessionOptions } from '@/lib/session';
 
-const localSessionOptions = {
-    password: process.env.SESSION_SECRET || 'sportsvault-super-secret-key-min-32-chars!!',
-    cookieName: 'sportsvault_session',
-    cookieOptions: {
-        secure: process.env.NODE_ENV === 'production',
-        httpOnly: true,
-        maxAge: 60 * 60 * 24 * 30,
-    },
-};
 
 function normalizePhone(phone) {
     const cleaned = phone.trim();
@@ -58,16 +48,17 @@ export async function POST(req) {
             const accountSid = process.env.TWILIO_ACCOUNT_SID;
             const authToken = process.env.TWILIO_AUTH_TOKEN;
             const serviceSid = process.env.TWILIO_VERIFY_SERVICE_SID;
-
+            
             if (!accountSid || !authToken || !serviceSid) {
                 return Response.json({ error: 'SMS service not configured' }, { status: 500 });
             }
 
-            const client = twilio(accountSid, authToken);
-            const check = await client.verify.v2.services(serviceSid)
-                .verificationChecks.create({ to: normalized, code });
+            const client = require('twilio')(accountSid, authToken);
+            const verificationCheck = await client.verify.v2.services(serviceSid)
+                .verificationChecks
+                .create({ to: normalized, code });
 
-            if (check.status !== 'approved') {
+            if (verificationCheck.status !== 'approved') {
                 return Response.json({ error: 'Incorrect verification code. Please try again.' }, { status: 401 });
             }
         }
@@ -75,7 +66,7 @@ export async function POST(req) {
         const user = await findUserByPhone(normalized);
 
         const cookieStore = await cookies();
-        const opts = { ...(sessionOptions || localSessionOptions) };
+        const opts = { ...sessionOptions };
         if (!rememberMe) {
             opts.cookieOptions = { ...opts.cookieOptions };
             delete opts.cookieOptions.maxAge;
@@ -83,11 +74,15 @@ export async function POST(req) {
         const session = await getIronSession(cookieStore, opts);
 
         if (user) {
+            if (!user.password) {
+                return Response.json({ exists: false, phone: normalized, existingProfile: user });
+            }
+
             const userData = {
                 ...user,
-                sports: JSON.parse(user.sports || '[]'),
-                positions: JSON.parse(user.positions || '{}'),
-                ratings: JSON.parse(user.ratings || '{}'),
+                sports: Array.isArray(user.sports) ? user.sports : (typeof user.sports === 'string' ? JSON.parse(user.sports || '[]') : []),
+                positions: typeof user.positions === 'object' ? user.positions : (typeof user.positions === 'string' ? JSON.parse(user.positions || '{}') : {}),
+                ratings: typeof user.ratings === 'object' ? user.ratings : (typeof user.ratings === 'string' ? JSON.parse(user.ratings || '{}') : {}),
                 dbId: user.id,
             };
             delete userData.password;

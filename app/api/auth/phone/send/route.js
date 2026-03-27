@@ -1,4 +1,4 @@
-import twilio from 'twilio';
+// MSG91 Auth Route
 
 function normalizePhone(phone) {
     const cleaned = phone.trim();
@@ -28,18 +28,18 @@ export async function POST(req) {
             return Response.json({ error: 'Invalid phone number. Please enter a valid 10-digit number.' }, { status: 400 });
         }
 
+        // Twilio implementation
         if (!accountSid || !authToken || !serviceSid) {
-            // Dev mode: skip actual SMS — use bypass code 990770 to verify
             console.log(`[AUTH DEV] Twilio not configured — use bypass code 990770 for ${normalized}`);
             return Response.json({ success: true, devMode: true });
         }
 
-        const client = twilio(accountSid, authToken);
+        const client = require('twilio')(accountSid, authToken);
         const verification = await client.verify.v2.services(serviceSid)
             .verifications
             .create({ to: normalized, channel: 'sms' });
 
-        console.log(`[AUTH] Twilio Verify sent to ${normalized}, status: ${verification.status}`);
+        console.log(`[AUTH] Twilio Verify sent to ${normalized}, sid: ${verification.sid}`);
         return Response.json({ success: true });
 
     } catch (err) {

@@ -4,9 +4,10 @@ import { getSupabase } from '@/lib/supabase';
 export async function POST(req) {
     try {
         const { email } = await req.json();
-        if (!email || !email.includes('@')) {
+        if (!email || typeof email !== 'string' || !email.includes('@')) {
             return Response.json({ error: 'Valid email address is required.' }, { status: 400 });
         }
+        const normalizedEmail = email.toLowerCase().trim();
 
         const code = Math.floor(100000 + Math.random() * 900000).toString();
         const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
@@ -14,21 +15,21 @@ export async function POST(req) {
         // Store OTP in Supabase (invalidate old codes first)
         const supabase = getSupabase();
         if (supabase) {
-            await supabase.from('otp_codes').update({ used: true }).eq('email', email).eq('used', false);
-            await supabase.from('otp_codes').insert({ email, code, expires_at: expiresAt.toISOString() });
+            await supabase.from('otp_codes').update({ used: true }).eq('email', normalizedEmail).eq('used', false);
+            await supabase.from('otp_codes').insert({ email: normalizedEmail, code, expires_at: expiresAt.toISOString() });
         }
 
         // Send via Resend
         const apiKey = process.env.RESEND_API_KEY;
         if (!apiKey) {
-            console.log(`[AUTH DEV] RESEND not configured — use bypass code 990770 for ${email}`);
+            console.log(`[AUTH DEV] RESEND not configured — use bypass code 990770 for ${normalizedEmail}`);
             return Response.json({ success: true, devMode: true });
         }
 
         const resend = new Resend(apiKey);
         await resend.emails.send({
             from: 'SportsVault <onboarding@resend.dev>',
-            to: [email],
+            to: [normalizedEmail],
             subject: 'Your SportsVault Login Code',
             html: `
                 <div style="font-family: sans-serif; text-align: center; padding: 40px; background: #f8fafc; border-radius: 12px; max-width: 480px; margin: 0 auto;">
@@ -42,7 +43,7 @@ export async function POST(req) {
             `,
         });
 
-        console.log(`[AUTH] Email OTP sent to ${email}`);
+        console.log(`[AUTH] Email OTP sent to ${normalizedEmail}`);
         return Response.json({ success: true });
 
     } catch (err) {

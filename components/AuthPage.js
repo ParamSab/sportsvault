@@ -8,9 +8,10 @@ export default function AuthPage() {
     const { state, dispatch } = useStore();
     const router = useRouter();
     const [step, setStep] = useState('login'); // login, otp, onboarding, setup-credentials
-    const [authMode, setAuthMode] = useState('phone'); // email, phone
+    const [authMode, setAuthMode] = useState('phone'); // email, phone, password
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
+    const [loginPassword, setLoginPassword] = useState('');
     const [rememberMe, setRememberMe] = useState(true);
     // Verified identifiers returned from server
     const [verifiedPhone, setVerifiedPhone] = useState('');
@@ -32,7 +33,7 @@ export default function AuthPage() {
     const [onboardStep, setOnboardStep] = useState(0);
     const [stepError, setStepError] = useState('');
     const [profile, setProfile] = useState({
-        name: '', password: '', photo: null, location: '', sports: [], positions: {},
+        name: '', phone: '', password: '', photo: null, location: '', sports: [], positions: {},
     });
 
     const startResendCountdown = () => {
@@ -72,6 +73,7 @@ export default function AuthPage() {
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || "Failed to send verification code");
+                if (data.devMode) setIsDevMode(true);
             } else {
                 if (!phone || phone.replace(/\D/g, '').length < 10) {
                     alert("Enter a valid phone number");
@@ -91,6 +93,31 @@ export default function AuthPage() {
         } catch (err) {
             console.error(err);
             alert(err.message || "Could not send verification code.");
+        } finally {
+            setIsSending(false);
+        }
+    };
+
+    const handlePasswordLogin = async () => {
+        if (!email.includes('@')) return alert("Enter a valid email address");
+        if (!loginPassword) return alert("Enter your password");
+        setIsSending(true);
+        try {
+            const res = await fetch('/api/auth/password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password: loginPassword, rememberMe })
+            });
+            const data = await res.json();
+            if (res.ok && data.user) {
+                dispatch({ type: 'LOGIN', payload: data.user });
+                router.push('/invite');
+            } else {
+                alert(data.error || "Incorrect email or password");
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Login failed.");
         } finally {
             setIsSending(false);
         }
@@ -240,11 +267,11 @@ export default function AuthPage() {
 
     const validateOnboardStep = (idx) => {
         if (idx === 0 && profile.name.trim().length < 2) { setStepError('Please enter your full name (at least 2 characters)'); return false; }
-        if (idx === 1 && profile.password.length < 6) { setStepError('Password must be at least 6 characters'); return false; }
+        if (idx === 1 && authMode === 'email' && (!profile.phone || profile.phone.replace(/\D/g, '').length < 10)) { setStepError('Please enter a valid phone number for game reminders'); return false; }
         // idx 2 is photo (optional)
         if (idx === 3 && !profile.location.trim()) { setStepError('Please enter your city or neighbourhood'); return false; }
-        if (idx === 4 && profile.sports.length === 0) { setStepError('Select at least one sport'); return false; }
-        if (idx === 5) {
+        if (idx === 3 && profile.sports.length === 0) { setStepError('Select at least one sport'); return false; }
+        if (idx === 4) {
             const missing = profile.sports.filter(s => !profile.positions[s]);
             if (missing.length > 0) { setStepError(`Select your position for: ${missing.join(', ')}`); return false; }
         }
@@ -267,7 +294,7 @@ export default function AuthPage() {
             id: 'current',
             name: profile.name || 'Player',
             email: credEmail || (authMode === 'email' ? email : null),
-            phone: authMode === 'phone' ? (verifiedPhone || phone) : null,
+            phone: authMode === 'phone' ? (verifiedPhone || phone) : (profile.phone || null),
             photo: profile.photo,
             location: profile.location || 'Mumbai',
             sports: profile.sports.length > 0 ? profile.sports : ['football'],
@@ -285,14 +312,13 @@ export default function AuthPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     name: newUser.name,
-                    password: profile.password,
                     email: newUser.email,
                     phone: newUser.phone,
                     photo: newUser.photo,
                     location: newUser.location,
                     sports: newUser.sports,
                     positions: newUser.positions,
-                    password: setupPassword || undefined,
+                    password: setupPassword,
                 }),
             });
             const dbData = await dbRes.json();
@@ -326,10 +352,18 @@ export default function AuthPage() {
             <p className="text-muted text-sm" style={{ marginBottom: 24 }}>This is how other players will see you.</p>
             <input type="text" placeholder="Your name" value={profile.name} onChange={e => setProfile(prev => ({ ...prev, name: e.target.value }))} style={{ fontSize: '1.125rem', padding: '16px 20px', width: '100%' }} autoFocus />
         </div>,
-        <div key="password" className="animate-fade-in">
-            <h2 style={{ marginBottom: 8 }}>Create a Password</h2>
-            <p className="text-muted text-sm" style={{ marginBottom: 24 }}>Secure your builder account.</p>
-            <input type="password" placeholder="Password (min 6 chars)" value={profile.password} onChange={e => setProfile(prev => ({ ...prev, password: e.target.value }))} style={{ fontSize: '1.125rem', padding: '16px 20px', width: '100%' }} autoFocus />
+        <div key="phone-capture" className="animate-fade-in">
+            <h2 style={{ marginBottom: 8 }}>Game Reminders</h2>
+            <p className="text-muted text-sm" style={{ marginBottom: 24 }}>We'll send you SMS game reminders. Enter your WhatsApp/Mobile number.</p>
+            <input 
+                type="tel" 
+                placeholder="e.g. 917904008139" 
+                value={profile.phone} 
+                onChange={e => setProfile(prev => ({ ...prev, phone: e.target.value }))} 
+                style={{ fontSize: '1.25rem', padding: '16px 20px', width: '100%', border: '1px solid var(--primary-color)' }} 
+                autoFocus 
+            />
+            <p className="text-xs text-muted" style={{ marginTop: 12 }}>Include country code (e.g. 91 for India).</p>
         </div>,
         <div key="photo" className="animate-fade-in">
             <h2 style={{ marginBottom: 8 }}>Add a Profile Photo</h2>
@@ -450,7 +484,7 @@ export default function AuthPage() {
                                         border: 'none', cursor: 'pointer', transition: 'all 0.2s',
                                     }}
                                 >
-                                    Email
+                                    Email Code
                                 </button>
                                 <button
                                     onClick={() => switchMode('phone')}
@@ -461,11 +495,32 @@ export default function AuthPage() {
                                         border: 'none', cursor: 'pointer', transition: 'all 0.2s',
                                     }}
                                 >
-                                    Phone (SMS)
+                                    SMS
+                                </button>
+                                <button
+                                    onClick={() => switchMode('password')}
+                                    style={{
+                                        flex: 1, padding: '10px', borderRadius: 8, fontSize: '0.875rem', fontWeight: 600,
+                                        background: authMode === 'password' ? 'var(--primary-color)' : 'transparent',
+                                        color: authMode === 'password' ? '#fff' : 'var(--text-secondary)',
+                                        border: 'none', cursor: 'pointer', transition: 'all 0.2s',
+                                    }}
+                                >
+                                    Login
                                 </button>
                             </div>
 
-                            {authMode === 'email' ? (
+                            {authMode === 'password' ? (
+                                <div style={{ marginBottom: 20 }}>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Email Address</label>
+                                    <input type="email" placeholder="name@example.com" value={email} onChange={(e) => setEmail(e.target.value)} style={{ fontSize: '1rem', padding: '14px 16px', width: '100%', marginBottom: 16 }} autoFocus />
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Password</label>
+                                    <div style={{ position: 'relative' }}>
+                                        <input type={showPassword ? 'text' : 'password'} placeholder="Your password" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} style={{ fontSize: '1rem', padding: '14px 48px 14px 16px', width: '100%' }} />
+                                        <button type="button" onClick={() => setShowPassword(p => !p)} style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: 'var(--text-secondary)' }}>{showPassword ? '🙈' : '👁'}</button>
+                                    </div>
+                                </div>
+                            ) : authMode === 'email' ? (
                                 <div style={{ marginBottom: 20 }}>
                                     <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Email Address</label>
                                     <input type="email" placeholder="name@example.com" value={email} onChange={(e) => setEmail(e.target.value)} style={{ fontSize: '1rem', padding: '14px 16px', width: '100%' }} autoFocus />
@@ -482,9 +537,16 @@ export default function AuthPage() {
                                 <input type="checkbox" id="rememberMe" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} style={{ width: 16, height: 16, cursor: 'pointer' }} />
                                 <label htmlFor="rememberMe" style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', cursor: 'pointer' }}>Remember me for 30 days</label>
                             </div>
-                            <button className="btn btn-primary btn-block btn-lg" onClick={handleSendOTP} disabled={isSending}>
-                                {isSending ? 'Sending...' : authMode === 'email' ? 'Send Magic Code →' : 'Send SMS Code →'}
-                            </button>
+                            
+                            {authMode === 'password' ? (
+                                <button className="btn btn-primary btn-block btn-lg" onClick={handlePasswordLogin} disabled={isSending}>
+                                    {isSending ? 'Logging in...' : 'Login →'}
+                                </button>
+                            ) : (
+                                <button className="btn btn-primary btn-block btn-lg" onClick={handleSendOTP} disabled={isSending}>
+                                    {isSending ? 'Sending...' : authMode === 'email' ? 'Send Magic Code →' : 'Send SMS Code →'}
+                                </button>
+                            )}
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'center', gap: 24, marginTop: 32 }}>
                             {Object.values(SPORTS).map(s => <span key={s.name} style={{ fontSize: '1.5rem', opacity: 0.4, animation: 'float 3s ease-in-out infinite', animationDelay: `${Math.random()}s` }}>{s.emoji}</span>)}
@@ -503,7 +565,7 @@ export default function AuthPage() {
                             </p>
                             {isDevMode && (
                                 <div style={{ background: '#fffbeb', border: '1px solid #f59e0b', borderRadius: 8, padding: '10px 14px', marginBottom: 20, fontSize: '0.82rem', color: '#92400e' }}>
-                                    <strong>Dev mode</strong> — Twilio not configured. Use code <strong style={{ letterSpacing: 2 }}>990770</strong> to continue.
+                                    <strong>Dev mode</strong> — SMS service not configured. Use code <strong style={{ letterSpacing: 2 }}>990770</strong> to continue.
                                 </div>
                             )}
                             <div className="otp-container" style={{ marginBottom: 24 }}>
