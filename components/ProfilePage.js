@@ -158,7 +158,8 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
                     }}>
                         {player.photo ? '' : getInitials(player.name)}
                     </div>
-                    <h2 style={{ marginBottom: 4 }}>{player.name}</h2>
+                    <h2 style={{ fontSize: '1.25rem', marginBottom: 2 }}>{player.name || 'Unknown'}</h2>
+                    <p className="text-sm text-muted">Member since {formatDate(player.createdAt || player.joined)}</p>
                     <p className="text-sm text-muted" style={{ marginBottom: 8 }}>📍 {player.location}</p>
                     <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 16 }}>
                         <span className={`trust-badge ${trust.css}`}>🛡️ {trust.name}</span>

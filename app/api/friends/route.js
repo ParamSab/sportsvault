@@ -16,28 +16,8 @@ export async function GET(req) {
                 ]
             },
             include: {
-                user: {
-                    select: {
-                        id: true, name: true, phone: true, photo: true, location: true,
-                        sports: true, positions: true, ratings: true, trustScore: true,
-                        thoughtsReceived: {
-                            include: { from: { select: { name: true } } },
-                            orderBy: { date: 'desc' },
-                            take: 10
-                        }
-                    }
-                },
-                friend: {
-                    select: {
-                        id: true, name: true, phone: true, photo: true, location: true,
-                        sports: true, positions: true, ratings: true, trustScore: true,
-                        thoughtsReceived: {
-                            include: { from: { select: { name: true } } },
-                            orderBy: { date: 'desc' },
-                            take: 10
-                        }
-                    }
-                }
+                user: { select: { id: true, name: true, phone: true, photo: true, location: true, sports: true, positions: true, ratings: true, trustScore: true, createdAt: true, privacy: true, gamesPlayed: true, thoughtsReceived: { include: { from: { select: { name: true } } } } } },
+                friend: { select: { id: true, name: true, phone: true, photo: true, location: true, sports: true, positions: true, ratings: true, trustScore: true, createdAt: true, privacy: true, gamesPlayed: true, thoughtsReceived: { include: { from: { select: { name: true } } } } } }
             }
         });
 
