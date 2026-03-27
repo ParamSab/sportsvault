@@ -78,9 +78,26 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
     }
 
     const trust = getTrustTier(player.trustScore || 0);
-    const sports = Array.isArray(player.sports) ? player.sports : (typeof player.sports === 'string' ? JSON.parse(player.sports || '[]') : []);
+
+    let sports = [];
+    try {
+        sports = Array.isArray(player.sports) ? player.sports : (typeof player.sports === 'string' ? JSON.parse(player.sports || '[]') : []);
+    } catch (_) { sports = []; }
+
     const currentSport = activeSport || sports[0] || 'football';
-    const rating = player.ratings?.[currentSport];
+
+    let rawRatings = {};
+    try {
+        rawRatings = typeof player.ratings === 'string' ? JSON.parse(player.ratings || '{}') : (player.ratings || {});
+    } catch (_) { rawRatings = {}; }
+    const rating = rawRatings[currentSport];
+    
+    let rawPositions = {};
+    try {
+        rawPositions = typeof player.positions === 'string' ? JSON.parse(player.positions || '{}') : (player.positions || {});
+    } catch (_) { rawPositions = {}; }
+    const playerPosition = rawPositions[currentSport] || 'Not set';
+
     const hasRating = rating && rating.count >= 10;
 
     const playerGames = (state.games || []).filter(g => (g.rsvps || []).some(r => r.playerId === player.id));
@@ -191,7 +208,7 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
                     </h3>
                     <span className="text-xs text-muted">
                         Position: <span style={{ color: SPORTS[currentSport]?.color, fontWeight: 600 }}>
-                            {player.positions?.[currentSport] || 'Not set'}
+                            {playerPosition}
                         </span>
                     </span>
                 </div>

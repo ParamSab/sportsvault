@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useStore } from '@/lib/store';
-import { SPORTS, getPlayer, getInitials, formatDate } from '@/lib/mockData';
+import { SPORTS, getPlayer, getInitials, formatDate, PLAYERS } from '@/lib/mockData';
 
 export default function NotificationsPage({ onViewGame }) {
     const { state, dispatch } = useStore();
@@ -9,6 +9,7 @@ export default function NotificationsPage({ onViewGame }) {
     const notifications = state.notifications || [];
     const unread = notifications.filter(n => !n.read);
     const read = notifications.filter(n => n.read);
+    const pendingFriends = (state.pendingFriends || []).filter(f => !f.isSender) || [];
 
     const sportBgColor = (sport) => {
         if (!sport) return 'rgba(99,102,241,0.15)';
@@ -76,6 +77,30 @@ export default function NotificationsPage({ onViewGame }) {
         }
     };
 
+    const handleFriendAction = async (friendId, action) => {
+        try {
+            await fetch('/api/friends/request', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ friendId, action })
+            });
+            const fRes = await fetch('/api/friends');
+            if (fRes.ok) {
+                const fData = await fRes.json();
+                const tiers = {};
+                fData.tiers?.forEach(t => { if(!tiers[t.friendId]) tiers[t.friendId] = {}; tiers[t.friendId][t.sport] = t.tier; });
+                dispatch({ type: 'LOAD_STATE', payload: { 
+                    friends: (fData.friends || []).map(f => f.id || f), 
+                    pendingFriends: fData.pendingRequests || [],
+                    players: [...(fData.friends || []), ...(fData.pendingRequests || []), ...PLAYERS],
+                    friendTiers: tiers 
+                } });
+            }
+        } catch (err) {
+            console.error('Friend action failed', err);
+        }
+    };
+
     // Mark all as read when page is opened
     useEffect(() => {
         const markRead = async () => {
@@ -115,7 +140,7 @@ export default function NotificationsPage({ onViewGame }) {
 
             {activeTab === 'alerts' ? (
                 <>
-                    {notifications.length === 0 && (
+                    {notifications.length === 0 && pendingFriends.length === 0 && (
                 <div className="glass-card no-hover text-center" style={{ padding: 48 }}>
                     <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>🔔</div>
                     <h3 style={{ marginBottom: 8 }}>All caught up!</h3>
@@ -123,7 +148,31 @@ export default function NotificationsPage({ onViewGame }) {
                 </div>
             )}
 
-            {/* Unread */}
+            {/* Friend Requests */}
+            {pendingFriends.length > 0 && (
+                <div style={{ marginBottom: 20 }}>
+                    <div className="text-xs font-semibold text-muted" style={{ marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--primary-color)' }}>
+                        Friend Requests
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {pendingFriends.map(player => (
+                            <div key={player.id} className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14 }}>
+                                <div className="avatar" style={{ background: player.photo ? `url(${player.photo}) center/cover` : undefined, fontSize: player.photo ? '0' : undefined }}>
+                                    {player.photo ? '' : getInitials(player.name || 'Unknown')}
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontWeight: 600, fontSize: '0.9375rem' }}>{player.name}</div>
+                                    <div className="text-xs text-muted">Sent you a request</div>
+                                </div>
+                                <button className="btn btn-sm btn-ghost" style={{ padding: '6px 12px', border: '1px solid var(--border-color)', color: 'var(--danger)' }} onClick={() => handleFriendAction(player.id, 'reject')}>Ignore</button>
+                                <button className="btn btn-sm btn-primary" style={{ padding: '6px 16px' }} onClick={() => handleFriendAction(player.id, 'accept')}>Accept</button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Unread Alerts */}
             {unread.length > 0 && (
                 <div style={{ marginBottom: 20 }}>
                     <div className="text-xs font-semibold text-muted" style={{ marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>
