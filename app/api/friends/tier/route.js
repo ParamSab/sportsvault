@@ -7,18 +7,19 @@ export async function POST(req) {
         if (!session.user) return Response.json({ error: 'Not authenticated' }, { status: 401 });
 
         const { friendId, sport, tier } = await req.json();
+        const currentUserId = session.user.dbId || session.user.id;
 
         if (tier === null) {
             await prisma.friendTier.deleteMany({
-                where: { userId: session.user.dbId, friendId, sport }
+                where: { userId: currentUserId, friendId, sport }
             });
         } else {
             await prisma.friendTier.upsert({
                 where: {
-                    userId_friendId_sport: { userId: session.user.dbId, friendId, sport }
+                    userId_friendId_sport: { userId: currentUserId, friendId, sport }
                 },
                 update: { tier },
-                create: { userId: session.user.dbId, friendId, sport, tier }
+                create: { userId: currentUserId, friendId, sport, tier }
             });
         }
 

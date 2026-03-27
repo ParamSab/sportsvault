@@ -5,12 +5,14 @@ export async function GET(req) {
     try {
         const session = await getSession(req);
         if (!session.user) return Response.json({ friends: [] });
+        
+        const currentUserId = session.user.dbId || session.user.id;
 
         const friendships = await prisma.friendship.findMany({
             where: {
                 OR: [
-                    { userId: session.user.dbId },
-                    { friendId: session.user.dbId }
+                    { userId: currentUserId },
+                    { friendId: currentUserId }
                 ]
             },
             include: {
@@ -40,19 +42,19 @@ export async function GET(req) {
         });
 
         const friendTiers = await prisma.friendTier.findMany({
-            where: { userId: session.user.dbId }
+            where: { userId: currentUserId }
         });
 
         const accepted = friendships.filter(f => f.status === 'accepted');
         const pending = friendships.filter(f => f.status === 'pending');
 
         const formatFriend = (f) => {
-            const friendData = f.userId === session.user.dbId ? f.friend : f.user;
+            const friendData = f.userId === currentUserId ? f.friend : f.user;
             if (!friendData) return null; // Safe guard against deleted users remaining in Friendship table
             return {
                 ...friendData,
                 friendshipStatus: f.status,
-                isSender: f.userId === session.user.dbId,
+                isSender: f.userId === currentUserId,
                 sports: JSON.parse(friendData.sports || '[]'),
                 positions: JSON.parse(friendData.positions || '{}'),
                 ratings: JSON.parse(friendData.ratings || '{}'),
@@ -80,6 +82,7 @@ export async function POST(req) {
         if (!session.user) return Response.json({ error: 'Not authenticated' }, { status: 401 });
 
         const { friendId, action, phone, name } = await req.json();
+        const currentUserId = session.user.dbId || session.user.id;
 
         if (action === 'add') {
             let finalFriendId = friendId;
@@ -99,10 +102,10 @@ export async function POST(req) {
 
             const friendship = await prisma.friendship.upsert({
                 where: {
-                    userId_friendId: { userId: session.user.dbId, friendId: finalFriendId }
+                    userId_friendId: { userId: currentUserId, friendId: finalFriendId }
                 },
                 update: { status: 'accepted' },
-                create: { userId: session.user.dbId, friendId: finalFriendId, status: 'accepted' }
+                create: { userId: currentUserId, friendId: finalFriendId, status: 'accepted' }
             });
             return Response.json({ success: true, friendship });
         }
@@ -111,8 +114,8 @@ export async function POST(req) {
             await prisma.friendship.deleteMany({
                 where: {
                     OR: [
-                        { userId: session.user.dbId, friendId },
-                        { userId: friendId, friendId: session.user.dbId }
+                        { userId: currentUserId, friendId },
+                        { userId: friendId, friendId: currentUserId }
                     ]
                 }
             });
