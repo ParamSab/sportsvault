@@ -48,6 +48,7 @@ export async function GET(req) {
 
         const formatFriend = (f) => {
             const friendData = f.userId === session.user.dbId ? f.friend : f.user;
+            if (!friendData) return null; // Safe guard against deleted users remaining in Friendship table
             return {
                 ...friendData,
                 friendshipStatus: f.status,
@@ -64,8 +65,8 @@ export async function GET(req) {
             };
         };
 
-        const friends = accepted.map(formatFriend);
-        const pendingRequests = pending.map(formatFriend);
+        const friends = accepted.map(formatFriend).filter(Boolean);
+        const pendingRequests = pending.map(formatFriend).filter(Boolean);
 
         return Response.json({ friends, pendingRequests, tiers: friendTiers });
     } catch (err) {
