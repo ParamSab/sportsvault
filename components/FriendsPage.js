@@ -3,29 +3,46 @@ import { useState } from 'react';
 import { useStore } from '@/lib/store';
 import { PLAYERS, SPORTS, getPlayer, getInitials, getTrustTier, getPlayerGames, formatDate, getSportEmoji } from '@/lib/mockData';
 
+function safeArray(val) {
+    if (Array.isArray(val)) return val;
+    if (typeof val === 'string') {
+        try { const p = JSON.parse(val); return Array.isArray(p) ? p : (p ? [p] : []); } catch { return []; }
+    }
+    return [];
+}
+
 export default function FriendsPage({ onViewProfile, onViewGame }) {
     const { state, dispatch } = useStore();
     const [searchPhone, setSearchPhone] = useState('');
     const [activeView, setActiveView] = useState('friends');
-    const [tierSport, setTierSport] = useState('football'); // Default to a sport for tier management
-
+    const [tierSport, setTierSport] = useState('football');
     const [showNewNameInput, setShowNewNameInput] = useState(false);
     const [newName, setNewName] = useState('');
+    const [addingId, setAddingId] = useState(null);
 
     const friendPlayers = state.friends
-        .map(fId => getPlayer(fId) || state.players.find(p => p.id === fId))
+        .map(fId => getPlayer(fId) || state.players.find(p => String(p.id) === String(fId)))
         .filter(Boolean);
 
     const friendTiers = state.friendTiers || {};
 
-    const suggestedPlayers = PLAYERS
-        .filter(p => !state.friends.includes(p.id) && p.id !== state.currentUser?.id && p.id !== 'current')
-        .slice(0, 5);
+    // Real users from DB (non-friends, not current user) for discover
+    const friendIdSet = new Set(state.friends.map(String));
+    const currentUserId = String(state.currentUser?.id || state.currentUser?.dbId || '');
+    const suggestedPlayers = state.players
+        .filter(p => !friendIdSet.has(String(p.id)) && String(p.id) !== currentUserId)
+        .slice(0, 10);
+
+    // Friends' upcoming games from state
+    const friendGames = state.games.filter(g =>
+        g.status === 'open' &&
+        (g.rsvps || []).some(r => r.status === 'yes' && friendIdSet.has(String(r.playerId)))
+    );
 
     const handleAddByPhone = async () => {
         if (searchPhone.length < 10) return;
 
-        const found = PLAYERS.find(p => p.phone.endsWith(searchPhone)) || state.players.find(p => p.phone && p.phone.endsWith(searchPhone));
+        const found = state.players.find(p => p.phone && p.phone.endsWith(searchPhone));
 
         if (found) {
             await fetch('/api/friends', {
@@ -38,10 +55,8 @@ export default function FriendsPage({ onViewProfile, onViewGame }) {
             setShowNewNameInput(false);
             setNewName('');
         } else if (!showNewNameInput) {
-            // Number not found, prompt for name
             setShowNewNameInput(true);
         } else if (newName.trim().length > 0) {
-            // Commit new offline friend
             const phone = `+91${searchPhone}`;
             const res = await fetch('/api/friends', {
                 method: 'POST',
@@ -66,20 +81,26 @@ export default function FriendsPage({ onViewProfile, onViewGame }) {
         dispatch({ type: 'SET_FRIEND_TIER', payload: { friendId, sport: tierSport, tier } });
     };
 
-    // Build activity feed from friends
-    const friendActivities = friendPlayers.flatMap(friend => {
-        const games = getPlayerGames(friend.id);
-        return games.slice(0, 2).map(g => ({
-            type: 'game',
-            player: friend,
-            game: g,
-            text: g.status === 'completed' ? `played in ${g.title}` : `joined ${g.title}`,
-        }));
-    }).slice(0, 8);
+    const handleToggleFriend = async (player) => {
+        const isFriend = friendIdSet.has(String(player.id));
+        setAddingId(player.id);
+        const action = isFriend ? 'remove' : 'add';
+        try {
+            await fetch('/api/friends', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action, friendId: player.id }),
+            });
+            if (action === 'add') dispatch({ type: 'ADD_FRIEND', payload: player.id });
+            else dispatch({ type: 'REMOVE_FRIEND', payload: player.id });
+        } catch (_) { /* ignore */ }
+        setAddingId(null);
+    };
 
     const renderFriendCard = (friend, showTiers = false) => {
         const trust = getTrustTier(friend.trustScore || 0);
         const currentTier = friendTiers[friend.id]?.[tierSport] || null;
+        const sports = safeArray(friend.sports);
 
         return (
             <div key={friend.id} className="glass-card" style={{ display: 'flex', flexDirection: 'column', padding: 14 }}>
@@ -94,7 +115,7 @@ export default function FriendsPage({ onViewProfile, onViewGame }) {
                     <div style={{ flex: 1 }}>
                         <div style={{ fontWeight: 600, fontSize: '0.9375rem' }}>{friend.name}</div>
                         <div className="text-xs text-muted">
-                            {friend.sports.map(s => getSportEmoji(s)).join(' ')} · {friend.location}
+                            {sports.map(s => getSportEmoji(s)).join(' ')} · {friend.location || 'Unknown'}
                         </div>
                     </div>
                 </div>
@@ -122,7 +143,6 @@ export default function FriendsPage({ onViewProfile, onViewGame }) {
         );
     };
 
-    // Group friends by tier for the currently selected sport
     const groupedFriends = { 1: [], 2: [], 3: [], unassigned: [] };
     friendPlayers.forEach(f => {
         const tier = friendTiers[f.id]?.[tierSport];
@@ -153,7 +173,7 @@ export default function FriendsPage({ onViewProfile, onViewGame }) {
                             type="tel" placeholder="Phone number" value={searchPhone}
                             onChange={e => {
                                 setSearchPhone(e.target.value.replace(/\D/g, '').slice(0, 10));
-                                setShowNewNameInput(false); // Reset if they start typing a different number
+                                setShowNewNameInput(false);
                             }}
                             style={{ flex: 1, fontSize: '0.875rem', padding: '12px' }}
                         />
@@ -187,17 +207,16 @@ export default function FriendsPage({ onViewProfile, onViewGame }) {
                     👥 Priority Lists
                 </button>
                 <button className={`tab-item ${activeView === 'feed' ? 'active' : ''}`} onClick={() => setActiveView('feed')}>
-                    📰 Feed
+                    🎮 Their Games
                 </button>
                 <button className={`tab-item ${activeView === 'discover' ? 'active' : ''}`} onClick={() => setActiveView('discover')}>
                     🔍 Discover
                 </button>
             </div>
 
-            {/* Priority Lists / Friends */}
+            {/* Priority Lists */}
             {activeView === 'friends' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    {/* Sport Selector */}
                     <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
                         {Object.keys(SPORTS).map(s => (
                             <button
@@ -214,14 +233,12 @@ export default function FriendsPage({ onViewProfile, onViewGame }) {
                         ))}
                     </div>
 
-                    {friendPlayers.length === 0 && (
+                    {friendPlayers.length === 0 ? (
                         <div className="glass-card no-hover text-center" style={{ padding: 32 }}>
                             <div style={{ fontSize: '2rem', marginBottom: 8 }}>👥</div>
-                            <p className="text-muted text-sm">No friends yet. Add someone by phone number!</p>
+                            <p className="text-muted text-sm">No friends yet. Add someone by phone number above!</p>
                         </div>
-                    )}
-
-                    {friendPlayers.length > 0 && (
+                    ) : (
                         <>
                             {[1, 2, 3].map(tier => groupedFriends[tier].length > 0 && (
                                 <div key={tier}>
@@ -233,12 +250,9 @@ export default function FriendsPage({ onViewProfile, onViewGame }) {
                                     </div>
                                 </div>
                             ))}
-
                             {groupedFriends.unassigned.length > 0 && (
                                 <div>
-                                    <div className="text-xs font-semibold text-muted" style={{ marginBottom: 8 }}>
-                                        UNASSIGNED FRIENDS
-                                    </div>
+                                    <div className="text-xs font-semibold text-muted" style={{ marginBottom: 8 }}>UNASSIGNED FRIENDS</div>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                                         {groupedFriends.unassigned.map(f => renderFriendCard(f, true))}
                                     </div>
@@ -249,49 +263,78 @@ export default function FriendsPage({ onViewProfile, onViewGame }) {
                 </div>
             )}
 
-            {/* Activity Feed */}
+            {/* Friends' Upcoming Games */}
             {activeView === 'feed' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {friendActivities.length === 0 && (
+                    {friendGames.length === 0 ? (
                         <div className="glass-card no-hover text-center" style={{ padding: 32 }}>
-                            <div style={{ fontSize: '2rem', marginBottom: 8 }}>📰</div>
-                            <p className="text-muted text-sm">Add friends to see their activity here!</p>
+                            <div style={{ fontSize: '2rem', marginBottom: 8 }}>🎮</div>
+                            <p className="text-muted text-sm">
+                                {friendPlayers.length === 0
+                                    ? 'Add friends to see their upcoming games here!'
+                                    : 'None of your friends have upcoming games right now.'}
+                            </p>
                         </div>
+                    ) : (
+                        friendGames.map(game => {
+                            const sport = SPORTS[game.sport];
+                            // Which friends are in this game?
+                            const friendsIn = (game.rsvps || [])
+                                .filter(r => r.status === 'yes' && friendIdSet.has(String(r.playerId)))
+                                .map(r => friendPlayers.find(f => String(f.id) === String(r.playerId))?.name)
+                                .filter(Boolean);
+
+                            return (
+                                <div
+                                    key={game.id}
+                                    className="glass-card"
+                                    style={{ padding: 0, overflow: 'hidden', cursor: 'pointer' }}
+                                    onClick={() => onViewGame(game.id)}
+                                >
+                                    <div style={{ height: 8, background: sport?.gradient || '#6366f1' }} />
+                                    <div style={{ padding: '14px 16px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                                            <div style={{ fontWeight: 700, fontSize: '0.9375rem' }}>
+                                                {sport?.emoji} {game.title}
+                                            </div>
+                                            <span style={{
+                                                fontSize: '0.65rem', fontWeight: 700, padding: '2px 8px',
+                                                borderRadius: 99, background: `${sport?.color}20`, color: sport?.color,
+                                                border: `1px solid ${sport?.color}40`,
+                                            }}>
+                                                {game.format}
+                                            </span>
+                                        </div>
+                                        <div className="text-xs text-muted" style={{ marginBottom: 6 }}>
+                                            📍 {game.location} · 📅 {game.date} {game.time}
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>👥</span>
+                                            <span style={{ fontSize: '0.75rem', color: sport?.color, fontWeight: 600 }}>
+                                                {friendsIn.join(', ')} {friendsIn.length === 1 ? 'is' : 'are'} playing
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })
                     )}
-                    {friendActivities.map((act, i) => (
-                        <div key={i} className="glass-card" style={{ padding: 14, cursor: 'pointer' }} onClick={() => onViewGame(act.game.id)}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                <div className="avatar avatar-sm" style={{
-                                    borderColor: SPORTS[act.game.sport]?.color,
-                                    background: act.player.photo ? `url(${act.player.photo}) center/cover` : undefined,
-                                    fontSize: act.player.photo ? '0' : undefined,
-                                }}>
-                                    {act.player.photo ? '' : getInitials(act.player.name)}
-                                </div>
-                                <div style={{ flex: 1 }}>
-                                    <div style={{ fontSize: '0.875rem' }}>
-                                        <span style={{ fontWeight: 600 }}>{act.player.name.split(' ')[0]}</span>
-                                        <span className="text-muted"> {act.text}</span>
-                                    </div>
-                                    <div className="text-xs text-muted" style={{ marginTop: 2 }}>
-                                        {getSportEmoji(act.game.sport)} {formatDate(act.game.date)} at {act.game.time}
-                                    </div>
-                                </div>
-                                <span className={`sport-badge ${act.game.sport}`} style={{ fontSize: '0.625rem', padding: '2px 8px' }}>
-                                    {SPORTS[act.game.sport]?.name}
-                                </span>
-                            </div>
-                        </div>
-                    ))}
                 </div>
             )}
 
             {/* Discover People */}
             {activeView === 'discover' && (
                 <div className="stagger" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {suggestedPlayers.length === 0 && (
+                        <div className="glass-card no-hover text-center" style={{ padding: 32 }}>
+                            <div style={{ fontSize: '2rem', marginBottom: 8 }}>🔍</div>
+                            <p className="text-muted text-sm">No other players found yet.</p>
+                        </div>
+                    )}
                     {suggestedPlayers.map(player => {
                         const trust = getTrustTier(player.trustScore || 0);
-                        const isFriend = state.friends.includes(player.id);
+                        const isFriend = friendIdSet.has(String(player.id));
+                        const sports = safeArray(player.sports);
                         return (
                             <div key={player.id} className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14 }}>
                                 <div className="avatar" style={{
@@ -304,18 +347,18 @@ export default function FriendsPage({ onViewProfile, onViewGame }) {
                                 <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => onViewProfile(player.id)}>
                                     <div style={{ fontWeight: 600, fontSize: '0.9375rem' }}>{player.name}</div>
                                     <div className="text-xs text-muted">
-                                        {player.sports.map(s => getSportEmoji(s)).join(' ')} · {player.gamesPlayed} games
+                                        {sports.map(s => getSportEmoji(s)).join(' ')} · {player.gamesPlayed ?? 0} games
                                     </div>
                                 </div>
                                 <button
                                     className={`btn btn-sm ${isFriend ? 'btn-outline' : 'btn-primary'}`}
+                                    disabled={addingId === player.id}
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        if (isFriend) dispatch({ type: 'REMOVE_FRIEND', payload: player.id });
-                                        else dispatch({ type: 'ADD_FRIEND', payload: player.id });
+                                        handleToggleFriend(player);
                                     }}
                                 >
-                                    {isFriend ? '✓' : '+ Add'}
+                                    {addingId === player.id ? '...' : isFriend ? '✓' : '+ Add'}
                                 </button>
                             </div>
                         );

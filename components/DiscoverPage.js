@@ -9,6 +9,7 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
     const [sportFilter, setSportFilter] = useState('all');
     const [viewMode, setViewMode] = useState('list');
     const [skillFilter, setSkillFilter] = useState('all');
+    const [showFriendsOnly, setShowFriendsOnly] = useState(false);
 
     const Map = useMemo(() => dynamic(() => import('./MapPicker').then(mod => {
         return function SimpleMap({ games, onViewGame, center }) {
@@ -21,22 +22,28 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
         }
     }), { ssr: false }), []);
 
+    const friendIdSet = useMemo(() => new Set((state.friends || []).map(String)), [state.friends]);
+
     const upcomingGames = useMemo(() => {
-        const currentUserId = state.currentUser?.id || 'current';
-        const friendIds = new Set(state.friends || []);
+        const currentUserId = String(state.currentUser?.id || state.currentUser?.dbId || 'current');
         return state.games
             .filter(g => g.status === 'open')
             .filter(g => {
                 const vis = g.visibility || 'public';
+                const orgId = String(g.organizerId || g.organizer?.id || g.organizer || '');
+                if (orgId === currentUserId) return true;
                 if (vis === 'public') return true;
-                if (g.organizer === currentUserId) return true;  // always show own games
-                if (vis === 'friends') return friendIds.has(g.organizer);
-                return false; // private
+                if (vis === 'friends') return friendIdSet.has(orgId);
+                return false;
             })
             .filter(g => sportFilter === 'all' || g.sport === sportFilter)
             .filter(g => skillFilter === 'all' || g.skillLevel === skillFilter)
+            .filter(g => {
+                if (!showFriendsOnly) return true;
+                return (g.rsvps || []).some(r => r.status === 'yes' && friendIdSet.has(String(r.playerId)));
+            })
             .sort((a, b) => new Date(a.date) - new Date(b.date));
-    }, [state.games, sportFilter, skillFilter, state.friends, state.currentUser]);
+    }, [state.games, sportFilter, skillFilter, state.friends, state.currentUser, showFriendsOnly, friendIdSet]);
 
     return (
         <div className="animate-fade-in">
@@ -46,7 +53,7 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
                     Find Your <span className="text-gradient-football">Game</span>
                 </h1>
                 <p className="text-muted text-sm">
-                    {upcomingGames.length} games near you
+                    {upcomingGames.length} game{upcomingGames.length !== 1 ? 's' : ''} {showFriendsOnly ? 'with friends' : 'near you'}
                 </p>
             </div>
 
@@ -68,6 +75,24 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
                     </button>
                 ))}
             </div>
+
+            {/* Friends filter toggle */}
+            {state.isAuthenticated && friendIdSet.size > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                    <button
+                        className={`chip ${showFriendsOnly ? 'active' : ''}`}
+                        onClick={() => setShowFriendsOnly(v => !v)}
+                        style={{
+                            background: showFriendsOnly ? 'rgba(99,102,241,0.2)' : undefined,
+                            borderColor: showFriendsOnly ? '#6366f1' : undefined,
+                            color: showFriendsOnly ? '#6366f1' : undefined,
+                            fontWeight: showFriendsOnly ? 700 : undefined,
+                        }}
+                    >
+                        👥 Friends' Games {showFriendsOnly ? '✓' : ''}
+                    </button>
+                </div>
+            )}
 
             {/* View Toggle + Skill Filter */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>

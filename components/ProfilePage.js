@@ -39,6 +39,22 @@ function GameRow({ g }) {
     );
 }
 
+// Safely parse JSON fields that may arrive as strings or already-parsed values
+function safeArray(val) {
+    if (Array.isArray(val)) return val;
+    if (typeof val === 'string') {
+        try { const p = JSON.parse(val); return Array.isArray(p) ? p : (p ? [p] : []); } catch { return []; }
+    }
+    return [];
+}
+function safeObject(val) {
+    if (val && typeof val === 'object' && !Array.isArray(val)) return val;
+    if (typeof val === 'string') {
+        try { return JSON.parse(val) || {}; } catch { return {}; }
+    }
+    return {};
+}
+
 export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewGame, onRateGame }) {
     const { state, dispatch } = useStore();
     const [activeSport, setActiveSport] = useState(null);
@@ -46,21 +62,34 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
     const [gameHistory, setGameHistory] = useState([]);
     const [savedGames, setSavedGames] = useState([]);
     const [historyLoading, setHistoryLoading] = useState(false);
+    const [friendLoading, setFriendLoading] = useState(false);
 
     const player = isOwn
         ? (state.currentUser || getPlayer('p1'))
-        : (getPlayer(playerId) || state.players.find(p => p.id === playerId));
+        : (getPlayer(playerId) || state.players.find(p => String(p.id) === String(playerId)));
 
-    if (!player) return <div className="glass-card no-hover text-center" style={{ padding: 48 }}><h3>Player not found</h3></div>;
+    if (!player) return (
+        <div className="glass-card no-hover text-center" style={{ padding: 48 }}>
+            <div style={{ fontSize: '2rem', marginBottom: 8 }}>👤</div>
+            <h3>Player not found</h3>
+            <button className="btn btn-ghost btn-sm" style={{ marginTop: 12 }} onClick={onBack}>← Back</button>
+        </div>
+    );
 
     const trust = getTrustTier(player.trustScore || 0);
-    const sports = player.sports || [];
+    const sports = safeArray(player.sports);
+    const positions = safeObject(player.positions);
+    const ratings = safeObject(player.ratings);
+    const thoughts = Array.isArray(player.thoughts) ? player.thoughts : [];
     const currentSport = activeSport || sports[0] || 'football';
-    const rating = player.ratings?.[currentSport];
+    const rating = ratings[currentSport];
     const hasRating = rating && rating.count >= 10;
 
-    const playerGames = state.games.filter(g => g.rsvps.some(r => r.playerId === player.id));
+    const playerGames = state.games.filter(g => (g.rsvps || []).some(r => String(r.playerId) === String(player.id)));
     const pastGames = playerGames.filter(g => g.status === 'completed');
+
+    // Is this player already a friend?
+    const isFriend = !isOwn && state.friends.some(fId => String(fId) === String(player.id));
 
     // Fetch game history from Supabase (only for own profile)
     useEffect(() => {
@@ -75,6 +104,21 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
             .catch(() => { setSavedGames([]); setGameHistory([]); })
             .finally(() => setHistoryLoading(false));
     }, [isOwn, player?.dbId]);
+
+    const handleToggleFriend = async () => {
+        setFriendLoading(true);
+        const action = isFriend ? 'remove' : 'add';
+        try {
+            await fetch('/api/friends', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action, friendId: player.id }),
+            });
+            if (action === 'add') dispatch({ type: 'ADD_FRIEND', payload: player.id });
+            else dispatch({ type: 'REMOVE_FRIEND', payload: player.id });
+        } catch (_) { /* ignore */ }
+        setFriendLoading(false);
+    };
 
     const handleAddThought = () => {
         if (!thoughtText.trim()) return;
@@ -102,7 +146,6 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
 
             {/* Profile Header */}
             <div className="glass-card no-hover" style={{ textAlign: 'center', marginBottom: 16, position: 'relative', overflow: 'hidden' }}>
-                {/* Gradient banner */}
                 <div style={{
                     position: 'absolute', top: 0, left: 0, right: 0, height: 80,
                     background: sports[0] ? SPORTS[sports[0]]?.gradient : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
@@ -118,25 +161,40 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
                         {player.photo ? '' : getInitials(player.name)}
                     </div>
                     <h2 style={{ marginBottom: 4 }}>{player.name}</h2>
-                    <p className="text-sm text-muted" style={{ marginBottom: 8 }}>📍 {player.location}</p>
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 16 }}>
+                    <p className="text-sm text-muted" style={{ marginBottom: 8 }}>📍 {player.location || 'Unknown'}</p>
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
                         <span className={`trust-badge ${trust.css}`}>🛡️ {trust.name}</span>
                         {sports.map(s => (
                             <span key={s} className={`sport-badge ${s}`}>{SPORTS[s]?.emoji}</span>
                         ))}
                     </div>
+
+                    {/* Add / Remove Friend button (non-own profiles only) */}
+                    {!isOwn && state.isAuthenticated && (
+                        <div style={{ marginBottom: 16 }}>
+                            <button
+                                className={`btn btn-sm ${isFriend ? 'btn-outline' : 'btn-primary'}`}
+                                onClick={handleToggleFriend}
+                                disabled={friendLoading}
+                                style={{ minWidth: 120 }}
+                            >
+                                {friendLoading ? '...' : isFriend ? '✓ Friends' : '+ Add Friend'}
+                            </button>
+                        </div>
+                    )}
+
                     {/* Stats Grid */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                         <div style={{ background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', padding: 12 }}>
-                            <div style={{ fontWeight: 800, fontSize: '1.25rem' }}>{player.gamesPlayed}</div>
+                            <div style={{ fontWeight: 800, fontSize: '1.25rem' }}>{player.gamesPlayed ?? 0}</div>
                             <div className="text-xs text-muted">Games</div>
                         </div>
                         <div style={{ background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', padding: 12 }}>
-                            <div style={{ fontWeight: 800, fontSize: '1.25rem', color: 'var(--success)' }}>{player.wins}</div>
+                            <div style={{ fontWeight: 800, fontSize: '1.25rem', color: 'var(--success)' }}>{player.wins ?? 0}</div>
                             <div className="text-xs text-muted">Wins</div>
                         </div>
                         <div style={{ background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', padding: 12 }}>
-                            <div style={{ fontWeight: 800, fontSize: '1.25rem', color: 'var(--danger)' }}>{player.losses}</div>
+                            <div style={{ fontWeight: 800, fontSize: '1.25rem', color: 'var(--danger)' }}>{player.losses ?? 0}</div>
                             <div className="text-xs text-muted">Losses</div>
                         </div>
                     </div>
@@ -167,7 +225,7 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
                     </h3>
                     <span className="text-xs text-muted">
                         Position: <span style={{ color: SPORTS[currentSport]?.color, fontWeight: 600 }}>
-                            {player.positions?.[currentSport] || 'Not set'}
+                            {positions[currentSport] || 'Not set'}
                         </span>
                     </span>
                 </div>
@@ -221,7 +279,7 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                     <div style={{
                         width: 64, height: 64, borderRadius: '50%',
-                        background: `conic-gradient(${trust.color} ${player.trustScore}%, var(--bg-input) 0)`,
+                        background: `conic-gradient(${trust.color} ${player.trustScore || 0}%, var(--bg-input) 0)`,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
                         <div style={{
@@ -230,7 +288,7 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             fontWeight: 800, fontSize: '1rem', color: trust.color,
                         }}>
-                            {player.trustScore}
+                            {player.trustScore || 0}
                         </div>
                     </div>
                     <div>
@@ -245,18 +303,18 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
             {/* Written Thoughts */}
             <div className="glass-card no-hover" style={{ marginBottom: 16 }}>
                 <h3 style={{ fontSize: '1rem', marginBottom: 12 }}>💬 Written Thoughts</h3>
-                {(player.thoughts || []).length === 0 ? (
+                {thoughts.length === 0 ? (
                     <p className="text-sm text-muted">No thoughts yet.</p>
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                        {player.thoughts.map((t, i) => {
+                        {thoughts.map((t, i) => {
                             const from = getPlayer(t.from) || state.currentUser;
                             return (
                                 <div key={i} style={{ background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', padding: 12 }}>
                                     <p className="text-sm" style={{ marginBottom: 8 }}>"{t.text}"</p>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                                            — {from?.name || 'Unknown'}
+                                            — {t.fromName || from?.name || 'Unknown'}
                                         </span>
                                         <span className="text-xs text-muted">{t.date}</span>
                                     </div>
@@ -265,8 +323,8 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
                         })}
                     </div>
                 )}
-                {/* Add thought (if not own profile) */}
-                {!isOwn && (
+                {/* Add thought (if not own profile and authenticated) */}
+                {!isOwn && state.isAuthenticated && (
                     <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
                         <input
                             type="text" placeholder="Leave a thought..."
@@ -308,10 +366,9 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
                 )}
             </div>
 
-            {/* Saved Games + Game History (own profile only, loaded from Supabase) */}
+            {/* Saved Games + Game History (own profile only) */}
             {isOwn && (
                 <>
-                    {/* Saved Games — visible from the moment of creation until 24h after game start */}
                     <div className="glass-card no-hover" style={{ marginBottom: 16 }}>
                         <h3 style={{ fontSize: '1rem', marginBottom: 12 }}>📌 Saved Games</h3>
                         {historyLoading ? (
@@ -325,7 +382,6 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
                         )}
                     </div>
 
-                    {/* Game History — games that are 24h+ past their scheduled start */}
                     <div className="glass-card no-hover" style={{ marginBottom: 16 }}>
                         <h3 style={{ fontSize: '1rem', marginBottom: 12 }}>🕒 Game History</h3>
                         {historyLoading ? (
