@@ -10,205 +10,122 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
     const [viewMode, setViewMode] = useState('list');
     const [skillFilter, setSkillFilter] = useState('all');
     const [dateFilter, setDateFilter] = useState('');
+    const [showFriendsOnly, setShowFriendsOnly] = useState(false);
     const [friendActionLoading, setFriendActionLoading] = useState(null);
 
     const Map = useMemo(() => dynamic(() => import('./MapPicker').then(mod => {
         return function SimpleMap({ games, onViewGame, center }) {
             const mapSrc = `https://maps.google.com/maps?q=${center.lat},${center.lng}&z=13&output=embed`;
-            return (
-                <div style={{ position: 'relative', height: '100%', width: '100%' }}>
-                    <iframe src={mapSrc} width="100%" height="100%" style={{ border: 0 }} allowFullScreen loading="lazy" />
-                </div>
-            )
-        }
+            return (<div style={{ position: 'relative', height: '100%', width: '100%' }}><iframe src={mapSrc} width="100%" height="100%" style={{ border: 0 }} allowFullScreen loading="lazy" /></div>);
+        };
     }), { ssr: false }), []);
 
+    const friendIdSet = useMemo(() => new Set((state.friends || []).map(String)), [state.friends]);
+
     const upcomingGames = useMemo(() => {
-        const currentUserId = state.currentUser?.dbId || state.currentUser?.id || 'current';
-        const friendIds = new Set(state.friends || []);
+        const currentUserId = String(state.currentUser?.dbId || state.currentUser?.id || 'current');
         return (state.games || [])
             .filter(g => g.status === 'open')
             .filter(g => {
                 const vis = g.visibility || 'public';
+                const orgId = String(g.organizerId || g.organizer?.id || g.organizer || '');
+                if (orgId === currentUserId) return true;
                 if (vis === 'public') return true;
-                if (g.organizerId === currentUserId) return true;  // always show own games
-                if (vis === 'friends') return friendIds.has(g.organizerId);
-                return false; // private but not yours
+                if (vis === 'friends') return friendIdSet.has(orgId);
+                return false;
             })
             .filter(g => sportFilter === 'all' || g.sport === sportFilter)
             .filter(g => skillFilter === 'all' || g.skillLevel === skillFilter)
             .filter(g => !dateFilter || g.date === dateFilter)
+            .filter(g => {
+                if (!showFriendsOnly) return true;
+                return (g.rsvps || []).some(r => r.status === 'yes' && friendIdSet.has(String(r.playerId)));
+            })
             .sort((a, b) => new Date(a.date) - new Date(b.date));
-    }, [state.games, sportFilter, skillFilter, dateFilter, state.friends, state.currentUser]);
+    }, [state.games, sportFilter, skillFilter, dateFilter, state.friends, state.currentUser, showFriendsOnly, friendIdSet]);
 
-    // Compute friend suggestions: real players (from DB) that the user doesn't know yet
     const currentUserId = state.currentUser?.dbId || state.currentUser?.id;
     const friendSuggestions = useMemo(() => {
-        const knownIds = new Set([...(state.friends || []), currentUserId]);
-        // Players loaded from API (non-mock) that the user isn't already friends with
-        const apiPlayers = (state.players || []).filter(p => p?.id && !p.id.startsWith('p') && !knownIds.has(p.id));
-        // Also include mock players as fallback suggestions
-        const mockPlayers = PLAYERS.filter(p => !knownIds.has(p.id) && p.id !== 'current').slice(0, 3);
-        const combined = [...apiPlayers, ...mockPlayers];
-        // Deduplicate by id
-        return combined.filter((p, i, a) => a.findIndex(x => x.id === p.id) === i).slice(0, 5);
+        const knownIds = new Set([...(state.friends || []).map(String), String(currentUserId || '')]);
+        const apiPlayers = (state.players || []).filter(p => p?.id && !String(p.id).startsWith('p') && !knownIds.has(String(p.id)));
+        const mockPlayers = PLAYERS.filter(p => !knownIds.has(String(p.id)) && p.id !== 'current').slice(0, 3);
+        return [...apiPlayers, ...mockPlayers].filter((p, i, a) => a.findIndex(x => x.id === p.id) === i).slice(0, 5);
     }, [state.players, state.friends, currentUserId]);
 
     const pastTeammates = useMemo(() => {
-        const knownIds = new Set([...(state.friends || []), currentUserId]);
+        const knownIds = new Set([...(state.friends || []).map(String), String(currentUserId || '')]);
         const teammates = new Set();
-        (state.history || []).forEach(g => {
-            (g.rsvps || []).forEach(r => {
-                if (r.playerId !== currentUserId && !knownIds.has(r.playerId)) {
-                    teammates.add(r.playerId);
-                }
-            });
-        });
+        (state.history || []).forEach(g => { (g.rsvps || []).forEach(r => { if (!knownIds.has(String(r.playerId))) teammates.add(r.playerId); }); });
         return Array.from(teammates).map(id => getPlayer(id) || (state.players || []).find(p => p?.id === id)).filter(Boolean).slice(0, 5);
     }, [state.history, state.players, state.friends, currentUserId]);
 
     const handleFriendRequest = async (friendId) => {
         setFriendActionLoading(friendId);
         try {
-            await fetch('/api/friends/request', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ friendId, action: 'send' })
-            });
-            // Refresh friend state
+            await fetch('/api/friends/request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ friendId, action: 'send' }) });
             const fRes = await fetch('/api/friends');
             if (fRes.ok) {
                 const fData = await fRes.json();
                 const tiers = {};
                 fData.tiers?.forEach(t => { if (!tiers[t.friendId]) tiers[t.friendId] = {}; tiers[t.friendId][t.sport] = t.tier; });
-                dispatch({ type: 'LOAD_STATE', payload: { 
-                    friends: (fData.friends || []).map(f => f.id || f), 
-                    pendingFriends: fData.pendingRequests || [],
-                    friendTiers: tiers 
-                } });
+                dispatch({ type: 'LOAD_STATE', payload: { friends: (fData.friends || []).map(f => f.id || f), pendingFriends: fData.pendingRequests || [], friendTiers: tiers } });
             }
-        } catch (err) {
-            console.error('Friend request failed', err);
-        } finally {
-            setFriendActionLoading(null);
-        }
+        } catch (err) { console.error('Friend request failed', err); }
+        finally { setFriendActionLoading(null); }
     };
 
     return (
         <div className="animate-fade-in">
-            {/* Hero */}
             <div style={{ marginBottom: 20 }}>
-                <h1 style={{ fontSize: 'clamp(1.5rem, 4vw, 2rem)', marginBottom: 4 }}>
-                    Find Your <span className="text-gradient-football">Game</span>
-                </h1>
-                <p className="text-muted text-sm">
-                    {upcomingGames.length} games near you
-                </p>
+                <h1 style={{ fontSize: 'clamp(1.5rem, 4vw, 2rem)', marginBottom: 4 }}>Find Your <span className="text-gradient-football">Game</span></h1>
+                <p className="text-muted text-sm">{upcomingGames.length} game{upcomingGames.length !== 1 ? 's' : ''} {showFriendsOnly ? 'with friends' : 'near you'}</p>
             </div>
 
-            {/* Sport Filters */}
             <div className="filter-bar" style={{ marginBottom: 12 }}>
-                <button
-                    className={`chip ${sportFilter === 'all' ? 'active all' : ''}`}
-                    onClick={() => setSportFilter('all')}
-                >
-                    🏅 All Sports
-                </button>
+                <button className={`chip ${sportFilter === 'all' ? 'active all' : ''}`} onClick={() => setSportFilter('all')}>🏅 All Sports</button>
                 {Object.entries(SPORTS).map(([key, sport]) => (
-                    <button
-                        key={key}
-                        className={`chip ${sportFilter === key ? `active ${key}` : ''}`}
-                        onClick={() => setSportFilter(key)}
-                    >
-                        {sport.emoji} {sport.name}
-                    </button>
+                    <button key={key} className={`chip ${sportFilter === key ? `active ${key}` : ''}`} onClick={() => setSportFilter(key)}>{sport.emoji} {sport.name}</button>
                 ))}
             </div>
 
-            {/* View Toggle + Skill Filter */}
+            {/* Friends filter toggle */}
+            {state.isAuthenticated && friendIdSet.size > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                    <button className={`chip ${showFriendsOnly ? 'active' : ''}`} onClick={() => setShowFriendsOnly(v => !v)}
+                        style={{ background: showFriendsOnly ? 'rgba(99,102,241,0.2)' : undefined, borderColor: showFriendsOnly ? '#6366f1' : undefined, color: showFriendsOnly ? '#6366f1' : undefined, fontWeight: showFriendsOnly ? 700 : undefined }}>
+                        👥 Friends' Games {showFriendsOnly ? '✓' : ''}
+                    </button>
+                </div>
+            )}
+
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <div className="tab-bar" style={{ width: 'auto' }}>
-                    <button className={`tab-item ${viewMode === 'list' ? 'active' : ''}`} onClick={() => setViewMode('list')}>
-                        📋 List
-                    </button>
-                    <button className={`tab-item ${viewMode === 'map' ? 'active' : ''}`} onClick={() => setViewMode('map')}>
-                        🗺️ Map
-                    </button>
+                    <button className={`tab-item ${viewMode === 'list' ? 'active' : ''}`} onClick={() => setViewMode('list')}>📋 List</button>
+                    <button className={`tab-item ${viewMode === 'map' ? 'active' : ''}`} onClick={() => setViewMode('map')}>🗺️ Map</button>
                 </div>
-                
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <input
-                        type="date"
-                        value={dateFilter}
-                        onChange={e => setDateFilter(e.target.value)}
-                        style={{
-                            padding: '8px 12px', fontSize: '0.8125rem',
-                            background: 'var(--bg-card)', borderRadius: 'var(--radius-full)',
-                            border: '1px solid var(--border-color)', width: 'auto',
-                            color: 'var(--text-primary)',
-                            colorScheme: 'dark'
-                        }}
-                    />
-                    {dateFilter && (
-                        <button 
-                            onClick={() => setDateFilter('')}
-                            className="btn btn-xs btn-ghost"
-                            style={{ padding: '0 8px' }}
-                        >
-                            ✕
-                        </button>
-                    )}
+                    <input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} style={{ padding: '6px 10px', fontSize: '0.8125rem', background: 'var(--bg-card)', borderRadius: 'var(--radius-full)', border: '1px solid var(--border-color)', color: dateFilter ? 'var(--text-primary)' : 'var(--text-muted)' }} />
+                    <select value={skillFilter} onChange={e => setSkillFilter(e.target.value)} style={{ padding: '8px 12px', fontSize: '0.8125rem', background: 'var(--bg-card)', borderRadius: 'var(--radius-full)', border: '1px solid var(--border-color)', width: 'auto' }}>
+                        <option value="all">All Levels</option>
+                        <option value="Beginner-Friendly">Beginner</option>
+                        <option value="Intermediate">Intermediate</option>
+                        <option value="Advanced">Advanced</option>
+                    </select>
                 </div>
-                <select
-                    value={skillFilter}
-                    onChange={e => setSkillFilter(e.target.value)}
-                    style={{
-                        padding: '8px 12px', fontSize: '0.8125rem',
-                        background: 'var(--bg-card)', borderRadius: 'var(--radius-full)',
-                        border: '1px solid var(--border-color)', width: 'auto',
-                    }}
-                >
-                    <option value="all">All Levels</option>
-                    <option value="Beginner-Friendly">Beginner</option>
-                    <option value="Intermediate">Intermediate</option>
-                    <option value="Advanced">Advanced</option>
-                </select>
             </div>
 
-            {/* Map View */}
             {viewMode === 'map' && (
-                <div style={{
-                    height: 350, borderRadius: 'var(--radius-lg)', overflow: 'hidden',
-                    border: '1px solid var(--border-color)', marginBottom: 16,
-                    position: 'relative', background: 'var(--bg-card)'
-                }}>
-                    <iframe
-                        src={`https://maps.google.com/maps?q=${state.currentUser?.lat || 19.076},${state.currentUser?.lng || 72.877}&z=12&output=embed`}
-                        width="100%" height="100%" style={{ border: 0, filter: 'grayscale(0.2) invert(0.9) hue-rotate(180deg) brightness(0.8)' }}
-                        allowFullScreen loading="lazy"
-                    />
-                    <div style={{
-                        position: 'absolute', bottom: 12, left: 12, right: 12,
-                        background: 'rgba(10,14,26,0.85)', borderRadius: 'var(--radius-md)',
-                        padding: '12px', fontSize: '0.8rem', color: 'var(--text-secondary)',
-                        backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.1)',
-                        zIndex: 10
-                    }}>
+                <div style={{ height: 350, borderRadius: 'var(--radius-lg)', overflow: 'hidden', border: '1px solid var(--border-color)', marginBottom: 16, position: 'relative', background: 'var(--bg-card)' }}>
+                    <iframe src={`https://maps.google.com/maps?q=${state.currentUser?.lat || 19.076},${state.currentUser?.lng || 72.877}&z=12&output=embed`} width="100%" height="100%" style={{ border: 0, filter: 'grayscale(0.2) invert(0.9) hue-rotate(180deg) brightness(0.8)' }} allowFullScreen loading="lazy" />
+                    <div style={{ position: 'absolute', bottom: 12, left: 12, right: 12, background: 'rgba(10,14,26,0.85)', borderRadius: 'var(--radius-md)', padding: '12px', fontSize: '0.8rem', color: 'var(--text-secondary)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.1)', zIndex: 10 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span>📍 Showing {upcomingGames.length} games near {state.currentUser?.location || 'Mumbai'}</span>
-                            <button className="btn btn-xs btn-ghost" onClick={() => {
-                                if (navigator.geolocation) {
-                                    navigator.geolocation.getCurrentPosition(pos => {
-                                        dispatch({ type: 'UPDATE_PROFILE', payload: { lat: pos.coords.latitude, lng: pos.coords.longitude } });
-                                    });
-                                }
-                            }}>Recenter 🎯</button>
+                            <button className="btn btn-xs btn-ghost" onClick={() => { if (navigator.geolocation) navigator.geolocation.getCurrentPosition(pos => dispatch({ type: 'UPDATE_PROFILE', payload: { lat: pos.coords.latitude, lng: pos.coords.longitude } })); }}>Recenter 🎯</button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Game Cards List */}
             <div className="stagger" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {upcomingGames.length === 0 && (
                     <div className="glass-card no-hover" style={{ textAlign: 'center', padding: 48 }}>
@@ -222,75 +139,30 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
                     const sportColor = SPORTS[game.sport]?.color;
                     const organizer = getPlayer(game.organizerId || game.organizer?.id) || game.organizer;
                     return (
-                        <button
-                            key={game.id}
-                            className="glass-card"
-                            onClick={() => onViewGame(game.id)}
-                            style={{ textAlign: 'left', cursor: 'pointer', padding: 0, overflow: 'hidden' }}
-                        >
-                            {/* Premium Header Block */}
+                        <button key={game.id} className="glass-card" onClick={() => onViewGame(game.id)} style={{ textAlign: 'left', cursor: 'pointer', padding: 0, overflow: 'hidden' }}>
                             <div style={{ height: 60, background: SPORTS[game.sport]?.gradient, position: 'relative', overflow: 'hidden' }}>
-                                <span style={{ fontSize: '3.5rem', opacity: 0.15, position: 'absolute', right: 5, bottom: -15, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))' }}>
-                                    {getSportEmoji(game.sport)}
-                                </span>
+                                <span style={{ fontSize: '3.5rem', opacity: 0.15, position: 'absolute', right: 5, bottom: -15, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))' }}>{getSportEmoji(game.sport)}</span>
                                 <div style={{ position: 'absolute', top: 12, left: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <span className={`sport-badge ${game.sport}`} style={{ background: 'rgba(0,0,0,0.3)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', backdropFilter: 'blur(4px)', padding: '4px 10px', fontSize: '0.7rem' }}>
-                                        {game.format}
-                                    </span>
-                                    {game.visibility && game.visibility !== 'public' && (
-                                        <span style={{ background: 'rgba(0,0,0,0.4)', color: '#fff', backdropFilter: 'blur(4px)', padding: '3px 8px', borderRadius: 99, fontSize: '0.65rem', fontWeight: 700 }}>
-                                            {game.visibility === 'friends' ? '👥 Friends' : '🔒 Private'}
-                                        </span>
-                                    )}
+                                    <span className={`sport-badge ${game.sport}`} style={{ background: 'rgba(0,0,0,0.3)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', backdropFilter: 'blur(4px)', padding: '4px 10px', fontSize: '0.7rem' }}>{game.format}</span>
+                                    {game.visibility && game.visibility !== 'public' && <span style={{ background: 'rgba(0,0,0,0.4)', color: '#fff', backdropFilter: 'blur(4px)', padding: '3px 8px', borderRadius: 99, fontSize: '0.65rem', fontWeight: 700 }}>{game.visibility === 'friends' ? '👥 Friends' : '🔒 Private'}</span>}
                                 </div>
                             </div>
-
                             <div style={{ padding: '20px' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
                                     <h3 style={{ fontSize: '1.1875rem', fontWeight: 800, lineHeight: 1.3, margin: 0 }}>{game.title}</h3>
-                                    <div style={{
-                                        background: spots <= 2 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(34, 197, 94, 0.15)',
-                                        color: spots <= 2 ? '#ef4444' : '#22c55e',
-                                        padding: '4px 10px', borderRadius: 'var(--radius-full)',
-                                        fontSize: '0.7rem', fontWeight: 800, whiteSpace: 'nowrap',
-                                        border: `1px solid ${spots <= 2 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(34, 197, 94, 0.3)'}`
-                                    }}>
-                                        {spots} SPOT{spots !== 1 ? 'S' : ''} LEFT
-                                    </div>
+                                    <div style={{ background: spots <= 2 ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)', color: spots <= 2 ? '#ef4444' : '#22c55e', padding: '4px 10px', borderRadius: 'var(--radius-full)', fontSize: '0.7rem', fontWeight: 800, whiteSpace: 'nowrap', border: `1px solid ${spots <= 2 ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)'}` }}>{spots} SPOT{spots !== 1 ? 'S' : ''} LEFT</div>
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
-                                    <div className="text-sm text-muted" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                        <span style={{ fontSize: '1.2rem' }}>📍</span> <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{game.location}</span>
-                                    </div>
-                                    <div className="text-sm text-muted" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                        <span style={{ fontSize: '1.2rem' }}>📅</span> <span>{formatDate(game.date)} <span style={{ opacity: 0.5 }}>•</span> {game.time}</span>
-                                    </div>
-                                    <div className="text-sm text-muted" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                        <span style={{ fontSize: '1.2rem' }}>⭐</span> <span>{game.skillLevel}</span>
-                                    </div>
+                                    <div className="text-sm text-muted" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: '1.2rem' }}>📍</span><span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{game.location}</span></div>
+                                    <div className="text-sm text-muted" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: '1.2rem' }}>📅</span><span>{formatDate(game.date)} <span style={{ opacity: 0.5 }}>•</span> {game.time}</span></div>
+                                    <div className="text-sm text-muted" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ fontSize: '1.2rem' }}>⭐</span><span>{game.skillLevel}</span></div>
                                 </div>
-
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 16 }}>
-                                    {/* Organizer + Player avatars */}
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                        <div className="avatar avatar-sm" style={{
-                                            borderColor: sportColor,
-                                            background: organizer?.photo ? `url(${organizer.photo}) center/cover` : undefined,
-                                            fontSize: organizer?.photo ? '0' : undefined,
-                                        }}>
-                                            {organizer?.photo ? '' : getInitials(organizer?.name || 'O')}
-                                        </div>
-                                        <div>
-                                            <div style={{ fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-secondary)' }}>Organized by</div>
-                                            <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>{organizer?.name?.split(' ')[0] || 'Unknown'}</div>
-                                        </div>
+                                        <div className="avatar avatar-sm" style={{ borderColor: sportColor, background: organizer?.photo ? `url(${organizer.photo}) center/cover` : undefined, fontSize: organizer?.photo ? '0' : undefined }}>{organizer?.photo ? '' : getInitials(organizer?.name || 'O')}</div>
+                                        <div><div style={{ fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-secondary)' }}>Organized by</div><div style={{ fontSize: '0.85rem', fontWeight: 600 }}>{organizer?.name?.split(' ')[0] || 'Unknown'}</div></div>
                                     </div>
-                                    <button className="btn btn-sm" style={{
-                                        background: `${sportColor}20`, color: sportColor, border: `1px solid ${sportColor}50`,
-                                        padding: '6px 16px', borderRadius: 'var(--radius-full)', fontWeight: 600
-                                    }}>
-                                        Open →
-                                    </button>
+                                    <button className="btn btn-sm" style={{ background: `${sportColor}20`, color: sportColor, border: `1px solid ${sportColor}50`, padding: '6px 16px', borderRadius: 'var(--radius-full)', fontWeight: 600 }}>Open →</button>
                                 </div>
                             </div>
                         </button>
@@ -298,50 +170,26 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
                 })}
             </div>
 
-            {/* People You May Know */}
             {friendSuggestions.length > 0 && state.isAuthenticated && (
                 <div style={{ marginTop: 32 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                         <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
-                        <span className="text-xs text-muted" style={{ textTransform: 'uppercase', letterSpacing: 1, whiteSpace: 'nowrap', padding: '0 8px' }}>
-                            👥 People You May Know
-                        </span>
+                        <span className="text-xs text-muted" style={{ textTransform: 'uppercase', letterSpacing: 1, whiteSpace: 'nowrap', padding: '0 8px' }}>👥 People You May Know</span>
                         <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         {friendSuggestions.map(player => {
-                            const isFriend = (state.friends || []).includes(player.id);
-                            const isPending = (state.pendingFriends || []).some(f => f.id === player.id);
+                            const isFriend = friendIdSet.has(String(player.id));
+                            const isPending = (state.pendingFriends || []).some(f => String(f.id) === String(player.id));
                             const isLoading = friendActionLoading === player.id;
                             return (
                                 <div key={player.id} className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14 }}>
-                                    <div className="avatar avatar-sm" style={{
-                                        background: player.photo ? `url(${player.photo}) center/cover` : 'var(--bg-input)',
-                                        fontSize: '0.9rem', cursor: 'pointer', flexShrink: 0
-                                    }} onClick={() => onViewProfile && onViewProfile(player.id)}>
-                                        {player.photo ? '' : getInitials(player.name || '?')}
-                                    </div>
+                                    <div className="avatar avatar-sm" style={{ background: player.photo ? `url(${player.photo}) center/cover` : 'var(--bg-input)', fontSize: '0.9rem', cursor: 'pointer', flexShrink: 0 }} onClick={() => onViewProfile && onViewProfile(player.id)}>{player.photo ? '' : getInitials(player.name || '?')}</div>
                                     <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => onViewProfile && onViewProfile(player.id)}>
                                         <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{player.name}</div>
-                                        <div className="text-xs text-muted">
-                                            {(player.sports || []).map(s => getSportEmoji(s)).join(' ')}
-                                            {player.gamesPlayed > 0 && ` · ${player.gamesPlayed} games`}
-                                        </div>
+                                        <div className="text-xs text-muted">{(Array.isArray(player.sports) ? player.sports : []).map(s => getSportEmoji(s)).join(' ')}{player.gamesPlayed > 0 && ` · ${player.gamesPlayed} games`}</div>
                                     </div>
-                                    {isFriend ? (
-                                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>✓ Friends</span>
-                                    ) : isPending ? (
-                                        <button className="btn btn-sm btn-outline" disabled style={{ fontSize: '0.8rem' }}>Requested</button>
-                                    ) : (
-                                        <button 
-                                            className="btn btn-sm btn-primary" 
-                                            style={{ fontSize: '0.8rem', padding: '6px 14px' }}
-                                            disabled={isLoading}
-                                            onClick={() => handleFriendRequest(player.id)}
-                                        >
-                                            {isLoading ? '...' : '+ Add'}
-                                        </button>
-                                    )}
+                                    {isFriend ? <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>✓ Friends</span> : isPending ? <button className="btn btn-sm btn-outline" disabled style={{ fontSize: '0.8rem' }}>Requested</button> : <button className="btn btn-sm btn-primary" style={{ fontSize: '0.8rem', padding: '6px 14px' }} disabled={isLoading} onClick={() => handleFriendRequest(player.id)}>{isLoading ? '…' : '+ Add'}</button>}
                                 </div>
                             );
                         })}
@@ -349,50 +197,26 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
                 </div>
             )}
 
-            {/* Past Teammates */}
             {pastTeammates.length > 0 && state.isAuthenticated && (
                 <div style={{ marginTop: 24 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                         <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
-                        <span className="text-xs text-muted" style={{ textTransform: 'uppercase', letterSpacing: 1, whiteSpace: 'nowrap', padding: '0 8px' }}>
-                            🏏 Played With
-                        </span>
+                        <span className="text-xs text-muted" style={{ textTransform: 'uppercase', letterSpacing: 1, whiteSpace: 'nowrap', padding: '0 8px' }}>🏏 Played With</span>
                         <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         {pastTeammates.map(player => {
-                            const isFriend = (state.friends || []).includes(player.id);
-                            const isPending = (state.pendingFriends || []).some(f => f.id === player.id);
+                            const isFriend = friendIdSet.has(String(player.id));
+                            const isPending = (state.pendingFriends || []).some(f => String(f.id) === String(player.id));
                             const isLoading = friendActionLoading === player.id;
                             return (
                                 <div key={player.id} className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14 }}>
-                                    <div className="avatar avatar-sm" style={{
-                                        background: player.photo ? `url(${player.photo}) center/cover` : 'var(--bg-input)',
-                                        fontSize: '0.9rem', cursor: 'pointer', flexShrink: 0
-                                    }} onClick={() => onViewProfile && onViewProfile(player.id)}>
-                                        {player.photo ? '' : getInitials(player.name || '?')}
-                                    </div>
+                                    <div className="avatar avatar-sm" style={{ background: player.photo ? `url(${player.photo}) center/cover` : 'var(--bg-input)', fontSize: '0.9rem', cursor: 'pointer', flexShrink: 0 }} onClick={() => onViewProfile && onViewProfile(player.id)}>{player.photo ? '' : getInitials(player.name || '?')}</div>
                                     <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => onViewProfile && onViewProfile(player.id)}>
                                         <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{player.name}</div>
-                                        <div className="text-xs text-muted">
-                                            {(player.sports || []).map(s => getSportEmoji(s)).join(' ')}
-                                            {player.gamesPlayed > 0 && ` · ${player.gamesPlayed} games`}
-                                        </div>
+                                        <div className="text-xs text-muted">{(Array.isArray(player.sports) ? player.sports : []).map(s => getSportEmoji(s)).join(' ')}{player.gamesPlayed > 0 && ` · ${player.gamesPlayed} games`}</div>
                                     </div>
-                                    {isFriend ? (
-                                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>✓ Friends</span>
-                                    ) : isPending ? (
-                                        <button className="btn btn-sm btn-outline" disabled style={{ fontSize: '0.8rem' }}>Requested</button>
-                                    ) : (
-                                        <button 
-                                            className="btn btn-sm btn-primary" 
-                                            style={{ fontSize: '0.8rem', padding: '6px 14px' }}
-                                            disabled={isLoading}
-                                            onClick={() => handleFriendRequest(player.id)}
-                                        >
-                                            {isLoading ? '...' : '+ Add'}
-                                        </button>
-                                    )}
+                                    {isFriend ? <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>✓ Friends</span> : isPending ? <button className="btn btn-sm btn-outline" disabled style={{ fontSize: '0.8rem' }}>Requested</button> : <button className="btn btn-sm btn-primary" style={{ fontSize: '0.8rem', padding: '6px 14px' }} disabled={isLoading} onClick={() => handleFriendRequest(player.id)}>{isLoading ? '…' : '+ Add'}</button>}
                                 </div>
                             );
                         })}
