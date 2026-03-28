@@ -26,7 +26,7 @@ export default function FriendsPage({ onViewProfile, onViewGame }) {
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
 
-    const pendingReceived = (state.pendingFriends || []).filter(f => !f.isSender) || [];
+    const pendingReceived = (state.pendingFriends || []).filter(f => f && !f.isSender) || [];
 
     const handleSearch = async (e) => {
         const query = e.target.value;
@@ -389,8 +389,8 @@ export default function FriendsPage({ onViewProfile, onViewGame }) {
                             const playerId = String(player.id || '');
                             const trust = getTrustTier(player.trustScore || 0);
                             const isFriend = (state.friends || []).some(f => String(f) === playerId);
-                            const isPendingSent = (state.pendingFriends || []).some(f => String(f.id) === playerId && f.isSender);
-                            const isPendingReceived = (state.pendingFriends || []).some(f => String(f.id) === playerId && !f.isSender);
+                            const isPendingSent = (state.pendingFriends || []).some(f => f && String(f.id) === playerId && f.isSender);
+                            const isPendingReceived = (state.pendingFriends || []).some(f => f && String(f.id) === playerId && !f.isSender);
                             
                             return (
                                 <div key={player.id} className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14 }}>
