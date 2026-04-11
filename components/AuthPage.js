@@ -274,7 +274,7 @@ export default function AuthPage() {
         if (idx === 1 && authMode === 'email' && (!profile.phone || profile.phone.replace(/\D/g, '').length < 10)) { setStepError('Please enter a valid phone number for game reminders'); return false; }
         // idx 2 is photo (optional)
         if (idx === 3 && !profile.location.trim()) { setStepError('Please enter your city or neighbourhood'); return false; }
-        if (idx === 3 && profile.sports.length === 0) { setStepError('Select at least one sport'); return false; }
+        if (idx === 4 && profile.sports.length === 0) { setStepError('Select at least one sport'); return false; }
         if (idx === 4) {
             const missing = profile.sports.filter(s => !profile.positions[s]);
             if (missing.length > 0) { setStepError(`Select your position for: ${missing.join(', ')}`); return false; }
@@ -391,6 +391,42 @@ export default function AuthPage() {
             <h2 style={{ marginBottom: 8 }}>Where are you based?</h2>
             <p className="text-muted text-sm" style={{ marginBottom: 24 }}>We'll show you games nearby.</p>
             <input type="text" placeholder="e.g. Bandra West, Mumbai" value={profile.location} onChange={e => setProfile(prev => ({ ...prev, location: e.target.value }))} style={{ fontSize: '1.125rem', padding: '16px 20px' }} />
+            <button
+                type="button"
+                onClick={async () => {
+                    if (!navigator.geolocation) { setStepError('Geolocation not supported on this device'); return; }
+                    setStepError('Detecting location…');
+                    navigator.geolocation.getCurrentPosition(async (pos) => {
+                        const { latitude, longitude } = pos.coords;
+                        try {
+                            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`, { headers: { 'Accept-Language': 'en' } });
+                            const data = await res.json();
+                            const addr = data.address || {};
+                            const locality = addr.suburb || addr.neighbourhood || addr.quarter || addr.city_district || addr.town || addr.city || addr.county || '';
+                            const city = addr.city || addr.town || addr.county || '';
+                            const label = locality && city && locality !== city ? `${locality}, ${city}` : city || locality || data.display_name?.split(',')[0] || '';
+                            setProfile(prev => ({ ...prev, location: label, lat: latitude, lng: longitude }));
+                            setStepError('');
+                        } catch {
+                            setProfile(prev => ({ ...prev, lat: latitude, lng: longitude }));
+                            setStepError('');
+                        }
+                    }, () => setStepError('Could not detect location — please type it manually'));
+                }}
+                style={{ marginTop: 12, width: '100%', padding: '13px 16px', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border-color)', background: 'var(--bg-input)', color: 'var(--text-secondary)', fontSize: '0.9rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+            >
+                📍 Detect my location automatically
+            </button>
+            {profile.lat && profile.lng && (
+                <a
+                    href={`https://maps.google.com/?q=${profile.lat},${profile.lng}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ display: 'block', marginTop: 10, fontSize: '0.8rem', color: 'var(--primary-color)', textAlign: 'center' }}
+                >
+                    📌 Confirm on Google Maps →
+                </a>
+            )}
         </div>,
         <div key="sports" className="animate-fade-in">
             <h2 style={{ marginBottom: 8 }}>Which sports do you play?</h2>

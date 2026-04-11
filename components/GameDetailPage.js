@@ -29,22 +29,23 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     const game = state.games.find(g => g.id === gameId);
 
     useEffect(() => {
-        if (!game && state.isLoaded && !notFound) {
-            fetch(`/api/games/${gameId}`)
-                .then(r => r.json())
-                .then(d => {
-                    if (d.game) {
-                        dispatch({ type: 'LOAD_STATE', payload: { games: [...state.games, d.game] } });
-                    } else {
-                        setNotFound(true);
-                    }
-                })
-                .catch(e => {
-                    console.error('Failed fetching individual game:', e);
+        if (!state.isLoaded) return;
+        // Always refresh from API on mount so pending RSVPs / latest state is visible
+        fetch(`/api/games/${gameId}`)
+            .then(r => r.json())
+            .then(d => {
+                if (d.game) {
+                    dispatch({ type: 'LOAD_STATE', payload: { games: state.games.map(g => g.id === gameId ? d.game : g).concat(state.games.find(g => g.id === gameId) ? [] : [d.game]) } });
+                } else if (!game) {
                     setNotFound(true);
-                });
-        }
-    }, [gameId, game, state.isLoaded, notFound, dispatch, state.games]);
+                }
+            })
+            .catch(e => {
+                console.error('Failed fetching individual game:', e);
+                if (!game) setNotFound(true);
+            });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [gameId, state.isLoaded]);
 
     // All useMemo hooks MUST be before any early return (Rules of Hooks)
     const confirmedPlayers = useMemo(() => {
