@@ -275,11 +275,11 @@ export default function AuthPage() {
         // idx 2 is photo (optional)
         if (idx === 3 && !profile.location.trim()) { setStepError('Please enter your city or neighbourhood'); return false; }
         if (idx === 4 && profile.sports.length === 0) { setStepError('Select at least one sport'); return false; }
-        if (idx === 4) {
+        if (idx === 5) {
             const missing = profile.sports.filter(s => !profile.positions[s]);
             if (missing.length > 0) { setStepError(`Select your position for: ${missing.join(', ')}`); return false; }
         }
-        if (idx === 5) {
+        if (idx === 6) {
             // Credentials step
             const credEmail = authMode === 'email' ? (verifiedEmail || email) : setupEmail;
             if (!credEmail || !credEmail.includes('@')) { setStepError('Enter a valid email address'); return false; }
