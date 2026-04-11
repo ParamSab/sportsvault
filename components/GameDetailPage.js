@@ -23,8 +23,9 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     const [nudgedPlayers, setNudgedPlayers] = useState(new Set());
 
     const [notFound, setNotFound] = useState(false);
+    const [msgCopied, setMsgCopied] = useState(false);      // MUST be before any early return
     const game = state.games.find(g => g.id === gameId);
-    
+
     useEffect(() => {
         if (!game && state.isLoaded && !notFound) {
             fetch(`/api/games/${gameId}`)
@@ -42,6 +43,43 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                 });
         }
     }, [gameId, game, state.isLoaded, notFound, dispatch, state.games]);
+
+    // All useMemo hooks MUST be before any early return (Rules of Hooks)
+    const confirmedPlayers = useMemo(() => {
+        if (!game) return [];
+        const currentUserId = state.currentUser?.dbId || state.currentUser?.id || 'current';
+        return (game.rsvps || [])
+            .filter(r => r.status === 'yes' || r.status === 'checked_in')
+            .map(r => {
+                const p = r.player || getPlayer(r.playerId) || state.players?.find(pl => pl.id === r.playerId) || (r.playerId === currentUserId ? state.currentUser : null);
+                return p ? { ...p, rsvpPosition: r.position || r.rsvpPosition } : null;
+            }).filter(Boolean);
+    }, [game, state.currentUser, state.players]);
+
+    const teams = useMemo(() => {
+        if (!game || confirmedPlayers.length < 4) return null;
+        return balanceTeams(confirmedPlayers, game.sport);
+    }, [confirmedPlayers, game]);
+
+    const friendsInTiers = useMemo(() => {
+        const tiers = { 1: [], 2: [], 3: [] };
+        if (!game || !state.friendTiers || !state.friends) return tiers;
+        state.friends.forEach(fId => {
+            const t = state.friendTiers[fId]?.[game.sport];
+            if (t) {
+                const p = getPlayer(fId) || state.players?.find(pl => pl.id === fId);
+                if (p) tiers[t].push(p);
+            }
+        });
+        return tiers;
+    }, [game, state.friendTiers, state.friends, state.players]);
+
+    const amenList = useMemo(() => {
+        if (!game) return [];
+        try {
+            return typeof game.amenities === 'string' ? JSON.parse(game.amenities) : (game.amenities || []);
+        } catch { return []; }
+    }, [game]);
 
     if (!game) {
         if (!state.isLoaded || (!notFound && state.isLoaded)) {
@@ -66,16 +104,6 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     const organizerId = game.organizerId || game.organizer?.id || game.organizer;
     const isOrganizer = organizerId === currentUserId;
     const privacyInfo = PRIVACY_LABELS[game.visibility || 'public'] || PRIVACY_LABELS.public;
-
-    const confirmedPlayers = confirmedRsvps.map(r => {
-        const p = r.player || getPlayer(r.playerId) || state.players?.find(pl => pl.id === r.playerId) || (r.playerId === currentUserId ? state.currentUser : null);
-        return p ? { ...p, rsvpPosition: r.position || r.rsvpPosition } : null;
-    }).filter(Boolean);
-
-    const teams = useMemo(() => {
-        if (confirmedPlayers.length >= 4) return balanceTeams(confirmedPlayers, game.sport);
-        return null;
-    }, [confirmedPlayers, game.sport]);
 
     const handleRSVP = async (status) => {
         let finalStatus = status;
@@ -119,24 +147,8 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
         }
     };
 
-    // Build tier data
-    const friendsInTiers = useMemo(() => {
-        const tiers = { 1: [], 2: [], 3: [] };
-        if (!state.friendTiers || !state.friends) return tiers;
-        state.friends.forEach(fId => {
-            const t = state.friendTiers[fId]?.[game.sport];
-            if (t) {
-                const p = getPlayer(fId) || state.players?.find(pl => pl.id === fId);
-                if (p) tiers[t].push(p);
-            }
-        });
-        return tiers;
-    }, [state.friendTiers, state.friends, game.sport, state.players]);
-
     const selectedTierPlayers = broadcastTier ? friendsInTiers[broadcastTier] : [];
     const validRecipients = selectedTierPlayers.filter(p => p.phone && p.phone.trim());
-
-    const [msgCopied, setMsgCopied] = useState(false);
 
     const getYesButtonText = () => {
         if (myRsvp?.status === 'yes') return '✅ Yes!';
@@ -234,11 +246,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
         console.error('WhatsApp msg generation failed:', e);
     }
 
-    const amenList = useMemo(() => {
-        try {
-            return typeof game.amenities === 'string' ? JSON.parse(game.amenities) : (game.amenities || []);
-        } catch { return []; }
-    }, [game.amenities]);
+
 
     return (
         <div className="animate-fade-in">
