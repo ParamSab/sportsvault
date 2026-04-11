@@ -88,22 +88,32 @@ export default function AppShell() {
         <div style={{ minHeight: '100dvh', background: 'var(--bg-primary)' }}>
             {/* Header */}
             <header className="app-header">
-                <div className="app-logo" onClick={() => navigate('discover')} style={{ cursor: 'pointer' }}>
-                    SportsVault Dashboard
+                <div className="app-logo" onClick={() => navigate('discover')} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: '1.5rem', lineHeight: 1 }}>⚽</span>
+                    <span>SportsVault</span>
                 </div>
                 {isGuest ? (
-                    <button className="btn btn-xs btn-primary" style={{ padding: '6px 14px', borderRadius: 99 }} onClick={() => navigate('profile')}>
-                        Login
+                    <button className="btn btn-xs btn-primary" style={{ padding: '7px 16px', borderRadius: 99, fontWeight: 700 }} onClick={() => navigate('profile')}>
+                        Join Now
                     </button>
                 ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <div className="header-location">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
                             <span>📍</span>
-                            <span>{state.currentUser?.location || 'Mumbai'}</span>
+                            <span style={{ maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{state.currentUser?.location || 'Mumbai'}</span>
                         </div>
-                        <button className="btn btn-xs btn-outline" style={{ border: '1px solid #ef4444', color: '#ef4444' }} onClick={() => dispatch({ type: 'LOGOUT' })}>
-                            Logout
-                        </button>
+                        <div
+                            className="avatar avatar-sm"
+                            onClick={() => navigate('profile')}
+                            style={{
+                                cursor: 'pointer', border: '2px solid #6366f1',
+                                background: state.currentUser?.photo ? `url(${state.currentUser.photo}) center/cover` : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                                fontSize: state.currentUser?.photo ? '0' : '0.75rem',
+                                color: '#fff', fontWeight: 700,
+                            }}
+                        >
+                            {state.currentUser?.photo ? '' : (state.currentUser?.name?.[0] || '?')}
+                        </div>
                     </div>
                 )}
             </header>
@@ -117,25 +127,25 @@ export default function AppShell() {
 
             {/* Bottom Navigation */}
             <nav className="bottom-nav">
-                <button className={`nav-item ${activeTab === 'discover' && !showAuthGate ? 'active' : ''}`} onClick={() => navigate('discover')}>
-                    <span className="nav-icon">🔍</span>
-                    <span className="nav-label">Discover</span>
+                <button className={`nav-item ${activeTab === 'discover' && !viewingGame && !viewingProfile && !showAuthGate ? 'active' : ''}`} onClick={() => navigate('discover')}>
+                    <span className="nav-icon">🏟️</span>
+                    <span className="nav-label">Games</span>
                 </button>
                 <button className={`nav-item ${activeTab === 'friends' ? 'active' : ''}`} onClick={() => navigate('friends')}>
                     <span className="nav-icon">👥</span>
                     <span className="nav-label">Friends</span>
                 </button>
                 <button className="create-btn-nav" onClick={() => navigate('create')}>
-                    ＋
+                    <span style={{ fontSize: '1.75rem', lineHeight: 1, fontWeight: 300 }}>＋</span>
                 </button>
                 <button className={`nav-item ${activeTab === 'notifications' ? 'active' : ''}`} onClick={() => navigate('notifications')}>
                     <span className="nav-icon">🔔</span>
                     <span className="nav-label">Alerts</span>
-                    {(unreadCount > 0 && !isGuest) && <span className="badge-count">{unreadCount}</span>}
+                    {(unreadCount > 0 && !isGuest) && <span className="badge-count">{unreadCount > 9 ? '9+' : unreadCount}</span>}
                 </button>
                 <button className={`nav-item ${activeTab === 'profile' || showAuthGate ? 'active' : ''}`} onClick={() => navigate('profile')}>
                     <span className="nav-icon">👤</span>
-                    <span className="nav-label">Profile</span>
+                    <span className="nav-label">Me</span>
                 </button>
             </nav>
         </div>

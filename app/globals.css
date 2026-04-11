@@ -773,3 +773,206 @@ h3 { font-size: clamp(1.125rem, 2.5vw, 1.375rem); }
   body { background: #fff; color: #000; }
   .glass-card { background: #fff; border-color: #ddd; }
 }
+
+/* ============================================
+   ENHANCED CARD STYLES
+   ============================================ */
+.glass-card {
+  position: relative;
+}
+.glass-card:not(.no-hover):hover {
+  border-color: rgba(99, 102, 241, 0.3);
+  box-shadow: 0 4px 24px rgba(99, 102, 241, 0.08);
+}
+
+/* Shimmer loading skeleton */
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-card) 25%, var(--bg-card-hover) 50%, var(--bg-card) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-md);
+}
+
+/* WhatsApp button */
+.wa-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--radius-full);
+  background: rgba(37, 211, 102, 0.12);
+  color: #25d366;
+  border: 1px solid rgba(37, 211, 102, 0.3);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-decoration: none;
+}
+.wa-btn:hover {
+  background: rgba(37, 211, 102, 0.2);
+  border-color: rgba(37, 211, 102, 0.5);
+}
+
+/* Friend online pulse */
+.online-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--success);
+  border: 2px solid var(--bg-card);
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  animation: pulse 2s infinite;
+}
+
+/* Better badge */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+}
+
+/* Section label */
+.section-label {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: var(--space-sm);
+}
+
+/* Gradient border card */
+.glass-card-accent {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  position: relative;
+}
+.glass-card-accent::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6, transparent);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Improved chip active state (without sport color) */
+.chip.active:not(.football):not(.padel):not(.cricket):not(.all) {
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+  border-color: #6366f1;
+}
+
+/* Better button sizes */
+.btn-xs {
+  padding: 4px 10px;
+  font-size: 0.75rem;
+}
+
+/* Input with icon prefix */
+.input-group {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bg-input);
+  transition: border-color var(--transition-fast);
+}
+.input-group:focus-within {
+  border-color: var(--border-active);
+}
+.input-group input {
+  border: none;
+  border-radius: 0;
+  flex: 1;
+}
+.input-group input:focus {
+  border-color: transparent;
+}
+.input-prefix {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  border-right: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+
+/* Better empty states */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+  gap: 12px;
+}
+.empty-state .empty-icon {
+  font-size: 3rem;
+  opacity: 0.6;
+}
+.empty-state p {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  max-width: 240px;
+}
+
+/* Toast notification */
+.toast {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  padding: 10px 20px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  z-index: var(--z-toast);
+  box-shadow: var(--shadow-md);
+  white-space: nowrap;
+  animation: slideUp 0.3s ease;
+}
+
+/* Pill divider */
+.divider-pill {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+.divider-pill::before, .divider-pill::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-color);
+}
+
+/* Improved nav for desktop */
+@media (min-width: 768px) {
+  .nav-item .nav-label { display: block; font-size: 0.5625rem; }
+  .nav-item { min-width: 60px; }
+}

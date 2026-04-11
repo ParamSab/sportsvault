@@ -1,36 +1,31 @@
 import { prisma } from '@/lib/prisma';
-import { getSession } from '@/lib/session';
+import { getIronSession } from 'iron-session';
+import { cookies } from 'next/headers';
+import { sessionOptions } from '@/lib/session';
 
-export async function GET(req) {
+export async function GET() {
     try {
-        const session = await getSession(req);
-        if (!session?.user?.id) return Response.json({ error: 'Not authenticated' }, { status: 401 });
+        const cookieStore = await cookies();
+        const session = await getIronSession(cookieStore, sessionOptions);
+        const userId = session.user?.dbId || session.user?.id;
+        if (!userId) return Response.json({ error: 'Not authenticated' }, { status: 401 });
 
-        // In a real app, you would fetch from the Friend table
-        // But for this MVP, let's just return all users except the current one as "suggested friends"
-        // if the Friend table is still migrating or empty.
-        
-        const currentUserId = session.user.id;
-        
-        // Try getting actual friends first
-        let friends = await prisma.friend.findMany({
-            where: { userId: currentUserId },
-            include: { friend: true }
+        const friendships = await prisma.friendship.findMany({
+            where: {
+                status: 'accepted',
+                OR: [{ userId }, { friendId: userId }]
+            },
+            include: {
+                user: { select: { id: true, name: true, phone: true, photo: true } },
+                friend: { select: { id: true, name: true, phone: true, photo: true } }
+            }
         });
 
-        // Fallback or addition: players who have played with this user (could be another logic)
-        // For now, let's return all users for the "search and add" friend experience
-        const allUsers = await prisma.user.findMany({
-            where: { id: { not: currentUserId } },
-            select: { id: true, name: true, phone: true, photo: true }
-        });
+        const friends = friendships.map(f => f.userId === userId ? f.friend : f.user);
 
-        return Response.json({ 
-            success: true, 
-            friends: friends.map(f => f.friend), 
-            suggested: allUsers 
-        });
+        return Response.json({ success: true, friends });
     } catch (err) {
+        console.error('GET /api/friends/list error:', err.message);
         return Response.json({ error: err.message }, { status: 500 });
     }
 }

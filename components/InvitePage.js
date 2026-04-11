@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 
 export default function InvitePage() {
     const [friends, setFriends] = useState([]);
@@ -11,12 +10,9 @@ export default function InvitePage() {
     const [sending, setSending] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
-    const router = useRouter();
+    const [whatsappLinks, setWhatsappLinks] = useState([]);
 
-    useEffect(() => {
-        fetchFriends();
-    }, []);
+    useEffect(() => { fetchFriends(); }, []);
 
     const fetchFriends = async () => {
         try {
@@ -25,27 +21,23 @@ export default function InvitePage() {
             if (data.error) throw new Error(data.error);
             setFriends(data.friends || []);
         } catch (err) {
-            setError('Failed to load friends');
-            console.error(err);
+            setError('Failed to load friends. Make sure you are logged in.');
         } finally {
             setLoading(false);
         }
     };
 
     const toggleFriend = (id) => {
-        setSelectedFriends(prev => 
+        setSelectedFriends(prev =>
             prev.includes(id) ? prev.filter(fid => fid !== id) : [...prev, id]
         );
     };
 
     const handleInvite = async (method) => {
-        if (selectedFriends.length === 0) {
-            setError('Please select at least one friend');
-            return;
-        }
+        if (selectedFriends.length === 0) { setError('Select at least one friend'); return; }
         setSending(true);
         setError('');
-        setSuccess('');
+        setWhatsappLinks([]);
 
         try {
             const res = await fetch('/api/friends/invite', {
@@ -56,19 +48,17 @@ export default function InvitePage() {
             const data = await res.json();
             if (data.error) throw new Error(data.error);
 
-            if (method === 'sms' && data.smsLinks) {
-                // Open WhatsApp broadcast link if possible, or individual links
-                // For "broadcast" on WhatsApp, we can use the list of numbers
-                const phoneNumbers = data.smsLinks.map(l => l.phone).join(',');
-                const encodedMsg = encodeURIComponent(message || 'Join me on SportsVault!');
-                
-                // Triggering the broadcase link
-                const whatsappUrl = `https://wa.me/?text=${encodedMsg}`;
-                window.open(whatsappUrl, '_blank');
-                
-                setSuccess('Opening WhatsApp for broadcast...');
-            } else {
-                setSuccess('Invitations sent successfully!');
+            if (method === 'sms' && data.smsLinks?.length > 0) {
+                if (data.smsLinks.length === 1) {
+                    // Single friend — open WhatsApp directly
+                    window.open(data.smsLinks[0].whatsappLink, '_blank');
+                } else {
+                    // Multiple friends — show clickable links
+                    setWhatsappLinks(data.smsLinks);
+                }
+            } else if (method === 'app') {
+                setError('');
+                alert('In-app notifications sent!');
             }
         } catch (err) {
             setError(err.message);
@@ -77,163 +67,152 @@ export default function InvitePage() {
         }
     };
 
-    const filteredFriends = friends.filter(f => 
-        f.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const filteredFriends = friends.filter(f =>
+        f.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (f.phone && f.phone.includes(searchTerm))
     );
 
-    if (loading) return <div className="loading-container"><div className="spinner"></div></div>;
+    if (loading) {
+        return (
+            <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)' }}>
+                <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '2rem', marginBottom: 16 }}>👥</div>
+                    <p className="text-muted">Loading friends…</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
-        <div className="page-container invite-friends">
-            <div className="glass-card main-card">
-                <header className="header">
-                    <h1 className="title-gradient">Invite Friends</h1>
-                    <p className="subtitle">Select friends to invite to your next game</p>
-                </header>
-
-                <div className="search-bar">
-                    <input 
-                        type="text" 
-                        placeholder="Search friends by name or phone..." 
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="glass-input"
-                    />
+        <div style={{ minHeight: '100dvh', background: 'var(--bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+            <div className="glass-card no-hover" style={{ maxWidth: 480, width: '100%', padding: 28 }}>
+                {/* Header */}
+                <div style={{ textAlign: 'center', marginBottom: 28 }}>
+                    <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>📲</div>
+                    <h2 style={{ marginBottom: 6 }}>Invite Friends</h2>
+                    <p className="text-sm text-muted">Select friends and invite them via WhatsApp</p>
                 </div>
 
-                <div className="friends-list">
+                {/* Search */}
+                <input
+                    type="text"
+                    placeholder="Search by name or phone…"
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    style={{ marginBottom: 16 }}
+                />
+
+                {/* Friend List */}
+                <div style={{ maxHeight: 280, overflowY: 'auto', marginBottom: 20, display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {filteredFriends.length === 0 ? (
-                        <div className="empty-state">No friends found</div>
+                        <div style={{ textAlign: 'center', padding: '32px 20px', color: 'var(--text-muted)' }}>
+                            {friends.length === 0 ? 'No friends yet — add friends first!' : 'No matches'}
+                        </div>
                     ) : (
-                        filteredFriends.map(friend => (
-                            <div 
-                                key={friend.id} 
-                                className={`friend-item ${selectedFriends.includes(friend.id) ? 'selected' : ''}`}
-                                onClick={() => toggleFriend(friend.id)}
-                            >
-                                <div className="avatar">
-                                    {friend.photo ? <img src={friend.photo} alt="" /> : friend.name[0]}
+                        filteredFriends.map(friend => {
+                            const selected = selectedFriends.includes(friend.id);
+                            return (
+                                <div
+                                    key={friend.id}
+                                    onClick={() => toggleFriend(friend.id)}
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: 12,
+                                        padding: '10px 14px', borderRadius: 'var(--radius-md)',
+                                        background: selected ? 'rgba(99,102,241,0.15)' : 'var(--bg-input)',
+                                        border: `1px solid ${selected ? '#6366f1' : 'var(--border-color)'}`,
+                                        cursor: 'pointer', transition: 'all 0.15s',
+                                    }}
+                                >
+                                    <div className="avatar avatar-sm" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff', fontWeight: 700 }}>
+                                        {friend.photo ? '' : (friend.name?.[0] || '?')}
+                                    </div>
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{friend.name}</div>
+                                        {friend.phone && <div className="text-xs text-muted">{friend.phone}</div>}
+                                    </div>
+                                    <div style={{
+                                        width: 20, height: 20, borderRadius: 6,
+                                        border: `2px solid ${selected ? '#6366f1' : 'rgba(255,255,255,0.2)'}`,
+                                        background: selected ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : 'transparent',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        fontSize: '0.7rem', color: '#fff', fontWeight: 900,
+                                    }}>
+                                        {selected && '✓'}
+                                    </div>
                                 </div>
-                                <div className="info">
-                                    <div className="name">{friend.name}</div>
-                                    <div className="phone">{friend.phone}</div>
-                                </div>
-                                <div className="checkbox">
-                                    {selectedFriends.includes(friend.id) && <span className="check">✓</span>}
-                                </div>
-                            </div>
-                        ))
+                            );
+                        })
                     )}
                 </div>
 
-                <div className="message-section">
-                    <label>Broadcast Message</label>
-                    <textarea 
-                        className="glass-input"
-                        placeholder="Type your invitation message here..."
+                {/* Message */}
+                <div style={{ marginBottom: 20 }}>
+                    <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                        Message (optional)
+                    </label>
+                    <textarea
+                        placeholder="Type your invitation message…"
                         value={message}
-                        onChange={(e) => setMessage(e.target.value)}
+                        onChange={e => setMessage(e.target.value)}
                         rows={3}
+                        style={{ resize: 'none' }}
                     />
                 </div>
 
-                {error && <div className="error-box">{error}</div>}
-                {success && <div className="success-box">{success}</div>}
+                {/* WhatsApp links (for multiple friends) */}
+                {whatsappLinks.length > 0 && (
+                    <div style={{ marginBottom: 20, background: 'rgba(37,211,102,0.1)', border: '1px solid rgba(37,211,102,0.3)', borderRadius: 'var(--radius-md)', padding: 16 }}>
+                        <p style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: 12, color: '#25d366' }}>Tap to open WhatsApp for each friend:</p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            {whatsappLinks.map(l => (
+                                <a
+                                    key={l.friendId}
+                                    href={l.whatsappLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: 10,
+                                        padding: '10px 14px', borderRadius: 'var(--radius-md)',
+                                        background: 'rgba(37,211,102,0.15)', color: '#25d366',
+                                        fontWeight: 600, fontSize: '0.875rem', textDecoration: 'none',
+                                    }}
+                                >
+                                    <span style={{ fontSize: '1.25rem' }}>💬</span>
+                                    WhatsApp {l.name || l.phone}
+                                </a>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
-                <div className="actions">
-                    <button 
-                        className="btn secondary" 
-                        onClick={() => handleInvite('app')}
-                        disabled={sending || selectedFriends.length === 0}
-                    >
-                        {sending ? 'Sending...' : 'Invite via App'}
-                    </button>
-                    <button 
-                        className="btn primary" 
+                {error && (
+                    <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: 'var(--danger)', borderRadius: 'var(--radius-md)', padding: '10px 14px', fontSize: '0.875rem', marginBottom: 16 }}>
+                        {error}
+                    </div>
+                )}
+
+                {/* Buttons */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <button
+                        className="btn btn-block"
+                        style={{ background: '#25d366', color: '#fff', fontWeight: 700 }}
                         onClick={() => handleInvite('sms')}
                         disabled={sending || selectedFriends.length === 0}
                     >
-                        {sending ? 'Preparing...' : 'Invite via WhatsApp'}
+                        {sending ? 'Preparing…' : `💬 Invite via WhatsApp (${selectedFriends.length})`}
                     </button>
-                    <button 
-                        className="btn ghost" 
-                        onClick={() => router.push('/')}
+                    <button
+                        className="btn btn-block btn-outline"
+                        onClick={() => handleInvite('app')}
+                        disabled={sending || selectedFriends.length === 0}
                     >
-                        Skip for now
+                        {sending ? 'Sending…' : '🔔 Send In-App Notification'}
                     </button>
+                    <a href="/" className="btn btn-block btn-ghost" style={{ textAlign: 'center' }}>
+                        Skip for now
+                    </a>
                 </div>
             </div>
-
-            <style jsx>{`
-                .invite-friends {
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    min-height: 90vh;
-                    padding: 20px;
-                }
-                .main-card {
-                    max-width: 500px;
-                    width: 100%;
-                    padding: 32px;
-                }
-                .header { margin-bottom: 24px; text-align: center; }
-                .subtitle { color: var(--text-muted); font-size: 0.9rem; margin-top: 8px; }
-                .search-bar { margin-bottom: 20px; }
-                .friends-list {
-                    max-height: 300px;
-                    overflow-y: auto;
-                    margin-bottom: 24px;
-                    border-radius: 12px;
-                    background: rgba(255, 255, 255, 0.03);
-                    padding: 8px;
-                }
-                .friend-item {
-                    display: flex;
-                    align-items: center;
-                    padding: 12px;
-                    border-radius: 10px;
-                    cursor: pointer;
-                    transition: all 0.2s;
-                    margin-bottom: 4px;
-                }
-                .friend-item:hover { background: rgba(255, 255, 255, 0.05); }
-                .friend-item.selected { background: rgba(var(--primary-rgb), 0.15); }
-                .avatar {
-                    width: 40px;
-                    height: 40px;
-                    background: var(--primary-gradient);
-                    border-radius: 50%;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-weight: 700;
-                    margin-right: 12px;
-                    overflow: hidden;
-                }
-                .info { flex: 1; }
-                .name { font-weight: 600; font-size: 0.95rem; }
-                .phone { font-size: 0.8rem; color: var(--text-muted); }
-                .checkbox {
-                    width: 20px;
-                    height: 20px;
-                    border: 2px solid rgba(255, 255, 255, 0.2);
-                    border-radius: 6px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                }
-                .selected .checkbox { background: var(--primary-gradient); border-color: transparent; }
-                .check { color: white; font-size: 0.8rem; font-weight: 900; }
-                .message-section { margin-bottom: 24px; }
-                .message-section label { display: block; margin-bottom: 8px; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); }
-                .actions { display: flex; flex-direction: column; gap: 12px; }
-                .btn { width: 100%; border-radius: 14px; padding: 14px; font-weight: 700; }
-                .error-box { background: rgba(var(--error-rgb), 0.1); color: var(--error); padding: 12px; border-radius: 10px; font-size: 0.85rem; margin-bottom: 20px; border: 1px solid rgba(var(--error-rgb), 0.2); }
-                .success-box { background: rgba(var(--success-rgb), 0.1); color: var(--success); padding: 12px; border-radius: 10px; font-size: 0.85rem; margin-bottom: 20px; border: 1px solid rgba(var(--success-rgb), 0.2); }
-                .empty-state { text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 0.9rem; }
-            `}</style>
         </div>
     );
 }

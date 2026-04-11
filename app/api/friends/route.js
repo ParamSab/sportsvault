@@ -1,84 +1,94 @@
 import { prisma } from '@/lib/prisma';
-import { getSession } from '@/lib/session';
+import { getIronSession } from 'iron-session';
+import { cookies } from 'next/headers';
+import { sessionOptions } from '@/lib/session';
 
-export async function GET(req) {
+function safeParse(val, fallback) {
+    if (val == null) return fallback;
+    if (typeof val !== 'string') return val ?? fallback;
+    try { return JSON.parse(val) ?? fallback; } catch { return fallback; }
+}
+
+export async function GET() {
     try {
-        const session = await getSession(req);
-        if (!session.user) return Response.json({ friends: [] });
+        const cookieStore = await cookies();
+        const session = await getIronSession(cookieStore, sessionOptions);
+        const userId = session.user?.dbId || session.user?.id;
+        if (!userId) return Response.json({ friends: [] });
 
-        const friendships = await prisma.friendship.findMany({
-            where: {
-                OR: [
-                    { userId: session.user.dbId },
-                    { friendId: session.user.dbId }
-                ]
-            },
-            include: {
-                user: {
-                    select: {
-                        id: true, name: true, phone: true, photo: true, location: true,
-                        sports: true, positions: true, ratings: true, trustScore: true,
-                        thoughtsReceived: {
-                            include: { from: { select: { name: true } } },
-                            orderBy: { date: 'desc' },
-                            take: 10
-                        }
-                    }
+        const [friendships, friendTiers] = await Promise.all([
+            prisma.friendship.findMany({
+                where: {
+                    status: 'accepted',
+                    OR: [{ userId }, { friendId: userId }]
                 },
-                friend: {
-                    select: {
-                        id: true, name: true, phone: true, photo: true, location: true,
-                        sports: true, positions: true, ratings: true, trustScore: true,
-                        thoughtsReceived: {
-                            include: { from: { select: { name: true } } },
-                            orderBy: { date: 'desc' },
-                            take: 10
+                include: {
+                    user: {
+                        select: {
+                            id: true, name: true, phone: true, photo: true,
+                            location: true, sports: true, positions: true,
+                            ratings: true, trustScore: true, createdAt: true,
+                            thoughtsReceived: {
+                                include: { sender: { select: { name: true } } },
+                                orderBy: { createdAt: 'desc' },
+                                take: 10
+                            }
+                        }
+                    },
+                    friend: {
+                        select: {
+                            id: true, name: true, phone: true, photo: true,
+                            location: true, sports: true, positions: true,
+                            ratings: true, trustScore: true, createdAt: true,
+                            thoughtsReceived: {
+                                include: { sender: { select: { name: true } } },
+                                orderBy: { createdAt: 'desc' },
+                                take: 10
+                            }
                         }
                     }
                 }
-            }
-        });
+            }),
+            prisma.friendTier.findMany({ where: { userId } })
+        ]);
 
-        const friendTiers = await prisma.friendTier.findMany({
-            where: { userId: session.user.dbId }
-        });
-
-        // Map friendships to flat user objects
         const friends = friendships.map(f => {
-            const friendData = f.userId === session.user.dbId ? f.friend : f.user;
+            const d = f.userId === userId ? f.friend : f.user;
+            const sports = (() => { const s = safeParse(d.sports, []); return Array.isArray(s) ? s : []; })();
             return {
-                ...friendData,
-                sports: JSON.parse(friendData.sports || '[]'),
-                positions: JSON.parse(friendData.positions || '{}'),
-                ratings: JSON.parse(friendData.ratings || '{}'),
-                thoughts: (friendData.thoughtsReceived || []).map(t => ({
+                ...d,
+                sports,
+                positions: safeParse(d.positions, {}),
+                ratings: safeParse(d.ratings, {}),
+                thoughts: (d.thoughtsReceived || []).map(t => ({
                     from: t.fromId,
-                    fromName: t.from?.name,
+                    fromName: t.sender?.name,
                     text: t.text,
-                    date: t.date.toISOString().split('T')[0]
+                    date: t.createdAt ? new Date(t.createdAt).toISOString().split('T')[0] : ''
                 }))
             };
         });
 
         return Response.json({ friends, tiers: friendTiers });
     } catch (err) {
-        return Response.json({ error: err.message }, { status: 500 });
+        console.error('GET /api/friends error:', err.message);
+        return Response.json({ friends: [], error: err.message }, { status: 500 });
     }
 }
 
 export async function POST(req) {
     try {
-        const session = await getSession(req);
-        if (!session.user) return Response.json({ error: 'Not authenticated' }, { status: 401 });
+        const cookieStore = await cookies();
+        const session = await getIronSession(cookieStore, sessionOptions);
+        const userId = session.user?.dbId || session.user?.id;
+        if (!userId) return Response.json({ error: 'Not authenticated' }, { status: 401 });
 
         const { friendId, action, phone, name } = await req.json();
 
         if (action === 'add') {
             let finalFriendId = friendId;
 
-            // If it's a "new" (offline) friend, we might need to create a shadow user or just save locally.
-            // For now, let's just support adding existing users.
-            if (phone && name) {
+            if (phone && name && !friendId) {
                 const shadow = await prisma.user.upsert({
                     where: { phone },
                     update: {},
@@ -87,24 +97,33 @@ export async function POST(req) {
                 finalFriendId = shadow.id;
             }
 
-            if (!finalFriendId) return Response.json({ error: 'Friend ID or data required' }, { status: 400 });
+            if (!finalFriendId) return Response.json({ error: 'Friend ID or contact details required' }, { status: 400 });
 
             const friendship = await prisma.friendship.upsert({
-                where: {
-                    userId_friendId: { userId: session.user.dbId, friendId: finalFriendId }
-                },
+                where: { userId_friendId: { userId, friendId: finalFriendId } },
                 update: { status: 'accepted' },
-                create: { userId: session.user.dbId, friendId: finalFriendId, status: 'accepted' }
+                create: { userId, friendId: finalFriendId, status: 'accepted' }
             });
-            return Response.json({ success: true, friendship });
+
+            try {
+                await prisma.notification.create({
+                    data: {
+                        userId: finalFriendId,
+                        title: 'New Friend',
+                        message: `${session.user?.name || 'Someone'} added you as a friend on SportsVault!`
+                    }
+                });
+            } catch (_) { /* notification optional */ }
+
+            return Response.json({ success: true, friendship, friendId: finalFriendId });
         }
 
         if (action === 'remove') {
             await prisma.friendship.deleteMany({
                 where: {
                     OR: [
-                        { userId: session.user.dbId, friendId },
-                        { userId: friendId, friendId: session.user.dbId }
+                        { userId, friendId },
+                        { userId: friendId, friendId: userId }
                     ]
                 }
             });
@@ -113,6 +132,7 @@ export async function POST(req) {
 
         return Response.json({ error: 'Invalid action' }, { status: 400 });
     } catch (err) {
+        console.error('POST /api/friends error:', err.message);
         return Response.json({ error: err.message }, { status: 500 });
     }
 }

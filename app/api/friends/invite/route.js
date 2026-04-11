@@ -1,66 +1,61 @@
 import { prisma } from '@/lib/prisma';
-import { getSession } from '@/lib/session';
+import { getIronSession } from 'iron-session';
+import { cookies } from 'next/headers';
+import { sessionOptions } from '@/lib/session';
 
 export async function POST(req) {
-  try {
-    const session = await getSession(req);
-    if (!session?.user?.id) {
-      return Response.json({ error: 'Not authenticated' }, { status: 401 });
-    }
+    try {
+        const cookieStore = await cookies();
+        const session = await getIronSession(cookieStore, sessionOptions);
+        const userId = session.user?.dbId || session.user?.id;
+        if (!userId) return Response.json({ error: 'Not authenticated' }, { status: 401 });
 
-    const { friendIds, method, message } = await req.json();
-    if (!Array.isArray(friendIds) || friendIds.length === 0) {
-      return Response.json({ error: 'No friends selected' }, { status: 400 });
-    }
-    if (!['app', 'sms'].includes(method)) {
-      return Response.json({ error: 'Invalid method' }, { status: 400 });
-    }
-
-    const senderId = session.user.id;
-    const invites = [];
-    const smsLinks = [];
-
-    for (const friendId of friendIds) {
-      // create invite record
-      const invite = await prisma.friendInvite.create({
-        data: {
-          senderId,
-          friendId,
-          method,
-          message,
-        },
-      });
-      invites.push(invite);
-
-      if (method === 'app') {
-        // create in‑app notification (reuse existing Notification model)
-        await prisma.notification.create({
-          data: {
-            userId: friendId,
-            title: `${session.user.name || 'A user'} invited you to a game`,
-            message: message || 'You have a new invitation.',
-            action: '/invite',
-          },
-        });
-      } else if (method === 'sms') {
-        // fetch friend's phone number
-        const friend = await prisma.user.findUnique({
-          where: { id: friendId },
-          select: { phone: true },
-        });
-        if (friend?.phone) {
-          const encodedMsg = encodeURIComponent(message || 'You have a new invitation.');
-          const phone = friend.phone.replace(/^\+/, ''); // remove leading + for wa.me
-          const whatsappLink = `https://wa.me/${phone}?text=${encodedMsg}`;
-          const smsLink = `sms:${friend.phone}?body=${encodedMsg}`;
-          smsLinks.push({ friendId, phone: friend.phone, whatsappLink, smsLink });
+        const { friendIds, method, message } = await req.json();
+        if (!Array.isArray(friendIds) || friendIds.length === 0) {
+            return Response.json({ error: 'No friends selected' }, { status: 400 });
         }
-      }
-    }
+        if (!['app', 'sms'].includes(method)) {
+            return Response.json({ error: 'Invalid method' }, { status: 400 });
+        }
 
-    return Response.json({ success: true, invites, smsLinks }, { status: 200 });
-  } catch (err) {
-    console.error('Invite error:', err);
-    return Response.json({ error: err.message }, { status: 500 });
-  }
+        const smsLinks = [];
+        const defaultMsg = message || `${session.user?.name || 'Your friend'} invited you to play on SportsVault! Download the app and join the game.`;
+
+        for (const friendId of friendIds) {
+            if (method === 'app') {
+                try {
+                    await prisma.notification.create({
+                        data: {
+                            userId: friendId,
+                            title: 'Game Invite',
+                            message: defaultMsg,
+                        }
+                    });
+                } catch (_) { /* skip if user doesn't exist */ }
+            } else if (method === 'sms') {
+                try {
+                    const friend = await prisma.user.findUnique({
+                        where: { id: friendId },
+                        select: { phone: true, name: true }
+                    });
+                    if (friend?.phone) {
+                        const phone = friend.phone.replace(/^\+/, '');
+                        const encodedMsg = encodeURIComponent(defaultMsg);
+                        smsLinks.push({
+                            friendId,
+                            name: friend.name,
+                            phone: friend.phone,
+                            whatsappLink: `https://wa.me/${phone}?text=${encodedMsg}`,
+                            smsLink: `sms:${friend.phone}?body=${encodedMsg}`
+                        });
+                    }
+                } catch (_) { /* skip if user doesn't exist */ }
+            }
+        }
+
+        return Response.json({ success: true, smsLinks });
+    } catch (err) {
+        console.error('POST /api/friends/invite error:', err.message);
+        return Response.json({ error: err.message }, { status: 500 });
+    }
 }
