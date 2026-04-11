@@ -15,6 +15,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     const [selectedPosition, setSelectedPosition] = useState('');
     const [showTeams, setShowTeams] = useState(false);
     const [showBroadcastPanel, setShowBroadcastPanel] = useState(false);
+    const [isRsvpLoading, setIsRsvpLoading] = useState(false);
     
     const isGuest = !state.isAuthenticated;
     const [broadcastTier, setBroadcastTier] = useState(null);
@@ -61,7 +62,8 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     const maybeRsvps = (game.rsvps || []).filter(r => r.status === 'maybe');
     const pendingRsvps = (game.rsvps || []).filter(r => r.status === 'pending');
     const spots = spotsLeft(game);
-    const currentUserId = state.currentUser?.dbId || state.currentUser?.id || 'current';
+    const actualPlayerId = state.currentUser?.dbId || state.currentUser?.id;
+    const currentUserId = actualPlayerId || 'current';
     const myRsvp = (game.rsvps || []).find(r => r.playerId === currentUserId);
     const organizerId = game.organizerId || game.organizer?.id || game.organizer;
     const isOrganizer = organizerId === currentUserId;
@@ -100,6 +102,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
         }
 
         const pos = selectedPosition || state.currentUser?.positions?.[game.sport] || POSITIONS[game.sport]?.[0] || '';
+        setIsRsvpLoading(true);
         dispatch({ type: 'RSVP', payload: { gameId, playerId: currentUserId, status: finalStatus, position: pos } });
         
         // Persist to DB using session
@@ -109,13 +112,15 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     gameId, 
-                    playerId: state.currentUser?.dbId || state.currentUser?.id, 
+                    playerId: actualPlayerId, 
                     status: finalStatus, 
                     position: pos 
                 }),
             });
         } catch (err) {
             console.error('RSVP persistence failed:', err);
+        } finally {
+            setIsRsvpLoading(false);
         }
     };
 
@@ -387,17 +392,21 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                         </div>
                     )}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
-                        <button className={`btn btn-sm ${(myRsvp?.status === 'yes' || myRsvp?.status === 'checked_in' || myRsvp?.status === 'pending') ? 'btn-rsvp-yes' : 'btn-outline'}`} onClick={() => handleRSVP('yes')}>
-                            {getYesButtonText()}
+                        <button className={`btn btn-sm ${(myRsvp?.status === 'yes' || myRsvp?.status === 'checked_in' || myRsvp?.status === 'pending') ? 'btn-rsvp-yes' : 'btn-outline'}`} 
+                            onClick={() => handleRSVP('yes')} disabled={isRsvpLoading}>
+                            {isRsvpLoading && myRsvp?.status === 'pending' ? '...' : getYesButtonText()}
                         </button>
-                        <button className={`btn btn-sm ${myRsvp?.status === 'backup' ? 'btn-primary' : 'btn-outline'}`} onClick={() => handleRSVP('backup')}>
-                            ⏳ Backup
+                        <button className={`btn btn-sm ${myRsvp?.status === 'backup' ? 'btn-primary' : 'btn-outline'}`} 
+                            onClick={() => handleRSVP('backup')} disabled={isRsvpLoading}>
+                            {isRsvpLoading && myRsvp?.status === 'backup' ? '...' : '⏳ Backup'}
                         </button>
-                        <button className={`btn btn-sm ${myRsvp?.status === 'maybe' ? 'btn-rsvp-maybe' : 'btn-outline'}`} onClick={() => handleRSVP('maybe')}>
-                            🤔 Maybe
+                        <button className={`btn btn-sm ${myRsvp?.status === 'maybe' ? 'btn-rsvp-maybe' : 'btn-outline'}`} 
+                            onClick={() => handleRSVP('maybe')} disabled={isRsvpLoading}>
+                            {isRsvpLoading && myRsvp?.status === 'maybe' ? '...' : '🤔 Maybe'}
                         </button>
-                        <button className={`btn btn-sm ${myRsvp?.status === 'no' ? 'btn-rsvp-no' : 'btn-outline'}`} onClick={() => handleRSVP('no')}>
-                            ❌ No
+                        <button className={`btn btn-sm ${myRsvp?.status === 'no' ? 'btn-rsvp-no' : 'btn-outline'}`} 
+                            onClick={() => handleRSVP('no')} disabled={isRsvpLoading}>
+                            {isRsvpLoading && myRsvp?.status === 'no' ? '...' : '❌ No'}
                         </button>
                     </div>
                 </>

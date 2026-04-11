@@ -24,29 +24,30 @@ export default function AppShell() {
     const isGuest = !state.isAuthenticated;
 
     useEffect(() => {
-        if (typeof window !== 'undefined') {
-            console.log('AppShell version: 17.0 - Footy Addicts UI update');
-            const params = new URLSearchParams(window.location.search);
-            const gameId = params.get('game');
-            if (gameId) {
-                if (isGuest) {
-                    localStorage.setItem('sportsvault_pending_game', gameId);
-                    setShowAuthGate(true);
-                    setActiveTab('profile');
-                } else {
-                    setViewingGame(gameId);
-                }
-                window.history.replaceState({}, document.title, window.location.pathname);
+        if (!state.isLoaded) return;
+
+        const params = new URLSearchParams(window.location.search);
+        const gameId = params.get('game');
+        
+        if (gameId) {
+            if (isGuest) {
+                localStorage.setItem('sportsvault_pending_game', gameId);
+                setShowAuthGate(true);
+            } else {
+                setViewingGame(gameId);
             }
-            if (!isGuest) {
-                const pending = localStorage.getItem('sportsvault_pending_game');
-                if (pending) {
-                    setViewingGame(pending);
-                    localStorage.removeItem('sportsvault_pending_game');
-                }
+            // Add a slight delay before clearing URL to ensure state sticks
+            setTimeout(() => {
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }, 100);
+        } else if (!isGuest) {
+            const pending = localStorage.getItem('sportsvault_pending_game');
+            if (pending) {
+                setViewingGame(pending);
+                localStorage.removeItem('sportsvault_pending_game');
             }
         }
-    }, [isGuest]);
+    }, [state.isLoaded, isGuest]);
 
     const navigate = (tab) => {
         if (isGuest && tab !== 'discover' && tab !== 'profile') {

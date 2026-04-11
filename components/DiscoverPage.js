@@ -67,15 +67,20 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
 
     const friendSuggestions = useMemo(() => {
         const knownIds = new Set([...(state.friends || []).map(String), String(currentUserId || '')]);
+        // Only suggest real DB users (exclude IDs starting with 'p' which are mock players)
         const apiPlayers = (state.players || []).filter(p => p?.id && !String(p.id).startsWith('p') && !knownIds.has(String(p.id)));
-        const mockPlayers = PLAYERS.filter(p => !knownIds.has(String(p.id)) && p.id !== 'current').slice(0, 3);
-        return [...apiPlayers, ...mockPlayers].filter((p, i, a) => a.findIndex(x => x.id === p.id) === i).slice(0, 5);
+        return apiPlayers.filter((p, i, a) => a.findIndex(x => x.id === p.id) === i).slice(0, 5);
     }, [state.players, state.friends, currentUserId]);
 
     const pastTeammates = useMemo(() => {
         const knownIds = new Set([...(state.friends || []).map(String), String(currentUserId || '')]);
         const teammates = new Set();
-        (state.history || []).forEach(g => { (g.rsvps || []).forEach(r => { if (!knownIds.has(String(r.playerId))) teammates.add(r.playerId); }); });
+        (state.history || []).forEach(g => { 
+            (g.rsvps || []).forEach(r => { 
+                const rid = String(r.playerId);
+                if (!knownIds.has(rid) && !rid.startsWith('p')) teammates.add(r.playerId); 
+            }); 
+        });
         return Array.from(teammates).map(id => getPlayer(id) || (state.players || []).find(p => p?.id === id)).filter(Boolean).slice(0, 5);
     }, [state.history, state.players, state.friends, currentUserId]);
 
