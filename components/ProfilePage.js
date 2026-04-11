@@ -31,11 +31,13 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
     const [fetchedPlayer, setFetchedPlayer] = useState(null);
     const [isLoadingPlayer, setIsLoadingPlayer] = useState(false);
     const [friendLoading, setFriendLoading] = useState(false);
+    const [toast, setToast] = useState('');
 
     const player = isOwn
         ? (state.currentUser || getPlayer('p1'))
         : (getPlayer(playerId) || (state.players || []).find(p => p && String(p.id) === String(playerId)) || fetchedPlayer);
 
+    // Fetch DB player if not found in mock/store data — MUST be before any early return
     useEffect(() => {
         if (isOwn) return;
         if (getPlayer(playerId) || (state.players || []).find(p => p && String(p.id) === String(playerId))) return;
@@ -47,6 +49,17 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
             .catch(() => {})
             .finally(() => setIsLoadingPlayer(false));
     }, [playerId, isOwn, state.players]);
+
+    // Fetch game history from DB (own profile only) — MUST be before any early return
+    useEffect(() => {
+        if (!isOwn || !player?.dbId) return;
+        setHistoryLoading(true);
+        fetch(`/api/games/history?userId=${player.dbId}`)
+            .then(r => r.json())
+            .then(data => { setSavedGames(data.saved || []); setGameHistory(data.history || []); })
+            .catch(() => { setSavedGames([]); setGameHistory([]); })
+            .finally(() => setHistoryLoading(false));
+    }, [isOwn, player?.dbId]);
 
     if (!player) {
         if (isLoadingPlayer) return <div className="glass-card no-hover text-center" style={{ padding: 48 }}><h3>Loading profile…</h3></div>;
@@ -76,24 +89,32 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
     const pastGames = playerGames.filter(g => g.status === 'completed');
     const isFriend = !isOwn && (state.friends || []).some(fId => String(fId) === String(player.id));
 
-    useEffect(() => {
-        if (!isOwn || !player?.dbId) return;
-        setHistoryLoading(true);
-        fetch(`/api/games/history?userId=${player.dbId}`)
-            .then(r => r.json())
-            .then(data => { setSavedGames(data.saved || []); setGameHistory(data.history || []); })
-            .catch(() => { setSavedGames([]); setGameHistory([]); })
-            .finally(() => setHistoryLoading(false));
-    }, [isOwn, player?.dbId]);
-
     const handleToggleFriend = async () => {
         setFriendLoading(true);
-        const action = isFriend ? 'remove' : 'add';
         try {
-            await fetch('/api/friends', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, friendId: player.id }) });
-            dispatch({ type: isFriend ? 'REMOVE_FRIEND' : 'ADD_FRIEND', payload: player.id });
-        } catch (_) {}
+            if (isFriend) {
+                await fetch('/api/friends', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'remove', friendId: player.id }) });
+                dispatch({ type: 'REMOVE_FRIEND', payload: player.id });
+                setToast('Friend removed');
+            } else {
+                const res = await fetch('/api/friends/request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send', friendId: player.id }) });
+                const data = await res.json();
+                if (data.success) {
+                    dispatch({ type: 'ADD_FRIEND', payload: player.id });
+                    setToast('Friend request sent!');
+                } else if (data.error === 'Already friends' || data.error === 'Request already exists') {
+                    setToast('Request already sent');
+                } else {
+                    await fetch('/api/friends', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'add', friendId: player.id }) });
+                    dispatch({ type: 'ADD_FRIEND', payload: player.id });
+                    setToast('Friend added!');
+                }
+            }
+        } catch (_) {
+            setToast('Something went wrong');
+        }
         setFriendLoading(false);
+        setTimeout(() => setToast(''), 3000);
     };
 
     const handleAddThought = () => {
@@ -104,6 +125,11 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
 
     return (
         <div className="animate-fade-in">
+            {toast && (
+                <div style={{ position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 99, padding: '10px 20px', fontWeight: 600, fontSize: '0.875rem', zIndex: 9999, boxShadow: '0 4px 20px rgba(0,0,0,0.3)', whiteSpace: 'nowrap' }}>
+                    {toast}
+                </div>
+            )}
             {!isOwn && <button className="btn btn-ghost" onClick={onBack} style={{ marginBottom: 12, padding: '8px 0' }}>← Back</button>}
 
             <div className="glass-card no-hover" style={{ textAlign: 'center', marginBottom: 16, position: 'relative', overflow: 'hidden' }}>

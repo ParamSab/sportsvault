@@ -128,38 +128,27 @@ export default function AppShell() {
                 </div>
 
                 {isGuest ? (
-                    <button className="btn btn-xs btn-primary" style={{ padding: '6px 16px', borderRadius: 99 }} onClick={() => navigate('profile')}>
-                        Login
+                    <button className="btn btn-xs btn-primary" style={{ padding: '7px 16px', borderRadius: 99, fontWeight: 700 }} onClick={() => navigate('profile')}>
+                        Join Now
                     </button>
                 ) : (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div className="header-location">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
                             <span>📍</span>
-                            <span>{state.currentUser?.location || 'Mumbai'}</span>
+                            <span style={{ maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{state.currentUser?.location || 'Mumbai'}</span>
                         </div>
                         <div
-                            onClick={() => navigate('profile')}
                             className="avatar avatar-sm"
+                            onClick={() => navigate('profile')}
                             style={{
-                                cursor: 'pointer',
-                                background: state.currentUser?.photo
-                                    ? `url(${state.currentUser.photo}) center/cover`
-                                    : 'linear-gradient(135deg, #6366f1, #a855f7)',
-                                color: '#fff',
-                                fontSize: '0.75rem',
-                                borderColor: '#6366f1',
-                                boxShadow: '0 0 0 2px rgba(99,102,241,0.3)',
+                                cursor: 'pointer', border: '2px solid #6366f1',
+                                background: state.currentUser?.photo ? `url(${state.currentUser.photo}) center/cover` : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                                fontSize: state.currentUser?.photo ? '0' : '0.75rem',
+                                color: '#fff', fontWeight: 700,
                             }}
                         >
-                            {state.currentUser?.photo ? '' : getInitials(state.currentUser?.name || 'U')}
+                            {state.currentUser?.photo ? '' : (state.currentUser?.name?.[0] || '?')}
                         </div>
-                        <button
-                            className="btn btn-xs btn-outline"
-                            style={{ border: '1px solid rgba(239,68,68,0.4)', color: '#ef4444', padding: '4px 10px', fontSize: '0.7rem' }}
-                            onClick={() => dispatch({ type: 'LOGOUT' })}
-                        >
-                            Out
-                        </button>
                     </div>
                 )}
             </header>
@@ -173,16 +162,16 @@ export default function AppShell() {
 
             {/* Bottom Navigation */}
             <nav className="bottom-nav">
-                <button className={`nav-item ${activeTab === 'discover' && !showAuthGate ? 'active' : ''}`} onClick={() => navigate('discover')}>
-                    <span className="nav-icon">🔍</span>
-                    <span className="nav-label">Explore</span>
+                <button className={`nav-item ${activeTab === 'discover' && !viewingGame && !viewingProfile && !showAuthGate ? 'active' : ''}`} onClick={() => navigate('discover')}>
+                    <span className="nav-icon">🏟️</span>
+                    <span className="nav-label">Games</span>
                 </button>
                 <button className={`nav-item ${activeTab === 'friends' && !showAuthGate ? 'active' : ''}`} onClick={() => navigate('friends')}>
                     <span className="nav-icon">👥</span>
                     <span className="nav-label">Squad</span>
                 </button>
-                <button className="create-btn-nav" onClick={() => navigate('create')} aria-label="Create game">
-                    ＋
+                <button className="create-btn-nav" onClick={() => navigate('create')}>
+                    <span style={{ fontSize: '1.75rem', lineHeight: 1, fontWeight: 300 }}>＋</span>
                 </button>
                 <button
                     className={`nav-item ${activeTab === 'notifications' && !showAuthGate ? 'active' : ''}`}
@@ -190,24 +179,11 @@ export default function AppShell() {
                     style={{ position: 'relative' }}
                 >
                     <span className="nav-icon">🔔</span>
-                    <span className="nav-label">Bell</span>
-                    {unreadCount > 0 && !isGuest && <span className="badge-count">{unreadCount}</span>}
+                    <span className="nav-label">Alerts</span>
+                    {(unreadCount > 0 && !isGuest) && <span className="badge-count">{unreadCount > 9 ? '9+' : unreadCount}</span>}
                 </button>
-                <button
-                    className={`nav-item ${activeTab === 'profile' || showAuthGate ? 'active' : ''}`}
-                    onClick={() => navigate('profile')}
-                >
-                    {!isGuest && state.currentUser?.photo ? (
-                        <div style={{
-                            width: 26, height: 26, borderRadius: '50%',
-                            background: `url(${state.currentUser.photo}) center/cover`,
-                            border: '2px solid',
-                            borderColor: (activeTab === 'profile' || showAuthGate) ? '#6366f1' : 'var(--border-color)',
-                            transition: 'border-color var(--transition-fast)',
-                        }} />
-                    ) : (
-                        <span className="nav-icon">👤</span>
-                    )}
+                <button className={`nav-item ${activeTab === 'profile' || showAuthGate ? 'active' : ''}`} onClick={() => navigate('profile')}>
+                    <span className="nav-icon">👤</span>
                     <span className="nav-label">Me</span>
                 </button>
             </nav>

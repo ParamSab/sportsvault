@@ -15,8 +15,6 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     const [selectedPosition, setSelectedPosition] = useState('');
     const [showTeams, setShowTeams] = useState(false);
     const [showBroadcastPanel, setShowBroadcastPanel] = useState(false);
-    const [isRsvpLoading, setIsRsvpLoading] = useState(false);
-    const [addingFriendId, setAddingFriendId] = useState(null);
     
     const isGuest = !state.isAuthenticated;
     const [broadcastTier, setBroadcastTier] = useState(null);
@@ -63,8 +61,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     const maybeRsvps = (game.rsvps || []).filter(r => r.status === 'maybe');
     const pendingRsvps = (game.rsvps || []).filter(r => r.status === 'pending');
     const spots = spotsLeft(game);
-    const actualPlayerId = state.currentUser?.dbId || state.currentUser?.id;
-    const currentUserId = actualPlayerId || 'current';
+    const currentUserId = state.currentUser?.dbId || state.currentUser?.id || 'current';
     const myRsvp = (game.rsvps || []).find(r => r.playerId === currentUserId);
     const organizerId = game.organizerId || game.organizer?.id || game.organizer;
     const isOrganizer = organizerId === currentUserId;
@@ -103,7 +100,6 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
         }
 
         const pos = selectedPosition || state.currentUser?.positions?.[game.sport] || POSITIONS[game.sport]?.[0] || '';
-        setIsRsvpLoading(true);
         dispatch({ type: 'RSVP', payload: { gameId, playerId: currentUserId, status: finalStatus, position: pos } });
         
         // Persist to DB using session
@@ -113,44 +109,13 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     gameId, 
-                    playerId: actualPlayerId, 
+                    playerId: state.currentUser?.dbId || state.currentUser?.id, 
                     status: finalStatus, 
                     position: pos 
                 }),
             });
         } catch (err) {
             console.error('RSVP persistence failed:', err);
-        } finally {
-            setIsRsvpLoading(false);
-        }
-    };
-
-    const handleFriendRequest = async (friendId) => {
-        if (!state.isAuthenticated) return;
-        setAddingFriendId(friendId);
-        try {
-            const res = await fetch('/api/friends/request', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ friendId, action: 'send' })
-            });
-            if (res.ok) {
-                const fRes = await fetch('/api/friends');
-                if (fRes.ok) {
-                    const fData = await fRes.json();
-                    dispatch({ 
-                        type: 'LOAD_STATE', 
-                        payload: { 
-                            friends: (fData.friends || []).map(f => f.id || f), 
-                            pendingFriends: fData.pendingRequests || [] 
-                        } 
-                    });
-                }
-            }
-        } catch (err) {
-            console.error('Friend request failed:', err);
-        } finally {
-            setAddingFriendId(null);
         }
     };
 
@@ -203,7 +168,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
               fetch('/api/games/reminder', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ gameId, playerId: actualPlayerId, type: 'approval' })
+                body: JSON.stringify({ gameId, playerId: actualPlayerId })
               }).catch(err => console.error('Reminder send failed:', err));
             }
         } catch (err) {
@@ -413,73 +378,23 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                    </button>
                 </div>
             ) : (
-                <>
-                    {/* First-join community toast */}
-                    {!myRsvp && (
-                        <div style={{ marginBottom: 12, padding: '10px 14px', background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 'var(--radius-md)', fontSize: '0.8125rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <span style={{ fontSize: '1rem' }}>🤝</span>
-                            <span>Be on time, respect all players, and play your best. <span style={{ color: '#818cf8', fontWeight: 600 }}>Community rules apply.</span></span>
-                        </div>
-                    )}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
-                        <button className={`btn btn-sm ${(myRsvp?.status === 'yes' || myRsvp?.status === 'checked_in' || myRsvp?.status === 'pending') ? 'btn-rsvp-yes' : 'btn-outline'}`} 
-                            onClick={() => handleRSVP('yes')} disabled={isRsvpLoading}>
-                            {isRsvpLoading && myRsvp?.status === 'pending' ? '...' : getYesButtonText()}
-                        </button>
-                        <button className={`btn btn-sm ${myRsvp?.status === 'backup' ? 'btn-primary' : 'btn-outline'}`} 
-                            onClick={() => handleRSVP('backup')} disabled={isRsvpLoading}>
-                            {isRsvpLoading && myRsvp?.status === 'backup' ? '...' : '⏳ Backup'}
-                        </button>
-                        <button className={`btn btn-sm ${myRsvp?.status === 'maybe' ? 'btn-rsvp-maybe' : 'btn-outline'}`} 
-                            onClick={() => handleRSVP('maybe')} disabled={isRsvpLoading}>
-                            {isRsvpLoading && myRsvp?.status === 'maybe' ? '...' : '🤔 Maybe'}
-                        </button>
-                        <button className={`btn btn-sm ${myRsvp?.status === 'no' ? 'btn-rsvp-no' : 'btn-outline'}`} 
-                            onClick={() => handleRSVP('no')} disabled={isRsvpLoading}>
-                            {isRsvpLoading && myRsvp?.status === 'no' ? '...' : '❌ No'}
-                        </button>
-                    </div>
-                </>
-            )}
-
-            {/* Game Host Claim Card */}
-            {game.needsHost && !isOrganizer && (
-                <div className="host-claim-card animate-fade-in" style={{ marginBottom: 16 }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-                        <div style={{ fontSize: '2rem', flexShrink: 0 }}>🏆</div>
-                        <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: 700, fontSize: '1.0625rem', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
-                                Become the Game Host
-                                {game.hostId === currentUserId && <span className="badge-host">✓ You're Hosting</span>}
-                            </div>
-                            <div className="text-sm" style={{ color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 12 }}>
-                                Hosts play <strong style={{ color: '#22c55e' }}>for free</strong>. You bring the bibs &amp; ball, organise the teams, and keep the game flowing on the day.
-                            </div>
-                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-                                <span style={{ fontSize: '0.75rem', padding: '3px 10px', borderRadius: 99, background: 'rgba(34,197,94,0.15)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)' }}>✅ Plays Free</span>
-                                <span style={{ fontSize: '0.75rem', padding: '3px 10px', borderRadius: 99, background: 'rgba(234,179,8,0.15)', color: '#f59e0b', border: '1px solid rgba(234,179,8,0.3)' }}>🎽 Brings Bibs</span>
-                                <span style={{ fontSize: '0.75rem', padding: '3px 10px', borderRadius: 99, background: 'rgba(234,179,8,0.15)', color: '#f59e0b', border: '1px solid rgba(234,179,8,0.3)' }}>⚽ Brings Ball</span>
-                            </div>
-                            {game.hostId && game.hostId !== currentUserId ? (
-                                <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>Host already claimed ✓</div>
-                            ) : game.hostId === currentUserId ? (
-                                <button className="btn btn-sm btn-outline" style={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)' }}
-                                    onClick={() => dispatch({ type: 'UPDATE_GAME', payload: { ...game, hostId: null } })}>
-                                    Give up host role
-                                </button>
-                            ) : (
-                                <button className="btn btn-sm" style={{ background: 'linear-gradient(135deg, #f59e0b, #f97316)', color: '#fff', padding: '8px 20px' }}
-                                    onClick={() => { handleRSVP('yes'); dispatch({ type: 'UPDATE_GAME', payload: { ...game, hostId: currentUserId } }); }}>
-                                    🏆 Claim Host Spot — Play Free
-                                </button>
-                            )}
-                        </div>
-                    </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+                    <button className={`btn btn-sm ${(myRsvp?.status === 'yes' || myRsvp?.status === 'checked_in' || myRsvp?.status === 'pending') ? 'btn-rsvp-yes' : 'btn-outline'}`} onClick={() => handleRSVP('yes')}>
+                        {getYesButtonText()}
+                    </button>
+                    <button className={`btn btn-sm ${myRsvp?.status === 'backup' ? 'btn-primary' : 'btn-outline'}`} onClick={() => handleRSVP('backup')}>
+                        ⏳ Backup
+                    </button>
+                    <button className={`btn btn-sm ${myRsvp?.status === 'maybe' ? 'btn-rsvp-maybe' : 'btn-outline'}`} onClick={() => handleRSVP('maybe')}>
+                        🤔 Maybe
+                    </button>
+                    <button className={`btn btn-sm ${myRsvp?.status === 'no' ? 'btn-rsvp-no' : 'btn-outline'}`} onClick={() => handleRSVP('no')}>
+                        ❌ No
+                    </button>
                 </div>
             )}
 
             
-
             {/* Host Approvals */}
             {isOrganizer && pendingRsvps.length > 0 && (
                 <div className="glass-card no-hover animate-fade-in" style={{ marginBottom: 16, border: '1px solid var(--warning)' }}>
@@ -537,18 +452,24 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                                         if (unCheckedIn.length === 0) return alert('All players are checked in or have already been nudged!');
                                         if (!window.confirm(`Send an automated nudge SMS to ${unCheckedIn.length} unchecked players?`)) return;
                                         
-                                        unCheckedIn.forEach(r => {
-                                            fetch('/api/games/reminder', {
+                                        let sentCount = 0;
+                                        let failedTwilio = false;
+                                        await Promise.all(unCheckedIn.map(async r => {
+                                            const res = await fetch('/api/games/reminder', {
                                                 method: 'POST',
                                                 headers: { 'Content-Type': 'application/json' },
                                                 body: JSON.stringify({ gameId: game.id, playerId: r.playerId, type: 'nudge' })
-                                            }).then(res => {
-                                                if (res.ok) {
-                                                    setNudgedPlayers(prev => { const next = new Set(prev); next.add(r.playerId); return next; });
-                                                }
                                             });
-                                        });
-                                        alert(`🔔 Nudges pushed to ${unCheckedIn.length} players!`);
+                                            const data = await res.json();
+                                            setNudgedPlayers(prev => { const next = new Set(prev); next.add(r.playerId); return next; });
+                                            if (data.success) sentCount++;
+                                            else if (data.reason === 'Twilio not configured') failedTwilio = true;
+                                        }));
+                                        if (failedTwilio) {
+                                            alert('SMS not configured. Ask your admin to add Twilio credentials.');
+                                        } else {
+                                            alert(`🔔 Nudges sent via SMS to ${sentCount} player${sentCount !== 1 ? 's' : ''}!`);
+                                        }
                                     }}
                                 >
                                     Nudge All ({confirmedRsvps.filter(r => r.playerId !== currentUserId && r.status !== 'checked_in' && !nudgedPlayers.has(r.playerId)).length})
@@ -569,25 +490,20 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                                     </div>
 
                                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                                        {!(state.friends || []).some(f => String(f) === String(r.playerId)) && 
-                                         !(state.pendingFriends || []).some(pf => String(pf.id) === String(r.playerId)) && 
-                                         r.playerId !== currentUserId && state.isAuthenticated && (
+                                        {!(state.friends || []).includes(r.playerId) && !(state.pendingFriends || []).includes(r.playerId) && r.playerId !== currentUserId && state.isAuthenticated && (
                                             <button 
                                                 className="btn btn-xs btn-outline"
-                                                style={{ fontSize: '0.65rem', padding: '4px 10px', borderRadius: 99 }}
-                                                disabled={addingFriendId === r.playerId}
+                                                style={{ fontSize: '0.65rem', padding: '4px 8px' }}
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     handleFriendRequest(r.playerId);
                                                 }}
                                             >
-                                                {addingFriendId === r.playerId ? '...' : '+ Friend'}
+                                                + Friend
                                             </button>
                                         )}
-                                        {((state.pendingFriends || []).some(pf => String(pf.id) === String(r.playerId))) && (
-                                            <span className="text-xs text-muted" style={{ fontWeight: 600, padding: '4px 8px', background: 'var(--bg-input)', borderRadius: 4 }}>
-                                                Sent ✓
-                                            </span>
+                                        {((state.pendingFriends || []).includes(r.playerId) && r.playerId !== currentUserId) && (
+                                            <span className="text-xs text-muted" style={{ fontWeight: 600 }}>Sent ✓</span>
                                         )}
                                         {isOrganizer && r.playerId !== currentUserId && (
                                             <button 
@@ -600,11 +516,15 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                                                         method: 'POST',
                                                         headers: { 'Content-Type': 'application/json' },
                                                         body: JSON.stringify({ gameId: game.id, playerId: r.playerId, type: 'nudge' })
-                                                    }).then(res => {
-                                                        if(res.ok) {
-                                                            alert('Nudge sent!');
-                                                            setNudgedPlayers(prev => { const next = new Set(prev); next.add(r.playerId); return next; });
+                                                    }).then(res => res.json()).then(data => {
+                                                        if (data.success) {
+                                                            alert('Nudge sent via SMS!');
+                                                        } else if (data.reason === 'Twilio not configured') {
+                                                            alert('SMS not configured. Ask your admin to add Twilio credentials in settings.');
+                                                        } else {
+                                                            alert(data.error || 'Could not send nudge');
                                                         }
+                                                        setNudgedPlayers(prev => { const next = new Set(prev); next.add(r.playerId); return next; });
                                                     });
                                                 }}
                                             >

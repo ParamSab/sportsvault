@@ -61,15 +61,15 @@ export async function GET(req) {
             // Fallback: use Prisma when Supabase is not configured
             const games = await prisma.game.findMany({
                 where: { organizerId: userId },
-                include: {
-                    organizer: { select: { id: true, name: true, photo: true } },
-                    rsvps: {
-                        include: {
-                            player: { select: { id: true, name: true, photo: true } }
-                        }
-                    }
+                select: {
+                    id: true, title: true, sport: true, format: true,
+                    date: true, time: true, duration: true, location: true,
+                    address: true, maxPlayers: true, skillLevel: true,
+                    status: true, visibility: true, price: true, gender: true,
+                    organizerId: true, createdAt: true,
                 },
                 orderBy: { createdAt: 'desc' },
+                take: 200, // cap at 200 most recent games
             });
 
             const mapped = games.map(g => ({
@@ -90,11 +90,7 @@ export async function GET(req) {
                 price:        g.price,
                 gender:       g.gender,
                 created_at:   g.createdAt,
-                rsvps:        g.rsvps.map(r => ({
-                    playerId: r.playerId,
-                    status:   r.status,
-                    player:   r.player,
-                })),
+                rsvps:        [],
             }));
 
             saved   = mapped.filter(g => g.status === 'open');

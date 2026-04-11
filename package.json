@@ -4,12 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma db push --accept-data-loss && next build",
     "start": "next start",
     "postinstall": "prisma generate"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.100.0",
+    "@prisma/client": "^5.22.0",
     "bcryptjs": "^3.0.3",
     "iron-session": "^8.0.4",
     "leaflet": "^1.9.4",
@@ -22,7 +23,6 @@
     "twilio": "^5.13.1"
   },
   "devDependencies": {
-    "@prisma/client": "^5.22.0",
     "prisma": "^5.22.0"
   }
 }
