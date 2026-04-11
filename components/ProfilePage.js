@@ -37,7 +37,8 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
         ? (state.currentUser || getPlayer('p1'))
         : (getPlayer(playerId) || (state.players || []).find(p => p && String(p.id) === String(playerId)) || fetchedPlayer);
 
-    // Fetch DB player if not found in mock/store data — MUST be before any early return
+    // Fetch DB player if not found in mock/store data — MUST be before any early return.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         if (isOwn) return;
         if (getPlayer(playerId) || (state.players || []).find(p => p && String(p.id) === String(playerId))) return;
@@ -45,10 +46,19 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
         setIsLoadingPlayer(true);
         fetch(`/api/users?id=${playerId}`)
             .then(r => r.json())
-            .then(data => { if (data.user) setFetchedPlayer({ ...data.user, gamesPlayed: 0, wins: 0, losses: 0 }); })
+            .then(data => {
+                if (data.user) {
+                    const p = { ...data.user, gamesPlayed: data.user.gamesPlayed ?? 0, wins: data.user.wins ?? 0, losses: data.user.losses ?? 0 };
+                    setFetchedPlayer(p);
+                    // Put into global store so FriendsPage can find this player after an ADD_FRIEND
+                    dispatch({ type: 'LOAD_STATE', payload: { players: [...(state.players || []).filter(x => x.id !== p.id), p] } });
+                }
+            })
             .catch(() => {})
             .finally(() => setIsLoadingPlayer(false));
-    }, [playerId, isOwn, state.players]);
+    // Intentionally omit state.players — including it causes an infinite re-fetch loop.
+    // playerId/isOwn are the only values that should trigger a re-fetch.
+    }, [playerId, isOwn]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Fetch game history from DB (own profile only) — MUST be before any early return
     useEffect(() => {
@@ -93,21 +103,32 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
         setFriendLoading(true);
         try {
             if (isFriend) {
-                await fetch('/api/friends', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'remove', friendId: player.id }) });
+                await fetch('/api/friends', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'remove', friendId: player.id }),
+                });
                 dispatch({ type: 'REMOVE_FRIEND', payload: player.id });
                 setToast('Friend removed');
             } else {
-                const res = await fetch('/api/friends/request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send', friendId: player.id }) });
+                // Use direct 'add' (accepted status) so the friend appears immediately
+                const res = await fetch('/api/friends', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'add', friendId: player.id }),
+                });
                 const data = await res.json();
-                if (data.success) {
-                    dispatch({ type: 'ADD_FRIEND', payload: player.id });
-                    setToast('Friend request sent!');
-                } else if (data.error === 'Already friends' || data.error === 'Request already exists') {
-                    setToast('Request already sent');
-                } else {
-                    await fetch('/api/friends', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'add', friendId: player.id }) });
-                    dispatch({ type: 'ADD_FRIEND', payload: player.id });
+                if (data.success || data.friendship) {
+                    // Ensure the player object is in state.players so FriendsPage can render their card
+                    dispatch({ type: 'LOAD_STATE', payload: {
+                        friends: [...new Set([...(state.friends || []).map(String), String(player.id)])],
+                        players: (state.players || []).some(p => String(p.id) === String(player.id))
+                            ? state.players
+                            : [...(state.players || []), player],
+                    }});
                     setToast('Friend added!');
+                } else {
+                    setToast(data.error || 'Could not add friend');
                 }
             }
         } catch (_) {
