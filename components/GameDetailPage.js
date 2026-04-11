@@ -26,24 +26,20 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
 
     const [notFound, setNotFound] = useState(false);
     const [msgCopied, setMsgCopied] = useState(false);      // MUST be before any early return
-    const game = state.games.find(g => g.id === gameId);
+    const [freshGame, setFreshGame] = useState(null);
+    // freshGame (from API) takes priority over stale global state
+    const game = freshGame || state.games.find(g => String(g.id) === String(gameId));
+
+    const refreshGame = () => {
+        fetch(`/api/games/${gameId}`)
+            .then(r => r.json())
+            .then(d => { if (d.game) setFreshGame(d.game); else if (!game) setNotFound(true); })
+            .catch(() => { if (!game) setNotFound(true); });
+    };
 
     useEffect(() => {
         if (!state.isLoaded) return;
-        // Always refresh from API on mount so pending RSVPs / latest state is visible
-        fetch(`/api/games/${gameId}`)
-            .then(r => r.json())
-            .then(d => {
-                if (d.game) {
-                    dispatch({ type: 'LOAD_STATE', payload: { games: state.games.map(g => g.id === gameId ? d.game : g).concat(state.games.find(g => g.id === gameId) ? [] : [d.game]) } });
-                } else if (!game) {
-                    setNotFound(true);
-                }
-            })
-            .catch(e => {
-                console.error('Failed fetching individual game:', e);
-                if (!game) setNotFound(true);
-            });
+        refreshGame();
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [gameId, state.isLoaded]);
 
@@ -104,8 +100,8 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     const spots = spotsLeft(game);
     const currentUserId = state.currentUser?.dbId || state.currentUser?.id || 'current';
     const myRsvp = (game.rsvps || []).find(r => r.playerId === currentUserId);
-    const organizerId = game.organizerId || game.organizer?.id || game.organizer;
-    const isOrganizer = organizerId === currentUserId;
+    const organizerId = game.organizerId || game.organizer?.id;
+    const isOrganizer = !!organizerId && String(organizerId) === String(currentUserId);
     const privacyInfo = PRIVACY_LABELS[game.visibility || 'public'] || PRIVACY_LABELS.public;
 
     const handleRSVP = async (status) => {
@@ -195,9 +191,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
           const res = await fetch(`/api/games/${gameId}`);
           if (res.ok) {
             const data = await res.json();
-            if (data.game) {
-                dispatch({ type: 'LOAD_STATE', payload: { games: state.games.map(g => g.id === gameId ? data.game : g) } });
-            }
+            if (data.game) setFreshGame(data.game);
           }
         } catch (refreshErr) {
           console.error('Failed to refresh game after host action:', refreshErr);
