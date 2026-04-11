@@ -21,35 +21,37 @@ export async function POST(req) {
         const smsLinks = [];
         const defaultMsg = message || `${session.user?.name || 'Your friend'} invited you to play on SportsVault! Download the app and join the game.`;
 
-        for (const friendId of friendIds) {
-            if (method === 'app') {
-                try {
-                    await prisma.notification.create({
-                        data: {
-                            userId: friendId,
-                            title: 'Game Invite',
-                            message: defaultMsg,
-                        }
+        // Batch-load all friend data in one query instead of N individual queries
+        const friendUsers = await prisma.user.findMany({
+            where: { id: { in: friendIds } },
+            select: { id: true, phone: true, name: true }
+        });
+        const friendMap = Object.fromEntries(friendUsers.map(f => [f.id, f]));
+
+        if (method === 'app') {
+            // Batch create notifications
+            await prisma.notification.createMany({
+                data: friendIds.map(friendId => ({
+                    userId: friendId,
+                    title: 'Game Invite',
+                    message: defaultMsg,
+                })),
+                skipDuplicates: true,
+            });
+        } else if (method === 'sms') {
+            for (const friendId of friendIds) {
+                const friend = friendMap[friendId];
+                if (friend?.phone) {
+                    const phone = friend.phone.replace(/^\+/, '');
+                    const encodedMsg = encodeURIComponent(defaultMsg);
+                    smsLinks.push({
+                        friendId,
+                        name: friend.name,
+                        phone: friend.phone,
+                        whatsappLink: `https://wa.me/${phone}?text=${encodedMsg}`,
+                        smsLink: `sms:${friend.phone}?body=${encodedMsg}`
                     });
-                } catch (_) { /* skip if user doesn't exist */ }
-            } else if (method === 'sms') {
-                try {
-                    const friend = await prisma.user.findUnique({
-                        where: { id: friendId },
-                        select: { phone: true, name: true }
-                    });
-                    if (friend?.phone) {
-                        const phone = friend.phone.replace(/^\+/, '');
-                        const encodedMsg = encodeURIComponent(defaultMsg);
-                        smsLinks.push({
-                            friendId,
-                            name: friend.name,
-                            phone: friend.phone,
-                            whatsappLink: `https://wa.me/${phone}?text=${encodedMsg}`,
-                            smsLink: `sms:${friend.phone}?body=${encodedMsg}`
-                        });
-                    }
-                } catch (_) { /* skip if user doesn't exist */ }
+                }
             }
         }
 

@@ -45,10 +45,8 @@ model User {
 
   friendTiers FriendTier[] @relation("TierOwner")
 
-  // New relations for friend invites
   sentInvites     FriendInvite[] @relation("FriendInviteSender")
   receivedInvites FriendInvite[] @relation("FriendInviteFriend")
-  // New relations for friends
   friendsAsUser   Friend[]       @relation("FriendUser")
   friendsAsFriend Friend[]       @relation("FriendFriend")
 }
@@ -64,6 +62,9 @@ model Friendship {
   friend User @relation("FriendshipReceiver", fields: [friendId], references: [id])
 
   @@unique([userId, friendId])
+  @@index([friendId])           // for reverse lookups in OR queries
+  @@index([userId, status])     // fast filter: my accepted friends
+  @@index([friendId, status])   // fast filter: requests sent to me
 }
 
 model FriendTier {
@@ -76,6 +77,7 @@ model FriendTier {
   user User @relation("TierOwner", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, friendId, sport])
+  @@index([userId]) // fetch all tiers for a user
 }
 
 model Friend {
@@ -88,18 +90,22 @@ model Friend {
   friend       User     @relation(name: "FriendFriend", fields: [friendUserId], references: [id])
 
   @@unique([userId, friendUserId])
+  @@index([userId])
 }
 
 model FriendInvite {
   id       String   @id @default(uuid())
   senderId String
   friendId String
-  phone    String
+  phone    String?
   message  String?
   sentAt   DateTime @default(now())
   method   String // "app" | "sms"
   sender   User     @relation(name: "FriendInviteSender", fields: [senderId], references: [id])
   friend   User     @relation(name: "FriendInviteFriend", fields: [friendId], references: [id])
+
+  @@index([senderId])
+  @@index([friendId])
 }
 
 model Thought {
@@ -111,6 +117,9 @@ model Thought {
 
   sender   User @relation("ThoughtSender", fields: [fromId], references: [id])
   receiver User @relation("ThoughtReceiver", fields: [toId], references: [id])
+
+  @@index([toId])   // thoughtsReceived lookup
+  @@index([fromId]) // thoughtsSent lookup
 }
 
 model Game {
@@ -132,13 +141,12 @@ model Game {
   approvalRequired Boolean @default(false)
   bookingImage     String?
 
-  // Footy Addicts Parity Features
-  pitchType String? // e.g., "5-a-side", "11-a-side"
-  surface   String? // e.g., "3G Astro", "Natural Grass", "Indoor"
-  footwear  String? // e.g., "AG Boots only", "No studs", "TF/IN only"
+  pitchType String?
+  surface   String?
+  footwear  String?
   price     Float?  @default(0)
-  gender    String  @default("mixed") // mixed, male, female
-  amenities String? // JSON string: ["bibs", "water", "changing_rooms", "showers", "parking"]
+  gender    String  @default("mixed")
+  amenities String?
 
   organizerId String
   organizer   User   @relation("Organizer", fields: [organizerId], references: [id], onDelete: Cascade)
@@ -147,6 +155,13 @@ model Game {
   notifications Notification[]
 
   createdAt DateTime @default(now())
+
+  @@index([organizerId])        // organizer's games
+  @@index([status])             // filter by open/completed
+  @@index([date])               // date-range queries & auto-expire
+  @@index([sport])              // sport filter
+  @@index([status, date])       // composite: auto-expire (open games before date)
+  @@index([visibility, status]) // discover: public open games
 }
 
 model Rsvp {
@@ -154,14 +169,15 @@ model Rsvp {
   gameId    String
   playerId  String
   status    String // 'yes', 'no', 'backup', 'maybe'
-  position  String? // player's position in this game
+  position  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   game   Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
   player User @relation(fields: [playerId], references: [id], onDelete: Cascade)
 
-  @@unique([gameId, playerId])
+  @@unique([gameId, playerId]) // also acts as index on (gameId, playerId)
+  @@index([playerId])          // all games a player has RSVPed for
 }
 
 model OtpCode {
@@ -180,11 +196,14 @@ model Notification {
   userId    String
   title     String
   message   String
-  action    String? // URL/link
+  action    String?
   gameId    String?
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
 
   user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   game Game? @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@index([userId])        // all notifications for a user
+  @@index([userId, read])  // unread notifications for a user
 }

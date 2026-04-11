@@ -43,33 +43,37 @@ export async function GET(req) {
 
     // --- Try Prisma first ---
     try {
-        // Auto-expire games (24h after start)
+        // Auto-expire: single batch UPDATE for all games whose date is >2 days old.
+        // This replaces the N+1 loop that fired one UPDATE per expired game.
         try {
-            const now = new Date();
-            const openGames = await prisma.game.findMany({ where: { status: 'open' } });
-            for (const g of openGames) {
-                const gameStart = new Date(`${g.date}T${g.time || '00:00'}`);
-                const expiry = new Date(gameStart.getTime() + (24 * 60 * 60 * 1000));
-                if (now > expiry) {
-                    await prisma.game.update({ where: { id: g.id }, data: { status: 'completed' } });
-                }
-            }
+            const cutoff = new Date();
+            cutoff.setDate(cutoff.getDate() - 2);
+            const cutoffStr = cutoff.toISOString().split('T')[0]; // YYYY-MM-DD
+            await prisma.game.updateMany({
+                where: { status: 'open', date: { lt: cutoffStr } },
+                data:  { status: 'completed' }
+            });
         } catch (expireErr) {
-            console.error('Error auto-expiring games:', expireErr);
+            console.error('Auto-expire error:', expireErr.message);
+        }
+
+        // Only return games from 7 days ago onward — no need to load ancient history.
+        const windowStart = new Date();
+        windowStart.setDate(windowStart.getDate() - 7);
+        const windowStr = windowStart.toISOString().split('T')[0];
+
+        const visibilityFilter = [{ visibility: 'public' }];
+        if (userId) visibilityFilter.push({ organizerId: userId });
+        if (friendIds.length > 0) {
+            visibilityFilter.push({
+                AND: [{ visibility: 'friends' }, { organizerId: { in: friendIds } }]
+            });
         }
 
         const games = await prisma.game.findMany({
             where: {
-                OR: [
-                    { visibility: 'public' },
-                    { organizerId: userId || undefined },
-                    {
-                        AND: [
-                            { visibility: 'friends' },
-                            { organizerId: { in: friendIds.length ? friendIds : ['__none__'] } }
-                        ]
-                    }
-                ]
+                date: { gte: windowStr },
+                OR: visibilityFilter,
             },
             include: {
                 organizer: { select: { id: true, name: true, photo: true } },
@@ -79,7 +83,8 @@ export async function GET(req) {
                     }
                 },
             },
-            orderBy: { createdAt: 'desc' },
+            orderBy: { date: 'asc' },
+            take: 100, // Never return more than 100 games at once
         });
 
         const serialized = games.map(g => ({

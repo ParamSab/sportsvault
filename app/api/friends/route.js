@@ -22,17 +22,14 @@ export async function GET() {
                     status: 'accepted',
                     OR: [{ userId }, { friendId: userId }]
                 },
+                // Thoughts are only needed when viewing an individual profile — don't
+                // load them here to keep the friends-list query fast at any scale.
                 include: {
                     user: {
                         select: {
                             id: true, name: true, phone: true, photo: true,
                             location: true, sports: true, positions: true,
                             ratings: true, trustScore: true, createdAt: true,
-                            thoughtsReceived: {
-                                include: { sender: { select: { name: true } } },
-                                orderBy: { createdAt: 'desc' },
-                                take: 10
-                            }
                         }
                     },
                     friend: {
@@ -40,14 +37,10 @@ export async function GET() {
                             id: true, name: true, phone: true, photo: true,
                             location: true, sports: true, positions: true,
                             ratings: true, trustScore: true, createdAt: true,
-                            thoughtsReceived: {
-                                include: { sender: { select: { name: true } } },
-                                orderBy: { createdAt: 'desc' },
-                                take: 10
-                            }
                         }
                     }
-                }
+                },
+                take: 500, // no user realistically needs more than 500 friends loaded at once
             }),
             prisma.friendTier.findMany({ where: { userId } })
         ]);
@@ -60,12 +53,7 @@ export async function GET() {
                 sports,
                 positions: safeParse(d.positions, {}),
                 ratings: safeParse(d.ratings, {}),
-                thoughts: (d.thoughtsReceived || []).map(t => ({
-                    from: t.fromId,
-                    fromName: t.sender?.name,
-                    text: t.text,
-                    date: t.createdAt ? new Date(t.createdAt).toISOString().split('T')[0] : ''
-                }))
+                thoughts: [], // loaded on demand when viewing a profile
             };
         });
 
