@@ -20,7 +20,7 @@ export async function POST(req) {
     // Verify authorization: Player themselves or the Game Organizer
     const game = await prisma.game.findUnique({
         where: { id: gameId },
-        select: { organizerId: true, title: true }
+        select: { organizerId: true, title: true, approvalRequired: true }
     });
 
     if (!game) return Response.json({ error: 'Game not found' }, { status: 404 });
@@ -32,16 +32,23 @@ export async function POST(req) {
         return Response.json({ error: 'Forbidden: You cannot RSVP for others' }, { status: 403 });
     }
 
+    // Server-side enforcement: if the game requires approval and the player
+    // is RSVPing 'yes' themselves (not the organizer approving), force 'pending'.
+    let finalStatus = status;
+    if (finalStatus === 'yes' && game.approvalRequired && isSelf && !isOrganizer) {
+        finalStatus = 'pending';
+    }
+
     // --- Try Prisma first ---
     try {
         const rsvp = await prisma.rsvp.upsert({
             where: { gameId_playerId: { gameId, playerId } },
-            update: { status, position: position || null },
-            create: { gameId, playerId, status, position: position || null },
+            update: { status: finalStatus, position: position || null },
+            create: { gameId, playerId, status: finalStatus, position: position || null },
         });
 
         // Create notification for organizer if it's a pending request
-        if (status === 'pending') {
+        if (finalStatus === 'pending') {
             try {
                 const player = await prisma.user.findUnique({
                     where: { id: playerId },
@@ -65,7 +72,7 @@ export async function POST(req) {
         }
 
         // Create notification for player if they are accepted by organizer
-        if (status === 'yes' && isOrganizer && !isSelf) {
+        if (finalStatus === 'yes' && isOrganizer && !isSelf) {
             try {
                 await prisma.notification.create({
                     data: {

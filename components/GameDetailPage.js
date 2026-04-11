@@ -17,6 +17,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     const [showTeams, setShowTeams] = useState(false);
     const [showBroadcastPanel, setShowBroadcastPanel] = useState(false);
     const [playerView, setPlayerView] = useState('pitch'); // 'pitch' | 'list'
+    const [showJoinConfirm, setShowJoinConfirm] = useState(false);
     
     const isGuest = !state.isAuthenticated;
     const [broadcastTier, setBroadcastTier] = useState(null);
@@ -397,10 +398,60 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                        Log in to RSVP →
                    </button>
                 </div>
+            ) : game.approvalRequired && !isOrganizer ? (
+                /* ── Approval-required flow ── */
+                <div style={{ marginBottom: 16 }}>
+                    {myRsvp?.status === 'pending' ? (
+                        <div className="glass-card no-hover animate-fade-in" style={{ padding: 20, border: '1px solid rgba(234,179,8,0.4)', marginBottom: 8, textAlign: 'center' }}>
+                            <div style={{ fontSize: '1.75rem', marginBottom: 8 }}>⏳</div>
+                            <div style={{ fontWeight: 700, fontSize: '1rem', marginBottom: 4 }}>Request Sent</div>
+                            <div className="text-sm text-muted">Waiting for the organizer to approve your spot.</div>
+                            <button className="btn btn-sm btn-ghost" style={{ marginTop: 12, color: 'var(--danger)', fontSize: '0.8rem' }} onClick={() => handleRSVP('no')}>
+                                Withdraw Request
+                            </button>
+                        </div>
+                    ) : myRsvp?.status === 'yes' || myRsvp?.status === 'checked_in' ? (
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            <div className="btn btn-sm btn-rsvp-yes" style={{ flex: 1, textAlign: 'center', pointerEvents: 'none' }}>✅ Confirmed</div>
+                            <button className="btn btn-sm btn-outline" style={{ color: 'var(--danger)' }} onClick={() => handleRSVP('no')}>Leave</button>
+                        </div>
+                    ) : showJoinConfirm ? (
+                        /* Confirmation card */
+                        <div className="glass-card no-hover animate-fade-in" style={{ padding: 20, border: '1px solid var(--primary-color)', marginBottom: 8 }}>
+                            <div style={{ fontWeight: 700, fontSize: '1rem', marginBottom: 8 }}>✋ Confirm Join Request</div>
+                            <div className="text-sm text-muted" style={{ marginBottom: 16, lineHeight: 1.6 }}>
+                                You're requesting to join <strong>{game.title}</strong>.<br />
+                                The organizer will review and approve your spot before you're confirmed.
+                            </div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button className="btn btn-sm btn-ghost" style={{ flex: 1 }} onClick={() => setShowJoinConfirm(false)}>Cancel</button>
+                                <button className="btn btn-sm btn-primary" style={{ flex: 2 }} onClick={() => { setShowJoinConfirm(false); handleRSVP('yes'); }}>
+                                    Send Request →
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <button
+                            className="btn btn-lg btn-primary btn-block animate-fade-in"
+                            style={{ marginBottom: 8, background: 'linear-gradient(135deg, #6366f1, #a855f7)', border: 'none' }}
+                            onClick={() => setShowJoinConfirm(true)}
+                        >
+                            ✋ Request to Join
+                        </button>
+                    )}
+                    {/* Still allow Maybe / No even in approval mode */}
+                    {!myRsvp?.status || myRsvp?.status === 'no' ? null : (
+                        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                            <button className={`btn btn-sm ${myRsvp?.status === 'maybe' ? 'btn-rsvp-maybe' : 'btn-outline'}`} style={{ flex: 1 }} onClick={() => handleRSVP('maybe')}>🤔 Maybe</button>
+                            <button className={`btn btn-sm ${myRsvp?.status === 'no' ? 'btn-rsvp-no' : 'btn-outline'}`} style={{ flex: 1 }} onClick={() => handleRSVP('no')}>❌ Can't Go</button>
+                        </div>
+                    )}
+                </div>
             ) : (
+                /* ── Standard open RSVP ── */
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
-                    <button className={`btn btn-sm ${(myRsvp?.status === 'yes' || myRsvp?.status === 'checked_in' || myRsvp?.status === 'pending') ? 'btn-rsvp-yes' : 'btn-outline'}`} onClick={() => handleRSVP('yes')}>
-                        {getYesButtonText()}
+                    <button className={`btn btn-sm ${(myRsvp?.status === 'yes' || myRsvp?.status === 'checked_in') ? 'btn-rsvp-yes' : 'btn-outline'}`} onClick={() => handleRSVP('yes')}>
+                        {myRsvp?.status === 'yes' ? '✅ Going!' : myRsvp?.status === 'checked_in' ? '🏟️ Checked In' : spots <= 0 ? '📝 Join Waitlist' : '✅ Yes'}
                     </button>
                     <button className={`btn btn-sm ${myRsvp?.status === 'backup' ? 'btn-primary' : 'btn-outline'}`} onClick={() => handleRSVP('backup')}>
                         ⏳ Backup
