@@ -110,7 +110,7 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
                 <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 80, background: sports[0] ? SPORTS[sports[0]]?.gradient : 'linear-gradient(135deg, #6366f1, #8b5cf6)', opacity: 0.3 }} />
                 <div style={{ position: 'relative', paddingTop: 24 }}>
                     <div className="avatar avatar-xl" style={{ margin: '0 auto 12px', borderColor: trust.color, background: player.photo ? `url(${player.photo}) center/cover` : `linear-gradient(135deg, ${trust.color}30, var(--bg-card))`, fontSize: player.photo ? '0' : '1.75rem' }}>
-                        {player.photo ? '' : getInitials(player.name)}
+                        {player.photo ? '' : getInitials(player.name || 'U')}
                     </div>
                     <h2 style={{ fontSize: '1.25rem', marginBottom: 2 }}>{player.name || 'Unknown'}</h2>
                     {(player.createdAt || player.joined) && <p className="text-sm text-muted">Member since {formatDate(player.createdAt || player.joined)}</p>}
@@ -142,8 +142,8 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
 
             <div className="glass-card no-hover" style={{ marginBottom: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                    <h3 style={{ fontSize: '1rem' }}>{SPORTS[currentSport]?.emoji} {SPORTS[currentSport]?.name} Rating</h3>
-                    <span className="text-xs text-muted">Position: <span style={{ color: SPORTS[currentSport]?.color, fontWeight: 600 }}>{playerPosition}</span></span>
+                    <h3 style={{ fontSize: '1rem' }}>{SPORTS[currentSport]?.emoji || '🏅'} {SPORTS[currentSport]?.name || currentSport} Rating</h3>
+                    <span className="text-xs text-muted">Position: <span style={{ color: SPORTS[currentSport]?.color || 'var(--primary-color)', fontWeight: 600 }}>{playerPosition}</span></span>
                 </div>
                 {hasRating ? (
                     <>
@@ -156,7 +156,7 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
                                 {Object.entries(rating.attrs).map(([attr, val]) => (
                                     <div key={attr} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                         <span className="text-xs" style={{ width: 100, color: 'var(--text-secondary)' }}>{attr}</span>
-                                        <div style={{ flex: 1, height: 8, background: 'var(--bg-input)', borderRadius: 4, overflow: 'hidden' }}><div style={{ width: `${(val / 10) * 100}%`, height: '100%', background: SPORTS[currentSport]?.gradient, borderRadius: 4, transition: 'width 0.5s ease' }} /></div>
+                                        <div style={{ flex: 1, height: 8, background: 'var(--bg-input)', borderRadius: 4, overflow: 'hidden' }}><div style={{ width: `${(val / 10) * 100}%`, height: '100%', background: SPORTS[currentSport]?.gradient || 'var(--primary-color)', borderRadius: 4, transition: 'width 0.5s ease' }} /></div>
                                         <span className="text-xs font-semibold" style={{ width: 32, textAlign: 'right' }}>{!isNaN(Number(val)) && val !== null ? Number(val).toFixed(1) : 'N/A'}</span>
                                     </div>
                                 ))}

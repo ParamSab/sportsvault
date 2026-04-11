@@ -168,7 +168,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
               fetch('/api/games/reminder', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ gameId, playerId: actualPlayerId })
+                body: JSON.stringify({ gameId, playerId: actualPlayerId, type: 'approval' })
               }).catch(err => console.error('Reminder send failed:', err));
             }
         } catch (err) {
@@ -378,23 +378,69 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                    </button>
                 </div>
             ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
-                    <button className={`btn btn-sm ${(myRsvp?.status === 'yes' || myRsvp?.status === 'checked_in' || myRsvp?.status === 'pending') ? 'btn-rsvp-yes' : 'btn-outline'}`} onClick={() => handleRSVP('yes')}>
-                        {getYesButtonText()}
-                    </button>
-                    <button className={`btn btn-sm ${myRsvp?.status === 'backup' ? 'btn-primary' : 'btn-outline'}`} onClick={() => handleRSVP('backup')}>
-                        ⏳ Backup
-                    </button>
-                    <button className={`btn btn-sm ${myRsvp?.status === 'maybe' ? 'btn-rsvp-maybe' : 'btn-outline'}`} onClick={() => handleRSVP('maybe')}>
-                        🤔 Maybe
-                    </button>
-                    <button className={`btn btn-sm ${myRsvp?.status === 'no' ? 'btn-rsvp-no' : 'btn-outline'}`} onClick={() => handleRSVP('no')}>
-                        ❌ No
-                    </button>
+                <>
+                    {/* First-join community toast */}
+                    {!myRsvp && (
+                        <div style={{ marginBottom: 12, padding: '10px 14px', background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 'var(--radius-md)', fontSize: '0.8125rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <span style={{ fontSize: '1rem' }}>🤝</span>
+                            <span>Be on time, respect all players, and play your best. <span style={{ color: '#818cf8', fontWeight: 600 }}>Community rules apply.</span></span>
+                        </div>
+                    )}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+                        <button className={`btn btn-sm ${(myRsvp?.status === 'yes' || myRsvp?.status === 'checked_in' || myRsvp?.status === 'pending') ? 'btn-rsvp-yes' : 'btn-outline'}`} onClick={() => handleRSVP('yes')}>
+                            {getYesButtonText()}
+                        </button>
+                        <button className={`btn btn-sm ${myRsvp?.status === 'backup' ? 'btn-primary' : 'btn-outline'}`} onClick={() => handleRSVP('backup')}>
+                            ⏳ Backup
+                        </button>
+                        <button className={`btn btn-sm ${myRsvp?.status === 'maybe' ? 'btn-rsvp-maybe' : 'btn-outline'}`} onClick={() => handleRSVP('maybe')}>
+                            🤔 Maybe
+                        </button>
+                        <button className={`btn btn-sm ${myRsvp?.status === 'no' ? 'btn-rsvp-no' : 'btn-outline'}`} onClick={() => handleRSVP('no')}>
+                            ❌ No
+                        </button>
+                    </div>
+                </>
+            )}
+
+            {/* Game Host Claim Card */}
+            {game.needsHost && !isOrganizer && (
+                <div className="host-claim-card animate-fade-in" style={{ marginBottom: 16 }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                        <div style={{ fontSize: '2rem', flexShrink: 0 }}>🏆</div>
+                        <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 700, fontSize: '1.0625rem', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                Become the Game Host
+                                {game.hostId === currentUserId && <span className="badge-host">✓ You're Hosting</span>}
+                            </div>
+                            <div className="text-sm" style={{ color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 12 }}>
+                                Hosts play <strong style={{ color: '#22c55e' }}>for free</strong>. You bring the bibs &amp; ball, organise the teams, and keep the game flowing on the day.
+                            </div>
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+                                <span style={{ fontSize: '0.75rem', padding: '3px 10px', borderRadius: 99, background: 'rgba(34,197,94,0.15)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)' }}>✅ Plays Free</span>
+                                <span style={{ fontSize: '0.75rem', padding: '3px 10px', borderRadius: 99, background: 'rgba(234,179,8,0.15)', color: '#f59e0b', border: '1px solid rgba(234,179,8,0.3)' }}>🎽 Brings Bibs</span>
+                                <span style={{ fontSize: '0.75rem', padding: '3px 10px', borderRadius: 99, background: 'rgba(234,179,8,0.15)', color: '#f59e0b', border: '1px solid rgba(234,179,8,0.3)' }}>⚽ Brings Ball</span>
+                            </div>
+                            {game.hostId && game.hostId !== currentUserId ? (
+                                <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>Host already claimed ✓</div>
+                            ) : game.hostId === currentUserId ? (
+                                <button className="btn btn-sm btn-outline" style={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)' }}
+                                    onClick={() => dispatch({ type: 'UPDATE_GAME', payload: { ...game, hostId: null } })}>
+                                    Give up host role
+                                </button>
+                            ) : (
+                                <button className="btn btn-sm" style={{ background: 'linear-gradient(135deg, #f59e0b, #f97316)', color: '#fff', padding: '8px 20px' }}
+                                    onClick={() => { handleRSVP('yes'); dispatch({ type: 'UPDATE_GAME', payload: { ...game, hostId: currentUserId } }); }}>
+                                    🏆 Claim Host Spot — Play Free
+                                </button>
+                            )}
+                        </div>
+                    </div>
                 </div>
             )}
 
             
+
             {/* Host Approvals */}
             {isOrganizer && pendingRsvps.length > 0 && (
                 <div className="glass-card no-hover animate-fade-in" style={{ marginBottom: 16, border: '1px solid var(--warning)' }}>

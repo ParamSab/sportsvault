@@ -25,6 +25,8 @@ export default function CreateGamePage({ onComplete }) {
     const { state, dispatch } = useStore();
     const [step, setStep] = useState(0);
     const [errors, setErrors] = useState({});
+    const [isSuccess, setIsSuccess] = useState(false);
+    const [createdGame, setCreatedGame] = useState(null);
     const [game, setGame] = useState({
         sport: '', format: '', title: '',
         location: '', address: '',
@@ -42,6 +44,7 @@ export default function CreateGamePage({ onComplete }) {
         gender: 'mixed',
         amenities: [],
         reminderHours: 2,
+        needsHost: false,
     });
 
     const update = (key, val) => setGame(prev => ({ ...prev, [key]: val }));
@@ -97,16 +100,19 @@ export default function CreateGamePage({ onComplete }) {
             if (data.game) {
                 // If saved successfully, use the real DB record which has UUIDs
                 dispatch({ type: 'CREATE_GAME', payload: data.game });
+                setCreatedGame(data.game);
             } else {
                 // Fallback to local if API failed but we want to show it (at least temporarily)
                 dispatch({ type: 'CREATE_GAME', payload: newGame });
+                setCreatedGame(newGame);
             }
+            setIsSuccess(true);
         } catch (err) {
             console.error('Failed to save game to DB:', err);
             dispatch({ type: 'CREATE_GAME', payload: newGame });
+            setCreatedGame(newGame);
+            setIsSuccess(true);
         }
-
-        onComplete();
     };
 
     const inputStyle = { width: '100%', marginBottom: 0 };
@@ -319,13 +325,35 @@ export default function CreateGamePage({ onComplete }) {
                     </div>
                 </div>
 
+                {/* Game Host toggle — Footy Addicts style */}
+                <div style={{ padding: '16px 20px', borderRadius: 16, background: game.needsHost ? 'linear-gradient(135deg, rgba(234,179,8,0.08), rgba(249,115,22,0.06))' : 'var(--bg-input)', border: game.needsHost ? '1px solid rgba(234,179,8,0.3)' : '1px solid var(--border-color)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, transition: 'all 0.3s ease' }}>
+                    <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: '1.25rem' }}>🏆</span> Need a Game Host?
+                        </div>
+                        <div className="text-muted text-xs" style={{ marginTop: 4, lineHeight: 1.6 }}>Host plays for free — they bring bibs &amp; ball, organise teams, and keep the game flowing.</div>
+                        {game.needsHost && (
+                            <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                <span style={{ fontSize: '0.7rem', padding: '3px 9px', borderRadius: 99, background: 'rgba(234,179,8,0.15)', color: '#f59e0b', border: '1px solid rgba(234,179,8,0.3)' }}>🎽 Brings bibs</span>
+                                <span style={{ fontSize: '0.7rem', padding: '3px 9px', borderRadius: 99, background: 'rgba(234,179,8,0.15)', color: '#f59e0b', border: '1px solid rgba(234,179,8,0.3)' }}>⚽ Brings ball</span>
+                                <span style={{ fontSize: '0.7rem', padding: '3px 9px', borderRadius: 99, background: 'rgba(34,197,94,0.15)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)' }}>✅ Plays free</span>
+                            </div>
+                        )}
+                    </div>
+                    <label className="ts-toggle" style={{ marginTop: 2 }}>
+                        <input type="checkbox" checked={game.needsHost} onChange={e => update('needsHost', e.target.checked)} />
+                        <span className="ts-slider round" />
+                    </label>
+                </div>
+
+                {/* Amenities */}
                 <div>
                     <label style={labelStyle}>Amenities Included</label>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                         {['Bibs', 'Water', 'Changing Rooms', 'Showers', 'Parking'].map(amn => (
-                            <button key={amn} 
+                            <button key={amn}
                                 onClick={() => {
-                                    const newAmn = game.amenities.includes(amn) 
+                                    const newAmn = game.amenities.includes(amn)
                                         ? game.amenities.filter(a => a !== amn)
                                         : [...game.amenities, amn];
                                     update('amenities', newAmn);
@@ -343,6 +371,7 @@ export default function CreateGamePage({ onComplete }) {
                 </div>
             </div>
         </div>,
+
 
         // 4: Privacy
         <div key="privacy" className="animate-fade-in">
@@ -461,6 +490,37 @@ export default function CreateGamePage({ onComplete }) {
             </div>
         </div>,
     ];
+
+    if (isSuccess && createdGame) {
+        const shareMsg = `⚽ *${createdGame.title}*\n📅 ${createdGame.date} at ${createdGame.time}\n📍 ${createdGame.location}\n\nRSVP here 👉 ${window.location.origin}/?game=${createdGame.id}`;
+        return (
+            <div className="animate-fade-in text-center" style={{ padding: '40px 20px' }}>
+                <div style={{ fontSize: '4rem', marginBottom: 20 }}>🚀</div>
+                <h2 style={{ marginBottom: 12 }}>Game is Live!</h2>
+                <p className="text-muted text-sm" style={{ marginBottom: 32 }}>Your game has been created and is now discoverable on the map.</p>
+                
+                <div className="glass-card" style={{ padding: 20, marginBottom: 32, textAlign: 'left' }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 8, color: SPORTS[createdGame.sport]?.color }}>{SPORTS[createdGame.sport]?.emoji} {createdGame.title}</div>
+                    <div className="text-xs text-secondary">📍 {createdGame.location}</div>
+                    <div className="text-xs text-secondary">📅 {createdGame.date} · {createdGame.time}</div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <a 
+                        href={`https://wa.me/?text=${encodeURIComponent(shareMsg)}`}
+                        target="_blank"
+                        className="btn btn-primary"
+                        style={{ background: '#25D366', borderColor: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}
+                    >
+                        <span>📱</span> Share to WhatsApp
+                    </a>
+                    <button className="btn btn-outline" onClick={onComplete}>
+                        Go to My Games
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="animate-fade-in">

@@ -10,6 +10,7 @@ import GameDetailPage from './GameDetailPage';
 import RatePage from './RatePage';
 import SportsCVPage from './SportsCVPage';
 import AuthPage from './AuthPage';
+import { getInitials } from '@/lib/mockData';
 
 export default function AppShell() {
     const { state, dispatch } = useStore();
@@ -24,21 +25,19 @@ export default function AppShell() {
 
     useEffect(() => {
         if (typeof window !== 'undefined') {
-            console.log('AppShell version: 16.5 - Crash fixes enabled');
+            console.log('AppShell version: 17.0 - Footy Addicts UI update');
             const params = new URLSearchParams(window.location.search);
             const gameId = params.get('game');
             if (gameId) {
                 if (isGuest) {
                     localStorage.setItem('sportsvault_pending_game', gameId);
                     setShowAuthGate(true);
-                    setActiveTab('profile'); // Force render AuthPage
+                    setActiveTab('profile');
                 } else {
                     setViewingGame(gameId);
                 }
                 window.history.replaceState({}, document.title, window.location.pathname);
             }
-            
-            // Re-check for pending game after becoming authenticated
             if (!isGuest) {
                 const pending = localStorage.getItem('sportsvault_pending_game');
                 if (pending) {
@@ -84,7 +83,6 @@ export default function AppShell() {
         }
 
         if (activeTab === 'profile' && isGuest) return <AuthPage />;
-
         if (viewingGame) return <GameDetailPage gameId={viewingGame} onBack={() => setViewingGame(null)} onViewProfile={setViewingProfile} />;
         if (viewingProfile) return <ProfilePage playerId={viewingProfile} onBack={() => setViewingProfile(null)} onViewCV={setViewingCV} onViewGame={setViewingGame} />;
         if (viewingCV) return <SportsCVPage playerId={viewingCV} onBack={() => setViewingCV(null)} />;
@@ -104,21 +102,62 @@ export default function AppShell() {
         <div style={{ minHeight: '100dvh', background: 'var(--bg-primary)' }}>
             {/* Header */}
             <header className="app-header">
-                <div className="app-logo" onClick={() => navigate('discover')} style={{ cursor: 'pointer' }}>
-                    SportsVault Dashboard
+                <div onClick={() => navigate('discover')} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{
+                        width: 32, height: 32,
+                        background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+                        borderRadius: 8,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '1rem',
+                        boxShadow: '0 0 12px rgba(99,102,241,0.4)',
+                        flexShrink: 0,
+                    }}>
+                        ⚡
+                    </div>
+                    <span style={{
+                        fontFamily: 'var(--font-heading)',
+                        fontWeight: 800,
+                        fontSize: '1.2rem',
+                        background: 'linear-gradient(135deg, #6366f1, #a855f7, #ec4899)',
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                    }}>
+                        SportsVault
+                    </span>
                 </div>
+
                 {isGuest ? (
-                    <button className="btn btn-xs btn-primary" style={{ padding: '6px 14px', borderRadius: 99 }} onClick={() => navigate('profile')}>
+                    <button className="btn btn-xs btn-primary" style={{ padding: '6px 16px', borderRadius: 99 }} onClick={() => navigate('profile')}>
                         Login
                     </button>
                 ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div className="header-location">
                             <span>📍</span>
                             <span>{state.currentUser?.location || 'Mumbai'}</span>
                         </div>
-                        <button className="btn btn-xs btn-outline" style={{ border: '1px solid #ef4444', color: '#ef4444' }} onClick={() => dispatch({ type: 'LOGOUT' })}>
-                            Logout
+                        <div
+                            onClick={() => navigate('profile')}
+                            className="avatar avatar-sm"
+                            style={{
+                                cursor: 'pointer',
+                                background: state.currentUser?.photo
+                                    ? `url(${state.currentUser.photo}) center/cover`
+                                    : 'linear-gradient(135deg, #6366f1, #a855f7)',
+                                color: '#fff',
+                                fontSize: '0.75rem',
+                                borderColor: '#6366f1',
+                                boxShadow: '0 0 0 2px rgba(99,102,241,0.3)',
+                            }}
+                        >
+                            {state.currentUser?.photo ? '' : getInitials(state.currentUser?.name || 'U')}
+                        </div>
+                        <button
+                            className="btn btn-xs btn-outline"
+                            style={{ border: '1px solid rgba(239,68,68,0.4)', color: '#ef4444', padding: '4px 10px', fontSize: '0.7rem' }}
+                            onClick={() => dispatch({ type: 'LOGOUT' })}
+                        >
+                            Out
                         </button>
                     </div>
                 )}
@@ -135,23 +174,40 @@ export default function AppShell() {
             <nav className="bottom-nav">
                 <button className={`nav-item ${activeTab === 'discover' && !showAuthGate ? 'active' : ''}`} onClick={() => navigate('discover')}>
                     <span className="nav-icon">🔍</span>
-                    <span className="nav-label">Discover</span>
+                    <span className="nav-label">Explore</span>
                 </button>
-                <button className={`nav-item ${activeTab === 'friends' ? 'active' : ''}`} onClick={() => navigate('friends')}>
+                <button className={`nav-item ${activeTab === 'friends' && !showAuthGate ? 'active' : ''}`} onClick={() => navigate('friends')}>
                     <span className="nav-icon">👥</span>
-                    <span className="nav-label">Friends</span>
+                    <span className="nav-label">Squad</span>
                 </button>
-                <button className="create-btn-nav" onClick={() => navigate('create')}>
+                <button className="create-btn-nav" onClick={() => navigate('create')} aria-label="Create game">
                     ＋
                 </button>
-                <button className={`nav-item ${activeTab === 'notifications' ? 'active' : ''}`} onClick={() => navigate('notifications')}>
+                <button
+                    className={`nav-item ${activeTab === 'notifications' && !showAuthGate ? 'active' : ''}`}
+                    onClick={() => navigate('notifications')}
+                    style={{ position: 'relative' }}
+                >
                     <span className="nav-icon">🔔</span>
-                    <span className="nav-label">Alerts</span>
-                    {(unreadCount > 0 && !isGuest) && <span className="badge-count">{unreadCount}</span>}
+                    <span className="nav-label">Bell</span>
+                    {unreadCount > 0 && !isGuest && <span className="badge-count">{unreadCount}</span>}
                 </button>
-                <button className={`nav-item ${activeTab === 'profile' || showAuthGate ? 'active' : ''}`} onClick={() => navigate('profile')}>
-                    <span className="nav-icon">👤</span>
-                    <span className="nav-label">Profile</span>
+                <button
+                    className={`nav-item ${activeTab === 'profile' || showAuthGate ? 'active' : ''}`}
+                    onClick={() => navigate('profile')}
+                >
+                    {!isGuest && state.currentUser?.photo ? (
+                        <div style={{
+                            width: 26, height: 26, borderRadius: '50%',
+                            background: `url(${state.currentUser.photo}) center/cover`,
+                            border: '2px solid',
+                            borderColor: (activeTab === 'profile' || showAuthGate) ? '#6366f1' : 'var(--border-color)',
+                            transition: 'border-color var(--transition-fast)',
+                        }} />
+                    ) : (
+                        <span className="nav-icon">👤</span>
+                    )}
+                    <span className="nav-label">Me</span>
                 </button>
             </nav>
         </div>

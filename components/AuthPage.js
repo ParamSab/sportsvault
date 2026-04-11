@@ -22,6 +22,7 @@ export default function AuthPage() {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [credError, setCredError] = useState('');
+    const [authError, setAuthError] = useState('');
 
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [isSending, setIsSending] = useState(false);
@@ -63,7 +64,8 @@ export default function AuthPage() {
         try {
             if (authMode === 'email') {
                 if (!email.includes('@')) {
-                    alert("Enter a valid email address");
+                    setAuthError("Enter a valid email address");
+                    setIsSending(false);
                     return;
                 }
                 const res = await fetch('/api/auth/otp/send', {
@@ -76,7 +78,8 @@ export default function AuthPage() {
                 if (data.devMode) setIsDevMode(true);
             } else {
                 if (!phone || phone.replace(/\D/g, '').length < 10) {
-                    alert("Enter a valid phone number");
+                    setAuthError("Enter a valid phone number");
+                    setIsSending(false);
                     return;
                 }
                 const res = await fetch('/api/auth/phone/send', {
@@ -92,15 +95,16 @@ export default function AuthPage() {
             startResendCountdown();
         } catch (err) {
             console.error(err);
-            alert(err.message || "Could not send verification code.");
+            setAuthError(err.message || "Could not send verification code.");
         } finally {
             setIsSending(false);
         }
     };
 
     const handlePasswordLogin = async () => {
-        if (!email.includes('@')) return alert("Enter a valid email address");
-        if (!loginPassword) return alert("Enter your password");
+        setAuthError('');
+        if (!email.includes('@')) { setAuthError("Enter a valid email address"); return; }
+        if (!loginPassword) { setAuthError("Enter your password"); return; }
         setIsSending(true);
         try {
             const res = await fetch('/api/auth/password', {
@@ -113,19 +117,20 @@ export default function AuthPage() {
                 dispatch({ type: 'LOGIN', payload: data.user });
                 router.push('/invite');
             } else {
-                alert(data.error || "Incorrect email or password");
+                setAuthError(data.error || "Incorrect email or password");
             }
         } catch (err) {
             console.error(err);
-            alert("Login failed.");
+            setAuthError("Login failed. Check your connection.");
         } finally {
             setIsSending(false);
         }
     };
 
     const handleVerifyOTP = async () => {
+        setAuthError('');
         const entered = otp.join('');
-        if (entered.length < 6) return alert("Enter the full 6-digit code");
+        if (entered.length < 6) { setAuthError("Enter the full 6-digit code"); return; }
 
         setIsSending(true);
         try {
@@ -160,11 +165,11 @@ export default function AuthPage() {
                     setStep('onboarding');
                 }
             } else {
-                alert(data.error || "Incorrect code");
+                setAuthError(data.error || "Incorrect code");
             }
         } catch (err) {
             console.error("Verification error:", err);
-            alert("An error occurred verifying your account.");
+            setAuthError("An error occurred verifying your account.");
         } finally {
             setIsSending(false);
         }
@@ -236,11 +241,10 @@ export default function AuthPage() {
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Failed to resend code');
-            setOtp(['', '', '', '', '', '']);
             startResendCountdown();
             document.getElementById('otp-0')?.focus();
         } catch (err) {
-            alert(err.message || 'Could not resend code.');
+            setAuthError(err.message || 'Could not resend code.');
         } finally {
             setIsSending(false);
         }
@@ -343,6 +347,7 @@ export default function AuthPage() {
         setEmail('');
         setPhone('');
         setOtp(['', '', '', '', '', '']);
+        setAuthError('');
         setStep('login');
     };
 
@@ -451,7 +456,26 @@ export default function AuthPage() {
                     <input type={showPassword ? 'text' : 'password'} placeholder="Repeat password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} style={{ fontSize: '1rem', padding: '14px 16px', width: '100%' }} />
                 </div>
             </div>
+
+            {/* Code of Conduct */}
+            <div style={{ marginTop: 24, padding: '16px 18px', background: 'var(--bg-input)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)' }}>
+                <div style={{ fontWeight: 700, fontSize: '0.9375rem', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span>📜</span> Community Rules
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                    <div className="conduct-rule"><span className="conduct-icon">⏰</span><span>Arrive on time. Late no-shows affect other players.</span></div>
+                    <div className="conduct-rule"><span className="conduct-icon">🤝</span><span>Respect all players regardless of skill level.</span></div>
+                    <div className="conduct-rule"><span className="conduct-icon">⚠️</span><span>Cancel at least 12h before to avoid a reliability hit.</span></div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <input type="checkbox" id="conductAgree" style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#6366f1' }} />
+                    <label htmlFor="conductAgree" style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', cursor: 'pointer', lineHeight: 1.5 }}>
+                        I agree to the community rules and will be a good sport. 🏅
+                    </label>
+                </div>
+            </div>
         </div>,
+
     ];
 
     return (
@@ -510,6 +534,25 @@ export default function AuthPage() {
                                 </button>
                             </div>
 
+                            {authError && (
+                                <div style={{ 
+                                    background: 'rgba(239, 68, 68, 0.1)', 
+                                    border: '1px solid rgba(239, 68, 68, 0.2)', 
+                                    color: '#ef4444', 
+                                    padding: '12px 14px', 
+                                    borderRadius: 12, 
+                                    fontSize: '0.8125rem', 
+                                    marginBottom: 20,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                    animation: 'shake 0.4s ease-in-out'
+                                }}>
+                                    <span style={{ fontSize: '1rem' }}>⚠️</span>
+                                    {authError}
+                                </div>
+                            )}
+
                             {authMode === 'password' ? (
                                 <div style={{ marginBottom: 20 }}>
                                     <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Email Address</label>
@@ -544,7 +587,13 @@ export default function AuthPage() {
                                 </button>
                             ) : (
                                 <button className="btn btn-primary btn-block btn-lg" onClick={handleSendOTP} disabled={isSending}>
-                                    {isSending ? 'Sending...' : authMode === 'email' ? 'Send Magic Code →' : 'Send SMS Code →'}
+                                    {isSending ? (
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                                            <div className="spinner-inline" /> Sending...
+                                        </div>
+                                    ) : (
+                                        authMode === 'email' ? 'Send Magic Code →' : 'Send SMS Code →'
+                                    )}
                                 </button>
                             )}
                         </div>

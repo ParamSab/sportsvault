@@ -187,9 +187,17 @@ export default function FriendsPage({ onViewProfile, onViewGame }) {
             {activeView === 'feed' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {friendGames.length === 0 ? (
-                        <div className="glass-card no-hover text-center" style={{ padding: 32 }}>
-                            <div style={{ fontSize: '2rem', marginBottom: 8 }}>🎮</div>
-                            <p className="text-muted text-sm">{friendPlayers.length === 0 ? 'Add friends to see their upcoming games here!' : 'None of your friends have upcoming games right now.'}</p>
+                        <div className="glass-card no-hover text-center" style={{ padding: '48px 24px' }}>
+                            <div style={{ fontSize: '3rem', marginBottom: 16 }}>🎮</div>
+                            <h3 style={{ marginBottom: 10 }}>No friends playing yet</h3>
+                            <p className="text-muted text-sm" style={{ marginBottom: 24, lineHeight: 1.6 }}>
+                                {friendPlayers.length === 0 
+                                    ? "Connect with friends to see which games they are joining!" 
+                                    : "None of your friends have joined any upcoming games yet."}
+                            </p>
+                            <button className="btn btn-primary" onClick={() => dispatch({ type: 'SET_TAB', payload: 'discover' })}>
+                                Find Games to Join →
+                            </button>
                         </div>
                     ) : friendGames.map(game => {
                         const sport = SPORTS[game.sport];

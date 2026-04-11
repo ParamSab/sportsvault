@@ -64,6 +64,23 @@ export async function POST(req) {
             }
         }
 
+        // Create notification for player if they are accepted by organizer
+        if (status === 'yes' && isOrganizer && !isSelf) {
+            try {
+                await prisma.notification.create({
+                    data: {
+                        userId: playerId,
+                        title: 'Game Confirmed! 🎉',
+                        message: `Organizer accepted your request for "${game.title}". You're in!`,
+                        gameId: gameId,
+                        action: `/?game=${gameId}`
+                    }
+                });
+            } catch (notifyErr) {
+                console.error('Admission notification error:', notifyErr.message);
+            }
+        }
+
         return Response.json({ rsvp });
     } catch (prismaErr) {
         console.error('RSVP Prisma error — falling back to Supabase:', prismaErr.message);
