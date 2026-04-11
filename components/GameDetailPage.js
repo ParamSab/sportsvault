@@ -3,6 +3,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { SPORTS, POSITIONS, getPlayer, getSportEmoji, spotsLeft, formatDate, getInitials, getTrustTier } from '@/lib/mockData';
 import { balanceTeams, generateWhatsAppMessage, getWhatsAppUrl } from '@/lib/teamBalancer';
+import PitchView from './PitchView';
 
 const PRIVACY_LABELS = {
     public: { emoji: '🌍', label: 'Public', color: '#22c55e' },
@@ -15,6 +16,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     const [selectedPosition, setSelectedPosition] = useState('');
     const [showTeams, setShowTeams] = useState(false);
     const [showBroadcastPanel, setShowBroadcastPanel] = useState(false);
+    const [playerView, setPlayerView] = useState('pitch'); // 'pitch' | 'list'
     
     const isGuest = !state.isAuthenticated;
     const [broadcastTier, setBroadcastTier] = useState(null);
@@ -435,7 +437,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
 
             {/* Attendee Lists */}
             <div className="glass-card no-hover" style={{ marginBottom: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                     <h3 style={{ fontSize: '1.125rem', fontWeight: 700 }}>Players ({confirmedRsvps.length}/{game.maxPlayers})</h3>
                     <span style={{
                         background: spots <= 2 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(34, 197, 94, 0.15)',
@@ -447,7 +449,46 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                     </span>
                 </div>
 
-                {confirmedRsvps.length > 0 && (
+                {/* View toggle */}
+                <div style={{ display: 'flex', gap: 0, marginBottom: 16, background: 'var(--bg-input)', borderRadius: 10, padding: 3 }}>
+                    <button
+                        onClick={() => setPlayerView('pitch')}
+                        style={{
+                            flex: 1, padding: '7px 0', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700,
+                            background: playerView === 'pitch' ? 'var(--bg-card)' : 'transparent',
+                            color: playerView === 'pitch' ? 'var(--text-primary)' : 'var(--text-muted)',
+                            boxShadow: playerView === 'pitch' ? '0 1px 4px rgba(0,0,0,0.3)' : 'none',
+                            transition: 'all 0.15s',
+                        }}
+                    >
+                        🏟️ Pitch View
+                    </button>
+                    <button
+                        onClick={() => setPlayerView('list')}
+                        style={{
+                            flex: 1, padding: '7px 0', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700,
+                            background: playerView === 'list' ? 'var(--bg-card)' : 'transparent',
+                            color: playerView === 'list' ? 'var(--text-primary)' : 'var(--text-muted)',
+                            boxShadow: playerView === 'list' ? '0 1px 4px rgba(0,0,0,0.3)' : 'none',
+                            transition: 'all 0.15s',
+                        }}
+                    >
+                        📋 List
+                    </button>
+                </div>
+
+                {/* Pitch view */}
+                {playerView === 'pitch' && (
+                    <PitchView
+                        players={confirmedPlayers}
+                        sport={game.sport}
+                        maxPlayers={game.maxPlayers}
+                        color={sport?.color || '#6366f1'}
+                        onViewProfile={onViewProfile}
+                    />
+                )}
+
+                {playerView === 'list' && confirmedRsvps.length > 0 && (
                     <div style={{ marginBottom: 20 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 8 }}>
                             <div className="text-xs font-semibold" style={{ color: '#22c55e', letterSpacing: '0.5px' }}>✅ GOING ({confirmedRsvps.length})</div>
@@ -568,7 +609,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                     </div>
                 )}
 
-                {backupRsvps.length > 0 && (
+                {playerView === 'list' && backupRsvps.length > 0 && (
                     <div style={{ marginBottom: 16 }}>
                         <div className="text-xs font-semibold" style={{ color: '#3b82f6', letterSpacing: '0.5px', marginBottom: 10, borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 8 }}>⏳ BACKUP ({backupRsvps.length})</div>
                         {backupRsvps.map(r => {
@@ -606,7 +647,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                     </div>
                 )}
 
-                {maybeRsvps.length > 0 && (
+                {playerView === 'list' && maybeRsvps.length > 0 && (
                     <div>
                         <div className="text-xs font-semibold" style={{ color: '#eab308', letterSpacing: '0.5px', marginBottom: 10, borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 8 }}>🤔 MAYBE ({maybeRsvps.length})</div>
                         {maybeRsvps.map(r => {
