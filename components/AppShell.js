@@ -62,7 +62,8 @@ export default function AppShell() {
         setRatingGame(null);
     };
 
-    const unreadCount = (state.notifications || []).filter(n => !n.read).length;
+    const pendingRequestsCount = (state.pendingFriends || []).filter(f => !f.isSender).length;
+    const unreadCount = (state.notifications || []).filter(n => !n.read).length + pendingRequestsCount;
 
     const renderContent = () => {
         if (showAuthGate) {
