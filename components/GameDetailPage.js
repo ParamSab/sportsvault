@@ -241,6 +241,21 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
         setBroadcastResult(null);
     };
 
+    const handleFriendRequest = async (friendId) => {
+        try {
+            await fetch('/api/friends', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ friendId, action: 'add' }),
+            });
+            dispatch({ type: 'LOAD_STATE', payload: {
+                friends: [...new Set([...(state.friends || []).map(String), String(friendId)])],
+            }});
+        } catch (err) {
+            console.error('Friend request failed', err);
+        }
+    };
+
     let whatsappMsg = '';
     try {
         whatsappMsg = generateWhatsAppMessage(game, state.players, showTeams ? teams : null);

@@ -63,7 +63,14 @@ export default function AppShell() {
     };
 
     const pendingRequestsCount = (state.pendingFriends || []).filter(f => !f.isSender).length;
-    const unreadCount = (state.notifications || []).filter(n => !n.read).length + pendingRequestsCount;
+    const myUserId = state.currentUser?.dbId || state.currentUser?.id;
+    const pendingApprovalsCount = myUserId
+        ? (state.games || [])
+            .filter(g => g.organizerId === myUserId)
+            .flatMap(g => (g.rsvps || []).filter(r => r.status === 'pending'))
+            .length
+        : 0;
+    const unreadCount = (state.notifications || []).filter(n => !n.read).length + pendingRequestsCount + pendingApprovalsCount;
 
     const renderContent = () => {
         if (showAuthGate) {
