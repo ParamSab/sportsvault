@@ -38,7 +38,7 @@ export default function FriendsPage({ onViewProfile, onViewGame }) {
     );
 
     const suggestedPlayers = (state.players || [])
-        .filter(p => p && !friendIdSet.has(String(p.id)) && String(p.id) !== currentUserId)
+        .filter(p => p && !String(p.id).startsWith('p') && !friendIdSet.has(String(p.id)) && String(p.id) !== currentUserId)
         .slice(0, 10);
 
     const handleSearch = async (e) => {
@@ -70,19 +70,46 @@ export default function FriendsPage({ onViewProfile, onViewGame }) {
 
     const handleAddByPhone = async () => {
         if (searchPhone.length < 10) return;
-        const found = PLAYERS.find(p => p.phone && p.phone.endsWith(searchPhone)) || (state.players || []).find(p => p.phone && p.phone.endsWith(searchPhone));
-        if (found) {
-            await fetch('/api/friends', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'add', friendId: found.id }) });
-            dispatch({ type: 'ADD_FRIEND', payload: found.id });
-            setSearchPhone(''); setShowNewNameInput(false); setNewName('');
-        } else if (!showNewNameInput) {
-            setShowNewNameInput(true);
-        } else if (newName.trim().length > 0) {
-            const phone = `+91${searchPhone}`;
-            const res = await fetch('/api/friends', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'add', phone, name: newName.trim() }) });
-            const data = await res.json();
-            dispatch({ type: 'ADD_FRIEND', payload: { isNew: true, phone, name: newName.trim(), id: data.friendship?.friendId } });
-            setSearchPhone(''); setShowNewNameInput(false); setNewName('');
+        const phone = `+91${searchPhone}`;
+        setAddingId('phone-search');
+        
+        try {
+            // First check if user exists in the store/players
+            const found = (state.players || []).find(p => p.phone && (p.phone === phone || p.phone.endsWith(searchPhone)));
+            
+            if (found && !String(found.id).startsWith('p')) {
+                // User exists, send friend request
+                await fetch('/api/friends/request', { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify({ friendId: found.id, action: 'send' }) 
+                });
+                alert(`Friend request sent to ${found.name}!`);
+                setSearchPhone('');
+            } else if (!showNewNameInput) {
+                // Not found, asking for name to create "Offline Friend" or search more deeply
+                setShowNewNameInput(true);
+            } else if (newName.trim().length > 0) {
+                const res = await fetch('/api/friends', { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify({ action: 'add', phone, name: newName.trim() }) 
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    const fRes = await fetch('/api/friends');
+                    if (fRes.ok) {
+                        const fData = await fRes.json();
+                        dispatch({ type: 'LOAD_STATE', payload: { friends: (fData.friends || []).map(f => f.id || f), players: [...(fData.friends || []), ...PLAYERS] } });
+                    }
+                    alert(`${newName.trim()} added to your squad!`);
+                    setSearchPhone(''); setShowNewNameInput(false); setNewName('');
+                }
+            }
+        } catch (err) {
+            console.error('Add by phone failed:', err);
+        } finally {
+            setAddingId(null);
         }
     };
 

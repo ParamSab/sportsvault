@@ -16,6 +16,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     const [showTeams, setShowTeams] = useState(false);
     const [showBroadcastPanel, setShowBroadcastPanel] = useState(false);
     const [isRsvpLoading, setIsRsvpLoading] = useState(false);
+    const [addingFriendId, setAddingFriendId] = useState(null);
     
     const isGuest = !state.isAuthenticated;
     const [broadcastTier, setBroadcastTier] = useState(null);
@@ -121,6 +122,35 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
             console.error('RSVP persistence failed:', err);
         } finally {
             setIsRsvpLoading(false);
+        }
+    };
+
+    const handleFriendRequest = async (friendId) => {
+        if (!state.isAuthenticated) return;
+        setAddingFriendId(friendId);
+        try {
+            const res = await fetch('/api/friends/request', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ friendId, action: 'send' })
+            });
+            if (res.ok) {
+                const fRes = await fetch('/api/friends');
+                if (fRes.ok) {
+                    const fData = await fRes.json();
+                    dispatch({ 
+                        type: 'LOAD_STATE', 
+                        payload: { 
+                            friends: (fData.friends || []).map(f => f.id || f), 
+                            pendingFriends: fData.pendingRequests || [] 
+                        } 
+                    });
+                }
+            }
+        } catch (err) {
+            console.error('Friend request failed:', err);
+        } finally {
+            setAddingFriendId(null);
         }
     };
 
@@ -539,20 +569,25 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                                     </div>
 
                                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                                        {!(state.friends || []).includes(r.playerId) && !(state.pendingFriends || []).includes(r.playerId) && r.playerId !== currentUserId && state.isAuthenticated && (
+                                        {!(state.friends || []).some(f => String(f) === String(r.playerId)) && 
+                                         !(state.pendingFriends || []).some(pf => String(pf.id) === String(r.playerId)) && 
+                                         r.playerId !== currentUserId && state.isAuthenticated && (
                                             <button 
                                                 className="btn btn-xs btn-outline"
-                                                style={{ fontSize: '0.65rem', padding: '4px 8px' }}
+                                                style={{ fontSize: '0.65rem', padding: '4px 10px', borderRadius: 99 }}
+                                                disabled={addingFriendId === r.playerId}
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     handleFriendRequest(r.playerId);
                                                 }}
                                             >
-                                                + Friend
+                                                {addingFriendId === r.playerId ? '...' : '+ Friend'}
                                             </button>
                                         )}
-                                        {((state.pendingFriends || []).includes(r.playerId) && r.playerId !== currentUserId) && (
-                                            <span className="text-xs text-muted" style={{ fontWeight: 600 }}>Sent ✓</span>
+                                        {((state.pendingFriends || []).some(pf => String(pf.id) === String(r.playerId))) && (
+                                            <span className="text-xs text-muted" style={{ fontWeight: 600, padding: '4px 8px', background: 'var(--bg-input)', borderRadius: 4 }}>
+                                                Sent ✓
+                                            </span>
                                         )}
                                         {isOrganizer && r.playerId !== currentUserId && (
                                             <button 
