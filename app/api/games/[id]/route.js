@@ -62,6 +62,7 @@ export async function GET(req, props) {
                 playerId: r.playerId,
                 status: r.status,
                 position: r.position || '',
+                paymentStatus: r.paymentStatus || 'not_required',
                 player: r.player ? {
                     ...r.player,
                     positions: typeof r.player.positions === 'string' ? JSON.parse(r.player.positions || '{}') : (r.player.positions || {}),

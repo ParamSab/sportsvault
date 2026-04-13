@@ -4,6 +4,7 @@ import { useStore } from '@/lib/store';
 import { SPORTS, POSITIONS, getPlayer, getSportEmoji, spotsLeft, formatDate, getInitials, getTrustTier } from '@/lib/mockData';
 import { balanceTeams, generateWhatsAppMessage, getWhatsAppUrl } from '@/lib/teamBalancer';
 import PitchView from './PitchView';
+import PaymentPage from './PaymentPage';
 
 const PRIVACY_LABELS = {
     public: { emoji: '🌍', label: 'Public', color: '#22c55e' },
@@ -28,6 +29,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     const [notFound, setNotFound] = useState(false);
     const [msgCopied, setMsgCopied] = useState(false);      // MUST be before any early return
     const [freshGame, setFreshGame] = useState(null);
+    const [showPayment, setShowPayment] = useState(false);
     // freshGame (from API) takes priority over stale global state
     const game = freshGame || state.games.find(g => String(g.id) === String(gameId));
 
@@ -249,6 +251,19 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
         setBroadcastResult(null);
     };
 
+    const handleMarkPaid = async () => {
+        try {
+            await fetch('/api/games/payment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ gameId, playerId: currentUserId, action: 'mark_paid' }),
+            });
+            dispatch({ type: 'RSVP', payload: { gameId, playerId: currentUserId, status: myRsvp?.status, position: myRsvp?.position, paymentStatus: 'pending' } });
+        } catch (err) {
+            console.error('Mark paid failed:', err);
+        }
+    };
+
     const handleFriendRequest = async (friendId) => {
         try {
             await fetch('/api/friends', {
@@ -274,6 +289,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
 
 
     return (
+        <>
         <div className="animate-fade-in">
             <button className="btn btn-ghost" onClick={onBack} style={{ marginBottom: 12, padding: '8px 0' }}>
                 ← Back to games
@@ -478,6 +494,29 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
             )}
 
             
+            {/* Payment Button — shown to accepted players when game has a fee + UPI ID */}
+            {!isOrganizer && myRsvp?.status === 'yes' && (game.price > 0) && game.upiId && (
+                <div style={{ marginBottom: 16 }}>
+                    {myRsvp.paymentStatus === 'approved' ? (
+                        <div style={{ padding: '12px 16px', borderRadius: 12, background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <span style={{ fontSize: '1.25rem' }}>✅</span>
+                            <div>
+                                <div style={{ fontWeight: 700, color: '#22c55e', fontSize: '0.9rem' }}>Payment Confirmed</div>
+                                <div className="text-xs text-muted">₹{game.price} received by organizer</div>
+                            </div>
+                        </div>
+                    ) : myRsvp.paymentStatus === 'pending' ? (
+                        <button className="btn btn-outline btn-block" style={{ borderRadius: 12, color: '#f59e0b', borderColor: 'rgba(245,158,11,0.4)', background: 'rgba(245,158,11,0.08)' }} onClick={() => setShowPayment(true)}>
+                            ⏳ Payment Pending Approval — Tap for details
+                        </button>
+                    ) : (
+                        <button className="btn btn-primary btn-block" style={{ borderRadius: 12, background: 'linear-gradient(135deg, #10b981, #059669)', border: 'none', fontWeight: 700 }} onClick={() => setShowPayment(true)}>
+                            💳 Pay ₹{game.price} Entry Fee
+                        </button>
+                    )}
+                </div>
+            )}
+
             {/* Host Approvals */}
             {isOrganizer && pendingRsvps.length > 0 && (
                 <div className="glass-card no-hover animate-fade-in" style={{ marginBottom: 16, border: '1px solid var(--warning)' }}>
@@ -627,9 +666,35 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                                         {((state.pendingFriends || []).includes(r.playerId) && r.playerId !== currentUserId) && (
                                             <span className="text-xs text-muted" style={{ fontWeight: 600 }}>Sent ✓</span>
                                         )}
+                                        {/* Payment approval badge/button for organizer */}
+                                        {isOrganizer && game.price > 0 && game.upiId && r.playerId !== currentUserId && (
+                                            r.paymentStatus === 'approved' ? (
+                                                <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#22c55e', background: 'rgba(34,197,94,0.12)', padding: '3px 7px', borderRadius: 6, border: '1px solid rgba(34,197,94,0.3)' }}>₹ Paid</span>
+                                            ) : r.paymentStatus === 'pending' ? (
+                                                <button
+                                                    className="btn btn-xs"
+                                                    style={{ fontSize: '0.65rem', padding: '3px 8px', background: 'rgba(245,158,11,0.15)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.4)', borderRadius: 6, fontWeight: 700 }}
+                                                    onClick={async (e) => {
+                                                        e.stopPropagation();
+                                                        await fetch('/api/games/payment', {
+                                                            method: 'POST',
+                                                            headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify({ gameId: game.id, playerId: r.playerId, action: 'approve' }),
+                                                        });
+                                                        dispatch({ type: 'RSVP', payload: { gameId: game.id, playerId: r.playerId, status: r.status, position: r.position, paymentStatus: 'approved' } });
+                                                        refreshGame();
+                                                    }}
+                                                >
+                                                    ₹ Approve
+                                                </button>
+                                            ) : (
+                                                <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', background: 'var(--bg-input)', padding: '3px 7px', borderRadius: 6, border: '1px solid var(--border-color)' }}>₹ Unpaid</span>
+                                            )
+                                        )}
+
                                         {isOrganizer && r.playerId !== currentUserId && (
-                                            <button 
-                                                className="btn btn-xs btn-ghost" 
+                                            <button
+                                                className="btn btn-xs btn-ghost"
                                                 style={{ color: nudgedPlayers.has(r.playerId) ? 'var(--text-muted)' : 'var(--primary-color)', fontSize: '0.65rem', padding: '4px 8px' }}
                                                 disabled={nudgedPlayers.has(r.playerId)}
                                                 onClick={(e) => {
@@ -943,5 +1008,19 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                 )}
             </div>
         </div>
+
+        {showPayment && (
+            <PaymentPage
+                game={game}
+                myRsvp={myRsvp}
+                currentUserId={currentUserId}
+                onClose={() => setShowPayment(false)}
+                onMarkPaid={async () => {
+                    await handleMarkPaid();
+                    setShowPayment(false);
+                }}
+            />
+        )}
+        </>
     );
 }

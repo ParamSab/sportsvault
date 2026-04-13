@@ -41,6 +41,7 @@ export default function CreateGamePage({ onComplete }) {
         surface: '3G Astro',
         footwear: 'AG Boots / TF shoes',
         price: 0,
+        upiId: '',
         gender: 'mixed',
         amenities: [],
         reminderHours: 2,
@@ -324,6 +325,22 @@ export default function CreateGamePage({ onComplete }) {
                         </div>
                     </div>
                 </div>
+
+                {game.price > 0 && (
+                    <div>
+                        <label style={labelStyle}>Your UPI ID (for collecting entry fee)</label>
+                        <input
+                            type="text"
+                            placeholder="e.g. yourname@ybl or 9999999999@okaxis"
+                            value={game.upiId || ''}
+                            onChange={e => update('upiId', e.target.value.trim())}
+                            style={inputStyle}
+                        />
+                        <div className="text-xs text-muted" style={{ marginTop: 4 }}>
+                            Players tap "Pay" and get redirected to GPay / PhonePe with ₹{game.price} pre-filled. You confirm after receiving.
+                        </div>
+                    </div>
+                )}
 
                 {/* Game Host toggle — Footy Addicts style */}
                 <div style={{ padding: '16px 20px', borderRadius: 16, background: game.needsHost ? 'linear-gradient(135deg, rgba(234,179,8,0.08), rgba(249,115,22,0.06))' : 'var(--bg-input)', border: game.needsHost ? '1px solid rgba(234,179,8,0.3)' : '1px solid var(--border-color)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, transition: 'all 0.3s ease' }}>

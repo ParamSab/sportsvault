@@ -95,6 +95,7 @@ export async function GET(req) {
                 playerId: r.playerId,
                 status: r.status,
                 position: r.position || '',
+                paymentStatus: r.paymentStatus || 'not_required',
                 player: r.player ? {
                     ...r.player,
                     positions: JSON.parse(r.player.positions || '{}'),
@@ -197,6 +198,7 @@ export async function POST(req) {
                 surface: game.surface || '3G Astro',
                 footwear: game.footwear || '',
                 price: game.price ? parseFloat(game.price.toString()) : 0,
+                upiId: game.upiId || null,
                 gender: game.gender || 'mixed',
                 amenities: typeof game.amenities === 'string' ? game.amenities : JSON.stringify(game.amenities || []),
                 organizerId: userId,

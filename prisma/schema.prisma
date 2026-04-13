@@ -146,6 +146,7 @@ model Game {
   surface   String?
   footwear  String?
   price     Float?  @default(0)
+  upiId     String? // UPI ID for collecting entry fees (e.g. name@ybl)
   gender    String  @default("mixed")
   amenities String?
 
@@ -172,8 +173,9 @@ model Rsvp {
   id        String   @id @default(uuid())
   gameId    String
   playerId  String
-  status    String // 'yes', 'no', 'backup', 'maybe'
-  position  String?
+  status        String  // 'yes', 'no', 'backup', 'maybe', 'pending', 'checked_in'
+  position      String?
+  paymentStatus String? @default("not_required") // not_required | pending | approved
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
