@@ -515,33 +515,33 @@ export default function AuthPage() {
     ];
 
     return (
-        <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '24px', background: 'radial-gradient(ellipse at top, #1a1f35 0%, #0a0e1a 60%)' }}>
-            <div style={{ maxWidth: 420, width: '100%', margin: '0 auto' }}>
-                <div style={{ textAlign: 'center', marginBottom: step === 'onboarding' ? 32 : 48 }}>
-                    <div style={{ fontSize: '3rem', marginBottom: 12, animation: 'float 3s ease-in-out infinite' }}>
+        <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', padding: '20px 20px 32px', background: 'radial-gradient(ellipse at top, #1a1f35 0%, #0a0e1a 60%)', overflowY: 'auto' }}>
+            <div style={{ maxWidth: 420, width: '100%', margin: '0 auto', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: '100%' }}>
+                <div style={{ textAlign: 'center', marginBottom: step === 'onboarding' ? 20 : 28 }}>
+                    <div style={{ fontSize: '2.5rem', marginBottom: 8, animation: 'float 3s ease-in-out infinite' }}>
                         {step === 'onboarding' ? '🏆' : '⚡'}
                     </div>
-                    <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: step === 'onboarding' ? '1.5rem' : '2.25rem', fontWeight: 900, background: 'linear-gradient(135deg, #6366f1, #a855f7, #ec4899)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', marginBottom: 8 }}>
+                    <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: step === 'onboarding' ? '1.375rem' : 'clamp(1.75rem, 5vw, 2.25rem)', fontWeight: 900, background: 'linear-gradient(135deg, #6366f1, #a855f7, #ec4899)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', marginBottom: 6 }}>
                         SportsVault
                     </h1>
-                    {step === 'login' && <p style={{ color: 'var(--text-secondary)', fontSize: '0.9375rem' }}>Find players. Join games. Build your rep.</p>}
+                    {step === 'login' && <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Find players. Join games. Build your rep.</p>}
                 </div>
 
                 {step === 'login' && (
                     <div className="animate-fade-in">
-                        <div className="glass-card no-hover" style={{ padding: 32 }}>
-                            <h3 style={{ marginBottom: 4 }}>Welcome</h3>
-                            <p className="text-muted text-sm" style={{ marginBottom: 20 }}>Log in or sign up to get started.</p>
+                        <div className="glass-card no-hover" style={{ padding: '24px 20px' }}>
+                            <h3 style={{ marginBottom: 4 }}>Welcome back</h3>
+                            <p className="text-muted text-sm" style={{ marginBottom: 16 }}>Log in or sign up to get started.</p>
 
                             {/* Auth mode toggle */}
-                            <div style={{ display: 'flex', gap: 8, marginBottom: 24, background: 'var(--bg-secondary)', borderRadius: 12, padding: 4 }}>
+                            <div style={{ display: 'flex', gap: 6, marginBottom: 20, background: 'var(--bg-secondary)', borderRadius: 12, padding: 4 }}>
                                 <button
                                     onClick={() => switchMode('email')}
                                     style={{
-                                        flex: 1, padding: '10px', borderRadius: 8, fontSize: '0.875rem', fontWeight: 600,
+                                        flex: 1, padding: '9px 4px', borderRadius: 8, fontSize: '0.8125rem', fontWeight: 600,
                                         background: authMode === 'email' ? 'var(--primary-color)' : 'transparent',
                                         color: authMode === 'email' ? '#fff' : 'var(--text-secondary)',
-                                        border: 'none', cursor: 'pointer', transition: 'all 0.2s',
+                                        border: 'none', cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap',
                                     }}
                                 >
                                     Email Code
@@ -549,36 +549,36 @@ export default function AuthPage() {
                                 <button
                                     onClick={() => switchMode('phone')}
                                     style={{
-                                        flex: 1, padding: '10px', borderRadius: 8, fontSize: '0.875rem', fontWeight: 600,
+                                        flex: 1, padding: '9px 4px', borderRadius: 8, fontSize: '0.8125rem', fontWeight: 600,
                                         background: authMode === 'phone' ? 'var(--primary-color)' : 'transparent',
                                         color: authMode === 'phone' ? '#fff' : 'var(--text-secondary)',
-                                        border: 'none', cursor: 'pointer', transition: 'all 0.2s',
+                                        border: 'none', cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap',
                                     }}
                                 >
-                                    SMS
+                                    SMS Code
                                 </button>
                                 <button
                                     onClick={() => switchMode('password')}
                                     style={{
-                                        flex: 1, padding: '10px', borderRadius: 8, fontSize: '0.875rem', fontWeight: 600,
+                                        flex: 1, padding: '9px 4px', borderRadius: 8, fontSize: '0.8125rem', fontWeight: 600,
                                         background: authMode === 'password' ? 'var(--primary-color)' : 'transparent',
                                         color: authMode === 'password' ? '#fff' : 'var(--text-secondary)',
-                                        border: 'none', cursor: 'pointer', transition: 'all 0.2s',
+                                        border: 'none', cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap',
                                     }}
                                 >
-                                    Login
+                                    Password
                                 </button>
                             </div>
 
                             {authError && (
-                                <div style={{ 
-                                    background: 'rgba(239, 68, 68, 0.1)', 
-                                    border: '1px solid rgba(239, 68, 68, 0.2)', 
-                                    color: '#ef4444', 
-                                    padding: '12px 14px', 
-                                    borderRadius: 12, 
-                                    fontSize: '0.8125rem', 
-                                    marginBottom: 20,
+                                <div style={{
+                                    background: 'rgba(239, 68, 68, 0.1)',
+                                    border: '1px solid rgba(239, 68, 68, 0.2)',
+                                    color: '#ef4444',
+                                    padding: '10px 12px',
+                                    borderRadius: 10,
+                                    fontSize: '0.8125rem',
+                                    marginBottom: 16,
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: 8,
@@ -612,11 +612,11 @@ export default function AuthPage() {
                                 </div>
                             )}
 
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 24 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
                                 <input type="checkbox" id="rememberMe" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} style={{ width: 16, height: 16, cursor: 'pointer' }} />
-                                <label htmlFor="rememberMe" style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', cursor: 'pointer' }}>Remember me for 30 days</label>
+                                <label htmlFor="rememberMe" style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', cursor: 'pointer' }}>Remember me for 30 days</label>
                             </div>
-                            
+
                             {authMode === 'password' ? (
                                 <button className="btn btn-primary btn-block btn-lg" onClick={handlePasswordLogin} disabled={isSending}>
                                     {isSending ? 'Logging in...' : 'Login →'}
@@ -633,15 +633,15 @@ export default function AuthPage() {
                                 </button>
                             )}
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'center', gap: 24, marginTop: 32 }}>
-                            {Object.values(SPORTS).map(s => <span key={s.name} style={{ fontSize: '1.5rem', opacity: 0.4, animation: 'float 3s ease-in-out infinite', animationDelay: `${Math.random()}s` }}>{s.emoji}</span>)}
+                        <div style={{ display: 'flex', justifyContent: 'center', gap: 20, marginTop: 24 }}>
+                            {Object.values(SPORTS).map(s => <span key={s.name} style={{ fontSize: '1.375rem', opacity: 0.35, animation: 'float 3s ease-in-out infinite' }}>{s.emoji}</span>)}
                         </div>
                     </div>
                 )}
 
                 {step === 'otp' && (
                     <div className="animate-fade-in">
-                        <div className="glass-card no-hover" style={{ padding: 32 }}>
+                        <div className="glass-card no-hover" style={{ padding: '24px 20px' }}>
                             <h3 style={{ marginBottom: 4 }}>
                                 {authMode === 'email' ? 'Check your inbox' : 'Check your messages'}
                             </h3>
@@ -678,14 +678,14 @@ export default function AuthPage() {
 
                 {step === 'onboarding' && (
                     <div className="animate-slide-up">
-                        <div className="glass-card no-hover" style={{ padding: 32 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                                <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.05em' }}>STEP {onboardStep + 1} OF {onboardingSteps.length}</div>
-                                <div style={{ display: 'flex', gap: 4 }}>{onboardingSteps.map((_, i) => <div key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: i === onboardStep ? 'var(--primary-color)' : i < onboardStep ? 'rgba(99,102,241,0.3)' : 'var(--border-color)', transition: 'all 0.3s' }} />)}</div>
+                        <div className="glass-card no-hover" style={{ padding: '20px 18px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                                <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.05em' }}>STEP {onboardStep + 1} OF {onboardingSteps.length}</div>
+                                <div style={{ display: 'flex', gap: 4 }}>{onboardingSteps.map((_, i) => <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: i === onboardStep ? 'var(--primary-color)' : i < onboardStep ? 'rgba(99,102,241,0.3)' : 'var(--border-color)', transition: 'all 0.3s' }} />)}</div>
                             </div>
                             {onboardingSteps[onboardStep]}
-                            {stepError && <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: 16, padding: '12px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: 8, border: '1px solid rgba(239, 68, 68, 0.2)' }}>⚠️ {stepError}</div>}
-                            <div style={{ display: 'flex', gap: 12, marginTop: 32 }}>
+                            {stepError && <div style={{ color: '#ef4444', fontSize: '0.8125rem', marginTop: 12, padding: '10px 12px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: 8, border: '1px solid rgba(239, 68, 68, 0.2)' }}>⚠️ {stepError}</div>}
+                            <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
                                 {onboardStep > 0 && <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => { setOnboardStep(s => s - 1); setStepError(''); }}>← Back</button>}
                                 <button className="btn btn-primary" style={{ flex: 2 }} onClick={() => { if (validateOnboardStep(onboardStep)) { if (onboardStep < onboardingSteps.length - 1) setOnboardStep(s => s + 1); else handleComplete(); } }}>{onboardStep < onboardingSteps.length - 1 ? 'Next →' : 'Create Account 🚀'}</button>
                             </div>
@@ -695,7 +695,7 @@ export default function AuthPage() {
 
                 {step === 'setup-credentials' && (
                     <div className="animate-slide-up">
-                        <div className="glass-card no-hover" style={{ padding: 32 }}>
+                        <div className="glass-card no-hover" style={{ padding: '24px 20px' }}>
                             <h3 style={{ marginBottom: 4 }}>Set your email & password</h3>
                             <p className="text-muted text-sm" style={{ marginBottom: 24 }}>All your games and profile are linked to this.</p>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
