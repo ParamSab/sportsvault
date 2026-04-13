@@ -147,6 +147,7 @@ model Game {
   footwear  String?
   price     Float?  @default(0)
   upiId     String? // UPI ID for collecting entry fees (e.g. name@ybl)
+  score     String? // JSON: {team1: 3, team2: 1, team1PlayerIds: [...], team2PlayerIds: [...]}
   gender    String  @default("mixed")
   amenities String?
 

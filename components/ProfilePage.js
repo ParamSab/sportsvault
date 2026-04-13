@@ -94,7 +94,7 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
     let rawPositions = {};
     try { rawPositions = typeof player.positions === 'string' ? JSON.parse(player.positions || '{}') : (player.positions || {}); } catch { rawPositions = {}; }
     const playerPosition = rawPositions[currentSport] || 'Not set';
-    const hasRating = rating && rating.count >= 10;
+    const hasRating = rating && rating.count >= 3;
     const thoughts = Array.isArray(player.thoughts) ? player.thoughts : [];
     const playerGames = (state.games || []).filter(g => (g.rsvps || []).some(r => String(r.playerId) === String(player.id)));
     const pastGames = playerGames.filter(g => g.status === 'completed');
@@ -242,15 +242,19 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
                     <>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
                             <span style={{ fontSize: '2.5rem', fontWeight: 800, color: 'var(--warning)', lineHeight: 1 }}>{rating.overall}</span>
-                            <div><div style={{ fontSize: '1.25rem', fontWeight: 700 }}>/ 10</div><div className="text-xs text-muted">{rating.count} ratings</div></div>
+                            <div><div style={{ fontSize: '1.25rem', fontWeight: 700 }}>/ 5</div><div className="text-xs text-muted">{rating.count} rating{rating.count !== 1 ? 's' : ''}</div></div>
                         </div>
                         {rating.attrs && Object.keys(rating.attrs).length > 0 && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                                 {Object.entries(rating.attrs).map(([attr, val]) => (
-                                    <div key={attr} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                        <span className="text-xs" style={{ width: 100, color: 'var(--text-secondary)' }}>{attr}</span>
-                                        <div style={{ flex: 1, height: 8, background: 'var(--bg-input)', borderRadius: 4, overflow: 'hidden' }}><div style={{ width: `${(val / 10) * 100}%`, height: '100%', background: SPORTS[currentSport]?.gradient || 'var(--primary-color)', borderRadius: 4, transition: 'width 0.5s ease' }} /></div>
-                                        <span className="text-xs font-semibold" style={{ width: 32, textAlign: 'right' }}>{!isNaN(Number(val)) && val !== null ? Number(val).toFixed(1) : 'N/A'}</span>
+                                    <div key={attr} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                        <span className="text-xs" style={{ width: 96, color: 'var(--text-secondary)', flexShrink: 0 }}>{attr}</span>
+                                        <div style={{ flex: 1, height: 7, background: 'var(--bg-input)', borderRadius: 4, overflow: 'hidden' }}>
+                                            <div style={{ width: `${(val / 5) * 100}%`, height: '100%', background: SPORTS[currentSport]?.gradient || 'var(--primary-color)', borderRadius: 4, transition: 'width 0.5s ease' }} />
+                                        </div>
+                                        <span className="text-xs" style={{ width: 28, textAlign: 'right', fontWeight: 700 }}>
+                                            {!isNaN(Number(val)) && val !== null ? Number(val).toFixed(1) : '—'}
+                                        </span>
                                     </div>
                                 ))}
                             </div>
@@ -260,7 +264,7 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
                     <div style={{ textAlign: 'center', padding: 24, background: 'var(--bg-input)', borderRadius: 'var(--radius-md)' }}>
                         <div style={{ fontSize: '1.5rem', marginBottom: 8 }}>🔒</div>
                         <div style={{ fontWeight: 600, marginBottom: 4 }}>Rating Pending</div>
-                        <div className="text-xs text-muted">{rating?.count || 0}/10 ratings received. Need {10 - (rating?.count || 0)} more.</div>
+                        <div className="text-xs text-muted">{rating?.count || 0}/3 ratings received. Need {Math.max(0, 3 - (rating?.count || 0))} more to unlock.</div>
                     </div>
                 )}
             </div>

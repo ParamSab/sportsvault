@@ -30,6 +30,8 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     const [msgCopied, setMsgCopied] = useState(false);      // MUST be before any early return
     const [freshGame, setFreshGame] = useState(null);
     const [showPayment, setShowPayment] = useState(false);
+    const [scoreInput, setScoreInput] = useState({ team1: '', team2: '' });
+    const [scoreSaving, setScoreSaving] = useState(false);
     // freshGame (from API) takes priority over stale global state
     const game = freshGame || state.games.find(g => String(g.id) === String(gameId));
 
@@ -842,6 +844,145 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                     )}
                 </div>
             )}
+
+            {/* ── Score Entry / Result ── */}
+            {confirmedRsvps.length >= 2 && (() => {
+                const savedScore = (() => { try { return game.score ? JSON.parse(game.score) : null; } catch { return null; } })();
+                const sportColor = sport?.color || '#6366f1';
+
+                if (savedScore) {
+                    // Score already saved — show result banner
+                    const t1 = savedScore.team1 ?? 0;
+                    const t2 = savedScore.team2 ?? 0;
+                    const draw = t1 === t2;
+                    return (
+                        <div className="glass-card no-hover" style={{ marginBottom: 16 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                                <span style={{ fontSize: '1.25rem' }}>🏆</span>
+                                <h3 style={{ fontSize: '1rem', margin: 0 }}>Final Score</h3>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0 }}>
+                                {/* Team 1 */}
+                                <div style={{ flex: 1, textAlign: 'center', padding: '16px 12px', borderRadius: '12px 0 0 12px', background: t1 > t2 ? 'rgba(34,197,94,0.12)' : t1 < t2 ? 'rgba(239,68,68,0.08)' : 'var(--bg-input)', border: `1px solid ${t1 > t2 ? 'rgba(34,197,94,0.3)' : t1 < t2 ? 'rgba(239,68,68,0.2)' : 'var(--border-color)'}` }}>
+                                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Team 1</div>
+                                    <div style={{ fontSize: '2.5rem', fontWeight: 900, color: t1 > t2 ? '#22c55e' : t1 < t2 ? '#ef4444' : 'var(--text-primary)', lineHeight: 1 }}>{t1}</div>
+                                    {t1 > t2 && <div style={{ fontSize: '0.7rem', color: '#22c55e', marginTop: 4, fontWeight: 700 }}>WIN</div>}
+                                </div>
+                                {/* Divider */}
+                                <div style={{ padding: '0 10px', fontWeight: 900, fontSize: '1.25rem', color: 'var(--text-secondary)', flexShrink: 0 }}>:</div>
+                                {/* Team 2 */}
+                                <div style={{ flex: 1, textAlign: 'center', padding: '16px 12px', borderRadius: '0 12px 12px 0', background: t2 > t1 ? 'rgba(34,197,94,0.12)' : t2 < t1 ? 'rgba(239,68,68,0.08)' : 'var(--bg-input)', border: `1px solid ${t2 > t1 ? 'rgba(34,197,94,0.3)' : t2 < t1 ? 'rgba(239,68,68,0.2)' : 'var(--border-color)'}` }}>
+                                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Team 2</div>
+                                    <div style={{ fontSize: '2.5rem', fontWeight: 900, color: t2 > t1 ? '#22c55e' : t2 < t1 ? '#ef4444' : 'var(--text-primary)', lineHeight: 1 }}>{t2}</div>
+                                    {t2 > t1 && <div style={{ fontSize: '0.7rem', color: '#22c55e', marginTop: 4, fontWeight: 700 }}>WIN</div>}
+                                </div>
+                            </div>
+                            {draw && <div style={{ textAlign: 'center', marginTop: 10, fontWeight: 700, color: 'var(--text-secondary)', fontSize: '0.875rem' }}>🤝 Draw</div>}
+                            {isOrganizer && (
+                                <button className="btn btn-xs btn-ghost" style={{ marginTop: 12, width: '100%', color: 'var(--text-secondary)' }}
+                                    onClick={() => {
+                                        setScoreInput({ team1: String(t1), team2: String(t2) });
+                                        // Temporarily clear game.score locally to show editor — re-fetch resets it
+                                        dispatch({ type: 'LOAD_STATE', payload: { games: state.games.map(g => String(g.id) === String(gameId) ? { ...g, score: null } : g) } });
+                                        if (freshGame) setFreshGame(prev => ({ ...prev, score: null }));
+                                    }}>
+                                    ✏️ Edit Score
+                                </button>
+                            )}
+                        </div>
+                    );
+                }
+
+                if (!isOrganizer) return null;
+
+                // Score input form (organizer only)
+                return (
+                    <div className="glass-card no-hover" style={{ marginBottom: 16, border: `1px solid ${sportColor}40` }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                            <span style={{ fontSize: '1.25rem' }}>🏆</span>
+                            <div>
+                                <div style={{ fontWeight: 700, fontSize: '1rem' }}>Enter Final Score</div>
+                                <div className="text-xs text-muted">Updates wins / losses for all players</div>
+                            </div>
+                        </div>
+
+                        {/* Team labels with player previews */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 8, alignItems: 'center', marginBottom: 16 }}>
+                            <div style={{ textAlign: 'center' }}>
+                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#3b82f6', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                                    Team 1 ({teams.team1.length})
+                                </div>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                                    {teams.team1.slice(0, 3).map(p => p.name.split(' ')[0]).join(', ')}{teams.team1.length > 3 ? '…' : ''}
+                                </div>
+                            </div>
+                            <div style={{ textAlign: 'center', color: 'var(--text-secondary)', fontWeight: 700, fontSize: '1rem', paddingBottom: 2 }}>vs</div>
+                            <div style={{ textAlign: 'center' }}>
+                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                                    Team 2 ({teams.team2.length})
+                                </div>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                                    {teams.team2.slice(0, 3).map(p => p.name.split(' ')[0]).join(', ')}{teams.team2.length > 3 ? '…' : ''}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Score inputs */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 32px 1fr', gap: 8, alignItems: 'center', marginBottom: 16 }}>
+                            <input
+                                type="number" min="0" max="99" placeholder="0"
+                                value={scoreInput.team1}
+                                onChange={e => setScoreInput(s => ({ ...s, team1: e.target.value }))}
+                                style={{ textAlign: 'center', fontSize: '2rem', fontWeight: 900, padding: '12px 8px', borderRadius: 12, background: 'var(--bg-input)', border: '1.5px solid #3b82f680', color: '#3b82f6' }}
+                            />
+                            <div style={{ textAlign: 'center', fontWeight: 900, color: 'var(--text-secondary)', fontSize: '1.25rem' }}>:</div>
+                            <input
+                                type="number" min="0" max="99" placeholder="0"
+                                value={scoreInput.team2}
+                                onChange={e => setScoreInput(s => ({ ...s, team2: e.target.value }))}
+                                style={{ textAlign: 'center', fontSize: '2rem', fontWeight: 900, padding: '12px 8px', borderRadius: 12, background: 'var(--bg-input)', border: '1.5px solid #ef444480', color: '#ef4444' }}
+                            />
+                        </div>
+
+                        <button
+                            className="btn btn-primary btn-block"
+                            style={{ background: `linear-gradient(135deg, ${sportColor}, ${sport?.gradient ? sportColor : '#a855f7'})`, border: 'none', borderRadius: 12, fontWeight: 700 }}
+                            disabled={scoreInput.team1 === '' || scoreInput.team2 === '' || scoreSaving}
+                            onClick={async () => {
+                                setScoreSaving(true);
+                                try {
+                                    const t1ids = teams.team1.map(p => p.dbId || p.id).filter(Boolean);
+                                    const t2ids = teams.team2.map(p => p.dbId || p.id).filter(Boolean);
+                                    const res = await fetch('/api/games/score', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            gameId,
+                                            team1Score: parseInt(scoreInput.team1),
+                                            team2Score: parseInt(scoreInput.team2),
+                                            team1PlayerIds: t1ids,
+                                            team2PlayerIds: t2ids,
+                                        }),
+                                    });
+                                    const data = await res.json();
+                                    if (data.success) {
+                                        const scoreJson = JSON.stringify(data.score);
+                                        dispatch({ type: 'LOAD_STATE', payload: { games: state.games.map(g => String(g.id) === String(gameId) ? { ...g, score: scoreJson, status: 'completed' } : g) } });
+                                        if (freshGame) setFreshGame(prev => ({ ...prev, score: scoreJson, status: 'completed' }));
+                                        else refreshGame();
+                                    }
+                                } catch (err) {
+                                    console.error('Save score failed:', err);
+                                } finally {
+                                    setScoreSaving(false);
+                                }
+                            }}
+                        >
+                            {scoreSaving ? 'Saving…' : '🏁 Save Score & End Game'}
+                        </button>
+                    </div>
+                );
+            })()}
 
             {/* Actions: Text Blast + WhatsApp */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
