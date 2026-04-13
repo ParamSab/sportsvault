@@ -143,6 +143,17 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                 }),
             });
             refreshGame(); // Sync server state (handles server-side overrides like approval enforcement)
+
+            // If user selected a position, sync it to their profile too
+            if (pos && pos !== (state.currentUser?.positions?.[game.sport])) {
+                const newPositions = { ...(state.currentUser?.positions || {}), [game.sport]: pos };
+                dispatch({ type: 'UPDATE_PROFILE', payload: { positions: newPositions } });
+                fetch('/api/users', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ positions: newPositions }),
+                }).catch(err => console.error('Position profile sync failed:', err));
+            }
         } catch (err) {
             console.error('RSVP persistence failed:', err);
         }
@@ -488,7 +499,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                                     </div>
                                     <div style={{ display: 'flex', gap: 6 }}>
                                         <button className="btn btn-sm btn-ghost" style={{ color: 'var(--danger)', padding: '4px 8px' }} onClick={() => handleHostAction(r.playerId, 'no')}>Deny</button>
-                                        <button className="btn btn-sm btn-primary" style={{ padding: '4px 12px' }} onClick={() => handleHostAction(r.playerId, 'yes')} disabled={spots <= 0}>Accept</button>
+                                        <button className="btn btn-sm btn-primary" style={{ padding: '4px 12px' }} onClick={() => handleHostAction(r.playerId, 'yes')}>Accept</button>
                                     </div>
                                 </div>
                             );
