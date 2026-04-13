@@ -32,6 +32,16 @@ export async function POST(req) {
       return Response.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    // Server-side dedup for approval type: check if already sent
+    if (type === 'approval') {
+      const alreadySent = await prisma.notification.findFirst({
+        where: { userId: playerId, gameId, title: { contains: 'Confirmed' } }
+      });
+      if (alreadySent) {
+        return Response.json({ success: false, reason: 'Approval already sent' });
+      }
+    }
+
     // Fetch player
     const player = await prisma.user.findUnique({ where: { id: playerId }, select: { phone: true, name: true } });
     if (!player || !player.phone) {
@@ -66,6 +76,21 @@ export async function POST(req) {
       from: twilioFrom,
       to: phone
     });
+
+    // Create in-app notification and record for dedup (approval only)
+    if (type === 'approval') {
+      try {
+        await prisma.notification.create({
+          data: {
+            userId: playerId,
+            gameId,
+            title: '🎉 Spot Confirmed',
+            message: `Your spot for "${game.title}" has been confirmed. See you at ${game.location}!`,
+            action: `?game=${gameId}`,
+          }
+        });
+      } catch (_) { /* non-fatal */ }
+    }
 
     return Response.json({ success: true, message: 'Reminder sent via Twilio' });
   } catch (err) {

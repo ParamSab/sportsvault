@@ -184,6 +184,27 @@ function EmptySlot({ color }) {
     );
 }
 
+// Goal post SVG marker
+function GoalPost({ flipped, label }) {
+    return (
+        <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+            ...(flipped ? { transform: 'scaleY(-1)' } : {}),
+        }}>
+            <div style={{ fontSize: '0.55rem', color: 'rgba(255,255,255,0.55)', fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', ...(flipped ? { transform: 'scaleY(-1)' } : {}) }}>
+                {label}
+            </div>
+            {/* Crossbar */}
+            <div style={{ width: 40, height: 3, background: 'rgba(255,255,255,0.6)', borderRadius: 2 }} />
+            {/* Posts */}
+            <div style={{ display: 'flex', gap: 34 }}>
+                <div style={{ width: 3, height: 10, background: 'rgba(255,255,255,0.6)', borderRadius: 2 }} />
+                <div style={{ width: 3, height: 10, background: 'rgba(255,255,255,0.6)', borderRadius: 2 }} />
+            </div>
+        </div>
+    );
+}
+
 export default function PitchView({ players, sport, maxPlayers, color, onViewProfile }) {
     const rows = groupByRow(players, sport);
     const filled = players.length;
@@ -197,6 +218,7 @@ export default function PitchView({ players, sport, maxPlayers, color, onViewPro
         : 'linear-gradient(180deg, #1a5c2e 0%, #1e6e36 35%, #1e6e36 65%, #1a5c2e 100%)';
 
     const pitchMarkings = sport === 'padel' ? <PadelCourt /> : sport === 'cricket' ? <CricketPitch /> : <FootballPitch />;
+    const showGoals = sport === 'football';
 
     return (
         <div>
@@ -207,7 +229,7 @@ export default function PitchView({ players, sport, maxPlayers, color, onViewPro
                 borderRadius: 16,
                 border: `2px solid ${color}40`,
                 overflow: 'hidden',
-                padding: '20px 12px',
+                padding: '12px 12px 16px',
                 minHeight: rows.length > 0 ? (rows.length * 90 + 40) : 240,
                 display: 'flex',
                 flexDirection: 'column',
@@ -217,6 +239,13 @@ export default function PitchView({ players, sport, maxPlayers, color, onViewPro
                 {/* Pitch border lines */}
                 <div style={{ position: 'absolute', inset: 8, border: '1.5px solid rgba(255,255,255,0.2)', borderRadius: 10, pointerEvents: 'none' }} />
                 {pitchMarkings}
+
+                {/* Opponent goal (top) */}
+                {showGoals && (
+                    <div style={{ display: 'flex', justifyContent: 'center', position: 'relative', zIndex: 1, marginBottom: -4 }}>
+                        <GoalPost label="OPP GOAL" />
+                    </div>
+                )}
 
                 {rows.length === 0 ? (
                     <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.5)', padding: 32, position: 'relative', zIndex: 1 }}>
@@ -241,6 +270,13 @@ export default function PitchView({ players, sport, maxPlayers, color, onViewPro
                             ))}
                         </div>
                     ))
+                )}
+
+                {/* Own goal (bottom) */}
+                {showGoals && (
+                    <div style={{ display: 'flex', justifyContent: 'center', position: 'relative', zIndex: 1, marginTop: -4 }}>
+                        <GoalPost label="YOUR GOAL" flipped />
+                    </div>
                 )}
             </div>
 

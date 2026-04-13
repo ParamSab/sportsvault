@@ -176,12 +176,12 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ gameId, playerId: actualPlayerId, status, position: pos })
             });
-            // Send immediate reminder if RSVP approved
-            if (status === 'yes') {
+            // Send immediate reminder only on first approval (not if already 'yes')
+            if (status === 'yes' && existingRsvp?.status !== 'yes') {
               fetch('/api/games/reminder', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ gameId, playerId: actualPlayerId })
+                body: JSON.stringify({ gameId, playerId: actualPlayerId, type: 'approval' })
               }).catch(err => console.error('Reminder send failed:', err));
             }
         } catch (err) {

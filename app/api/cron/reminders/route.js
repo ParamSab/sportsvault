@@ -65,14 +65,22 @@ export async function GET(req) {
                 }
 
                 if (client && playersToSms.length > 0) {
+                    // Format game time as 12-hour for the message
+                    const [hh, mm] = (game.time || '00:00').split(':').map(Number);
+                    const ampm = hh >= 12 ? 'PM' : 'AM';
+                    const h12 = hh % 12 || 12;
+                    const gameTimeStr = `${h12}:${String(mm).padStart(2, '0')} ${ampm}`;
+                    // Format date as "Mon, 14 Apr"
+                    const gameDateStr = new Date(`${game.date}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+
                     for (const player of playersToSms) {
                         let phone = String(player.phone).replace(/[^0-9+]/g, '');
                         // Ensure E.164 format (add Indian country code if needed)
                         if (!phone.startsWith('+')) {
                             phone = phone.length === 10 ? `+91${phone}` : `+${phone}`;
                         }
-                        
-                        const message = `⚽ SportsVault Reminder: "${game.title}" starts in ${game.reminderHours}h at ${game.location}. See you on the pitch!`;
+
+                        const message = `⚽ SportsVault Reminder: "${game.title}" is on ${gameDateStr} at ${gameTimeStr} · ${game.location}. See you on the pitch!`;
                         
                         try {
                             await client.messages.create({
