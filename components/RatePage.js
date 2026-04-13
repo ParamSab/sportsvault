@@ -10,13 +10,16 @@ export default function RatePage({ gameId, onBack }) {
     const [thought, setThought] = useState('');
     const [submitted, setSubmitted] = useState([]);
 
-    const game = state.games.find(g => g.id === gameId);
+    const game = state.games.find(g => String(g.id) === String(gameId));
     if (!game) return <div className="glass-card no-hover text-center" style={{ padding: 48 }}><h3>Game not found</h3><button className="btn btn-outline mt-md" onClick={onBack}>← Back</button></div>;
 
-    const currentUserId = state.currentUser?.id || 'current';
-    const playersToRate = game.rsvps
-        .filter(r => r.status === 'yes' && r.playerId !== currentUserId)
-        .map(r => ({ ...getPlayer(r.playerId), rsvpPosition: r.position }))
+    const currentUserId = state.currentUser?.dbId || state.currentUser?.id || 'current';
+    const playersToRate = (game.rsvps || [])
+        .filter(r => r.status === 'yes' && String(r.playerId) !== String(currentUserId))
+        .map(r => {
+            const p = r.player || getPlayer(r.playerId) || (state.players || []).find(pl => String(pl.id) === String(r.playerId) || String(pl.dbId) === String(r.playerId));
+            return p ? { ...p, rsvpPosition: r.position } : null;
+        })
         .filter(Boolean);
 
     const sport = game.sport;
@@ -59,7 +62,7 @@ export default function RatePage({ gameId, onBack }) {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    playerId: player.id,
+                    playerId: player.dbId || player.id,
                     sport,
                     rating: avg,
                     thought: thought.trim(),
