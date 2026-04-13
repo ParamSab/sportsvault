@@ -195,6 +195,8 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
             });
 
             if (!rsvpRes.ok) {
+                const errData = await rsvpRes.json().catch(() => ({}));
+                console.error('RSVP accept failed:', rsvpRes.status, errData);
                 // Revert optimistic update — server rejected it
                 dispatch({ type: 'RSVP', payload: { gameId, playerId, status: existingRsvp?.status || 'pending', position: pos } });
                 return;
@@ -552,7 +554,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                                     </div>
                                     <div style={{ display: 'flex', gap: 6 }}>
                                         <button className="btn btn-sm btn-ghost" style={{ color: 'var(--danger)', padding: '4px 8px' }} onClick={() => handleHostAction(r.playerId, 'no')} disabled={acceptingPlayers.has(r.playerId)}>Deny</button>
-                                        <button className="btn btn-sm btn-primary" style={{ padding: '4px 12px' }} onClick={() => handleHostAction(r.playerId, 'yes')} disabled={spots <= 0 || acceptingPlayers.has(r.playerId)}>
+                                        <button className="btn btn-sm btn-primary" style={{ padding: '4px 12px' }} onClick={() => handleHostAction(r.playerId, 'yes')} disabled={acceptingPlayers.has(r.playerId)}>
                                             {acceptingPlayers.has(r.playerId) ? '…' : 'Accept'}
                                         </button>
                                     </div>
@@ -993,36 +995,53 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                             />
                         </div>
 
-                        {/* Goalscorers / Assisters — shown once any score is typed */}
-                        {scoreEntered && (
-                            <div style={{ marginBottom: 16 }}>
-                                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
-                                    ⚽ Tag Goalscorers (optional)
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                                    {['team1', 'team2'].map((t, ti) => (
-                                        <div key={t}>
-                                            <div style={{ fontSize: '0.65rem', fontWeight: 700, color: ti === 0 ? '#3b82f6' : '#ef4444', textTransform: 'uppercase', marginBottom: 6 }}>
-                                                Team {ti + 1}
+                        {/* Goalscorers / Assisters — always shown for organizer */}
+                        {(() => {
+                            // Build player stubs from RSVPs when full player objects aren't available
+                            const allPlayers = confirmedRsvps.map(r => {
+                                const found = confirmedPlayers.find(p => (p.dbId || p.id) === r.playerId);
+                                if (found) return found;
+                                if (r.player) return r.player;
+                                return { id: r.playerId, name: r.playerId ? r.playerId.slice(-6).toUpperCase() : '???' };
+                            }).filter(p => p.id || p.dbId);
+                            const rsvpTeam1 = allPlayers.filter((_, i) => i % 2 === 0);
+                            const rsvpTeam2 = allPlayers.filter((_, i) => i % 2 !== 0);
+                            const displayTeams = {
+                                team1: safeTeams.team1.length > 0 ? safeTeams.team1 : rsvpTeam1,
+                                team2: safeTeams.team2.length > 0 ? safeTeams.team2 : rsvpTeam2,
+                            };
+                            const hasPlayers = displayTeams.team1.length > 0 || displayTeams.team2.length > 0;
+                            if (!hasPlayers) return null;
+                            return (
+                                <div style={{ marginBottom: 16 }}>
+                                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                                        ⚽ Tag Goalscorers (optional)
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                                        {['team1', 'team2'].map((t, ti) => (
+                                            <div key={t}>
+                                                <div style={{ fontSize: '0.65rem', fontWeight: 700, color: ti === 0 ? '#3b82f6' : '#ef4444', textTransform: 'uppercase', marginBottom: 6 }}>
+                                                    Team {ti + 1}
+                                                </div>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                    {displayTeams[t].map(p => {
+                                                        const pid = p.dbId || p.id;
+                                                        const isScorer = scorers[t].includes(pid);
+                                                        return (
+                                                            <button key={pid} onClick={() => toggleScorer(t, pid)}
+                                                                style={{ textAlign: 'left', padding: '5px 10px', borderRadius: 8, border: `1px solid ${isScorer ? (ti === 0 ? '#3b82f6' : '#ef4444') : 'var(--border-color)'}`, background: isScorer ? (ti === 0 ? 'rgba(59,130,246,0.15)' : 'rgba(239,68,68,0.15)') : 'var(--bg-input)', fontSize: '0.78rem', fontWeight: isScorer ? 700 : 400, color: isScorer ? (ti === 0 ? '#3b82f6' : '#ef4444') : 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                                <span>{isScorer ? '⚽' : '○'}</span>
+                                                                <span>{p.name?.split(' ')[0] || pid?.slice(-4)}</span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
                                             </div>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                                {safeTeams[t].map(p => {
-                                                    const pid = p.dbId || p.id;
-                                                    const isScorer = scorers[t].includes(pid);
-                                                    return (
-                                                        <button key={pid} onClick={() => toggleScorer(t, pid)}
-                                                            style={{ textAlign: 'left', padding: '5px 10px', borderRadius: 8, border: `1px solid ${isScorer ? (ti === 0 ? '#3b82f6' : '#ef4444') : 'var(--border-color)'}`, background: isScorer ? (ti === 0 ? 'rgba(59,130,246,0.15)' : 'rgba(239,68,68,0.15)') : 'var(--bg-input)', fontSize: '0.78rem', fontWeight: isScorer ? 700 : 400, color: isScorer ? (ti === 0 ? '#3b82f6' : '#ef4444') : 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                            <span>{isScorer ? '⚽' : '○'}</span>
-                                                            <span>{p.name?.split(' ')[0]}</span>
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    ))}
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            );
+                        })()}
 
                         <button
                             className="btn btn-primary btn-block"
