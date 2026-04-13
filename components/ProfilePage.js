@@ -62,14 +62,15 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
 
     // Fetch game history from DB (own profile only) — MUST be before any early return
     useEffect(() => {
-        if (!isOwn || !player?.dbId) return;
+        const uid = player?.dbId || player?.id;
+        if (!isOwn || !uid) return;
         setHistoryLoading(true);
-        fetch(`/api/games/history?userId=${player.dbId}`)
+        fetch(`/api/games/history?userId=${uid}`)
             .then(r => r.json())
             .then(data => { setSavedGames(data.saved || []); setGameHistory(data.history || []); })
             .catch(() => { setSavedGames([]); setGameHistory([]); })
             .finally(() => setHistoryLoading(false));
-    }, [isOwn, player?.dbId]);
+    }, [isOwn, player?.dbId, player?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     if (!player) {
         if (isLoadingPlayer) return <div className="glass-card no-hover text-center" style={{ padding: 48 }}><h3>Loading profile…</h3></div>;
@@ -98,6 +99,7 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
     const playerGames = (state.games || []).filter(g => (g.rsvps || []).some(r => String(r.playerId) === String(player.id)));
     const pastGames = playerGames.filter(g => g.status === 'completed');
     const isFriend = !isOwn && (state.friends || []).some(fId => String(fId) === String(player.id));
+    const isPendingSent = !isOwn && (state.pendingFriends || []).some(f => f.isSender && String(f.id) === String(player.id));
 
     const handleToggleFriend = async () => {
         setFriendLoading(true);
@@ -110,25 +112,64 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
                 });
                 dispatch({ type: 'REMOVE_FRIEND', payload: player.id });
                 setToast('Friend removed');
-            } else {
-                // Use direct 'add' (accepted status) so the friend appears immediately
-                const res = await fetch('/api/friends', {
+            } else if (isPendingSent) {
+                // Cancel the pending request
+                await fetch('/api/friends', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'add', friendId: player.id }),
+                    body: JSON.stringify({ action: 'remove', friendId: player.id }),
+                });
+                const fRes = await fetch('/api/friends');
+                if (fRes.ok) {
+                    const fData = await fRes.json();
+                    dispatch({ type: 'LOAD_STATE', payload: {
+                        friends: (fData.friends || []).map(f => f.id || f),
+                        pendingFriends: fData.pendingRequests || [],
+                    }});
+                }
+                setToast('Request withdrawn');
+            } else {
+                // Send a friend request
+                const res = await fetch('/api/friends/request', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'send', friendId: player.id }),
                 });
                 const data = await res.json();
-                if (data.success || data.friendship) {
-                    // Ensure the player object is in state.players so FriendsPage can render their card
-                    dispatch({ type: 'LOAD_STATE', payload: {
-                        friends: [...new Set([...(state.friends || []).map(String), String(player.id)])],
-                        players: (state.players || []).some(p => String(p.id) === String(player.id))
-                            ? state.players
-                            : [...(state.players || []), player],
-                    }});
-                    setToast('Friend added!');
+                if (data.success) {
+                    const fRes = await fetch('/api/friends');
+                    if (fRes.ok) {
+                        const fData = await fRes.json();
+                        dispatch({ type: 'LOAD_STATE', payload: {
+                            friends: (fData.friends || []).map(f => f.id || f),
+                            pendingFriends: fData.pendingRequests || [],
+                            players: (state.players || []).some(p => String(p.id) === String(player.id))
+                                ? state.players
+                                : [...(state.players || []), player],
+                        }});
+                    }
+                    setToast('Friend request sent!');
+                } else if (data.error === 'Already friends') {
+                    setToast('Already friends!');
                 } else {
-                    setToast(data.error || 'Could not add friend');
+                    // Fallback: direct add
+                    const res2 = await fetch('/api/friends', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'add', friendId: player.id }),
+                    });
+                    const d2 = await res2.json();
+                    if (d2.success || d2.friendship) {
+                        dispatch({ type: 'LOAD_STATE', payload: {
+                            friends: [...new Set([...(state.friends || []).map(String), String(player.id)])],
+                            players: (state.players || []).some(p => String(p.id) === String(player.id))
+                                ? state.players
+                                : [...(state.players || []), player],
+                        }});
+                        setToast('Friend added!');
+                    } else {
+                        setToast(d2.error || 'Could not add friend');
+                    }
                 }
             }
         } catch (_) {
@@ -168,8 +209,13 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
                     </div>
                     {!isOwn && state.isAuthenticated && (
                         <div style={{ marginBottom: 16 }}>
-                            <button className={`btn btn-sm ${isFriend ? 'btn-outline' : 'btn-primary'}`} onClick={handleToggleFriend} disabled={friendLoading} style={{ minWidth: 120 }}>
-                                {friendLoading ? '…' : isFriend ? '✓ Friends' : '+ Add Friend'}
+                            <button
+                                className={`btn btn-sm ${isFriend ? 'btn-outline' : isPendingSent ? 'btn-ghost' : 'btn-primary'}`}
+                                onClick={handleToggleFriend}
+                                disabled={friendLoading}
+                                style={{ minWidth: 130, opacity: isPendingSent ? 0.85 : 1 }}
+                            >
+                                {friendLoading ? '…' : isFriend ? '✓ Friends' : isPendingSent ? '⏳ Request Sent' : '+ Add Friend'}
                             </button>
                         </div>
                     )}
