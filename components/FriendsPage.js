@@ -92,12 +92,24 @@ export default function FriendsPage({ onViewProfile }) {
     };
 
     const handleSetTier = async (friendId, tier) => {
-        await fetch('/api/friends/tier', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ friendId, sport: tierSport, tier }),
-        });
+        // Optimistic update immediately so UI feels instant
         dispatch({ type: 'SET_FRIEND_TIER', payload: { friendId, sport: tierSport, tier } });
+        try {
+            const res = await fetch('/api/friends/tier', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ friendId, sport: tierSport, tier }),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                console.error('Tier save failed:', err);
+                // Revert optimistic update on failure
+                dispatch({ type: 'SET_FRIEND_TIER', payload: { friendId, sport: tierSport, tier: null } });
+            }
+        } catch (err) {
+            console.error('Tier save network error:', err);
+            dispatch({ type: 'SET_FRIEND_TIER', payload: { friendId, sport: tierSport, tier: null } });
+        }
     };
 
     const handleWhatsApp = (friend) => {
