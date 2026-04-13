@@ -45,6 +45,15 @@ export async function GET(req) {
 
     // --- Try Prisma first ---
     try {
+        // Auto-migrate: add new columns if they don't exist yet (safe — uses IF NOT EXISTS)
+        try {
+            await prisma.$executeRawUnsafe(`ALTER TABLE "Game" ADD COLUMN IF NOT EXISTS "upiId" TEXT`);
+            await prisma.$executeRawUnsafe(`ALTER TABLE "Game" ADD COLUMN IF NOT EXISTS "score" TEXT`);
+            await prisma.$executeRawUnsafe(`ALTER TABLE "Rsvp" ADD COLUMN IF NOT EXISTS "paymentStatus" TEXT DEFAULT 'not_required'`);
+        } catch (migrateErr) {
+            console.error('Auto-migrate error (non-fatal):', migrateErr.message);
+        }
+
         // Auto-expire: single batch UPDATE for all games whose date is >2 days old.
         // This replaces the N+1 loop that fired one UPDATE per expired game.
         try {

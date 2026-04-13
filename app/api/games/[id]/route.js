@@ -9,6 +9,13 @@ export async function GET(req, props) {
     const gameId = params.id;
     
     try {
+        // Auto-migrate new columns (safe — IF NOT EXISTS)
+        try {
+            await prisma.$executeRawUnsafe(`ALTER TABLE "Game" ADD COLUMN IF NOT EXISTS "upiId" TEXT`);
+            await prisma.$executeRawUnsafe(`ALTER TABLE "Game" ADD COLUMN IF NOT EXISTS "score" TEXT`);
+            await prisma.$executeRawUnsafe(`ALTER TABLE "Rsvp" ADD COLUMN IF NOT EXISTS "paymentStatus" TEXT DEFAULT 'not_required'`);
+        } catch (_) { /* non-fatal */ }
+
         let game = null;
         let prismaError = false;
 
