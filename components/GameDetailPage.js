@@ -21,6 +21,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     const [broadcastStatus, setBroadcastStatus] = useState(null); // null | 'sending' | 'sent' | 'error'
     const [broadcastResult, setBroadcastResult] = useState(null);
     const [nudgedPlayers, setNudgedPlayers] = useState(new Set());
+    const [acceptingPlayers, setAcceptingPlayers] = useState(new Set());
 
     const [notFound, setNotFound] = useState(false);
     const game = state.games.find(g => g.id === gameId);
@@ -148,44 +149,52 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     };
 
     const handleHostAction = async (playerId, status) => {
+        if (acceptingPlayers.has(playerId)) return;
+
         const existingRsvp = (game.rsvps || []).find(r => r.playerId === playerId);
         const pos = existingRsvp?.position || '';
-        
-        // Use either dbId or the id from the player object
-        const p = state.players?.find(pl => pl.id === playerId);
-        const actualPlayerId = p?.dbId || p?.id || playerId;
-        
-        dispatch({ type: 'RSVP', payload: { gameId, playerId: actualPlayerId, status, position: pos } });
+
+        // Optimistic update
+        dispatch({ type: 'RSVP', payload: { gameId, playerId, status, position: pos } });
+        setAcceptingPlayers(prev => new Set([...prev, playerId]));
 
         try {
-            await fetch('/api/games/rsvp', {
+            const rsvpRes = await fetch('/api/games/rsvp', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ gameId, playerId: actualPlayerId, status, position: pos })
+                body: JSON.stringify({ gameId, playerId, status, position: pos })
             });
-            // Send immediate reminder only on first approval (not if already 'yes')
-            if (status === 'yes' && existingRsvp?.status !== 'yes') {
-              fetch('/api/games/reminder', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ gameId, playerId: actualPlayerId, type: 'approval' })
-              }).catch(err => console.error('Reminder send failed:', err));
+
+            if (!rsvpRes.ok) {
+                // Revert optimistic update — server rejected it
+                dispatch({ type: 'RSVP', payload: { gameId, playerId, status: existingRsvp?.status || 'pending', position: pos } });
+                return;
             }
+
+            // Fire-and-forget reminder on first approval
+            if (status === 'yes' && existingRsvp?.status !== 'yes') {
+                fetch('/api/games/reminder', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ gameId, playerId, type: 'approval' })
+                }).catch(err => console.error('Reminder send failed:', err));
+            }
+
+            // Refresh game using UPDATE_GAME so the reducer merges into current state
+            // (avoids the stale-closure issue of using state.games here)
+            try {
+                const res = await fetch(`/api/games/${gameId}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.game) dispatch({ type: 'UPDATE_GAME', payload: data.game });
+                }
+            } catch (_) {}
         } catch (err) {
             console.error('Host action persistence failed:', err);
-        }
-        
-        // Refresh game data to reflect updated RSVP status
-        try {
-          const res = await fetch(`/api/games/${gameId}`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.game) {
-                dispatch({ type: 'LOAD_STATE', payload: { games: state.games.map(g => g.id === gameId ? data.game : g) } });
-            }
-          }
-        } catch (refreshErr) {
-          console.error('Failed to refresh game after host action:', refreshErr);
+            // Revert optimistic update on network error
+            dispatch({ type: 'RSVP', payload: { gameId, playerId, status: existingRsvp?.status || 'pending', position: pos } });
+        } finally {
+            setAcceptingPlayers(prev => { const s = new Set(prev); s.delete(playerId); return s; });
         }
     };
     
@@ -415,8 +424,10 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                                         {p.ratings?.[game.sport]?.count >= 10 && <div className="text-xs text-muted">⭐ {p.ratings[game.sport].overall} Reliability</div>}
                                     </div>
                                     <div style={{ display: 'flex', gap: 6 }}>
-                                        <button className="btn btn-sm btn-ghost" style={{ color: 'var(--danger)', padding: '4px 8px' }} onClick={() => handleHostAction(r.playerId, 'no')}>Deny</button>
-                                        <button className="btn btn-sm btn-primary" style={{ padding: '4px 12px' }} onClick={() => handleHostAction(r.playerId, 'yes')} disabled={spots <= 0}>Accept</button>
+                                        <button className="btn btn-sm btn-ghost" style={{ color: 'var(--danger)', padding: '4px 8px' }} onClick={() => handleHostAction(r.playerId, 'no')} disabled={acceptingPlayers.has(r.playerId)}>Deny</button>
+                                        <button className="btn btn-sm btn-primary" style={{ padding: '4px 12px' }} onClick={() => handleHostAction(r.playerId, 'yes')} disabled={spots <= 0 || acceptingPlayers.has(r.playerId)}>
+                                            {acceptingPlayers.has(r.playerId) ? '…' : 'Accept'}
+                                        </button>
                                     </div>
                                 </div>
                             );
