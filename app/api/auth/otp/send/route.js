@@ -1,5 +1,5 @@
 import { Resend } from 'resend';
-import { getSupabase } from '@/lib/supabase';
+import { prisma } from '@/lib/prisma';
 
 export async function POST(req) {
     try {
@@ -12,17 +12,24 @@ export async function POST(req) {
         const code = Math.floor(100000 + Math.random() * 900000).toString();
         const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-        // Store OTP in Supabase (invalidate old codes first)
-        const supabase = getSupabase();
-        if (supabase) {
-            await supabase.from('otp_codes').update({ used: true }).eq('email', normalizedEmail).eq('used', false);
-            await supabase.from('otp_codes').insert({ email: normalizedEmail, code, expires_at: expiresAt.toISOString() });
+        // Invalidate old unused codes then store new one
+        try {
+            await prisma.otpCode.updateMany({
+                where: { email: normalizedEmail, used: false },
+                data: { used: true },
+            });
+            await prisma.otpCode.create({
+                data: { email: normalizedEmail, code, expiresAt },
+            });
+        } catch (dbErr) {
+            console.error('[EMAIL OTP SEND] DB error:', dbErr.message);
+            return Response.json({ error: 'Could not save verification code. Try again.' }, { status: 500 });
         }
 
         // Send via Resend
         const apiKey = process.env.RESEND_API_KEY;
         if (!apiKey) {
-            console.log(`[AUTH DEV] RESEND not configured — use bypass code 990770 for ${normalizedEmail}`);
+            console.log(`[AUTH DEV] RESEND not configured — bypass code for ${normalizedEmail}: ${code}`);
             return Response.json({ success: true, devMode: true });
         }
 

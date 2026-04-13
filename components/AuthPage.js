@@ -358,17 +358,33 @@ export default function AuthPage() {
             <input type="text" placeholder="Your name" value={profile.name} onChange={e => setProfile(prev => ({ ...prev, name: e.target.value }))} style={{ fontSize: '1.125rem', padding: '16px 20px', width: '100%' }} autoFocus />
         </div>,
         <div key="phone-capture" className="animate-fade-in">
-            <h2 style={{ marginBottom: 8 }}>Game Reminders</h2>
-            <p className="text-muted text-sm" style={{ marginBottom: 24 }}>We'll send you SMS game reminders. Enter your WhatsApp/Mobile number.</p>
-            <input 
-                type="tel" 
-                placeholder="e.g. 917904008139" 
-                value={profile.phone} 
-                onChange={e => setProfile(prev => ({ ...prev, phone: e.target.value }))} 
-                style={{ fontSize: '1.25rem', padding: '16px 20px', width: '100%', border: '1px solid var(--primary-color)' }} 
-                autoFocus 
-            />
-            <p className="text-xs text-muted" style={{ marginTop: 12 }}>Include country code (e.g. 91 for India).</p>
+            {authMode === 'phone' ? (
+                // Phone already verified — show confirmation and let them continue
+                <div style={{ textAlign: 'center', padding: '24px 0' }}>
+                    <div style={{ fontSize: '3rem', marginBottom: 16 }}>✅</div>
+                    <h2 style={{ marginBottom: 8 }}>Phone Verified!</h2>
+                    <p className="text-muted text-sm" style={{ marginBottom: 8 }}>
+                        <strong>{verifiedPhone}</strong> is confirmed.
+                    </p>
+                    <p className="text-muted text-sm">
+                        We'll send game reminders to this number. Tap Next to continue.
+                    </p>
+                </div>
+            ) : (
+                <>
+                    <h2 style={{ marginBottom: 8 }}>Game Reminders</h2>
+                    <p className="text-muted text-sm" style={{ marginBottom: 24 }}>We'll send you SMS game reminders. Enter your WhatsApp/Mobile number.</p>
+                    <input
+                        type="tel"
+                        placeholder="e.g. 917904008139"
+                        value={profile.phone}
+                        onChange={e => setProfile(prev => ({ ...prev, phone: e.target.value }))}
+                        style={{ fontSize: '1.25rem', padding: '16px 20px', width: '100%', border: '1px solid var(--primary-color)' }}
+                        autoFocus
+                    />
+                    <p className="text-xs text-muted" style={{ marginTop: 12 }}>Include country code (e.g. 91 for India).</p>
+                </>
+            )}
         </div>,
         <div key="photo" className="animate-fade-in">
             <h2 style={{ marginBottom: 8 }}>Add a Profile Photo</h2>
@@ -470,8 +486,14 @@ export default function AuthPage() {
             </div>
         </div>,
         <div key="credentials" className="animate-fade-in">
-            <h2 style={{ marginBottom: 8 }}>Secure your account</h2>
-            <p className="text-muted text-sm" style={{ marginBottom: 24 }}>Set an email and password to log in next time.</p>
+            <h2 style={{ marginBottom: 8 }}>
+                {authMode === 'phone' ? 'Set up your login' : 'Secure your account'}
+            </h2>
+            <p className="text-muted text-sm" style={{ marginBottom: 24 }}>
+                {authMode === 'phone'
+                    ? 'Create an email & password so you can log in next time without needing an SMS code.'
+                    : 'Set a password to log in next time without needing a code.'}
+            </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div>
                     <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Email Address</label>
