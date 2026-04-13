@@ -169,6 +169,13 @@ export async function POST(req) {
         return Response.json({ error: 'Authentication required' }, { status: 401 });
     }
 
+    // Ensure new columns exist before attempting to create (idempotent)
+    try {
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Game" ADD COLUMN IF NOT EXISTS "upiId" TEXT`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Game" ADD COLUMN IF NOT EXISTS "score" TEXT`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Rsvp" ADD COLUMN IF NOT EXISTS "paymentStatus" TEXT DEFAULT 'not_required'`);
+    } catch (_) { /* non-fatal */ }
+
     // --- Try Prisma first ---
     try {
         const newGame = await prisma.game.create({
@@ -298,6 +305,21 @@ export async function POST(req) {
             return Response.json({ error: error.message }, { status: 500 });
         }
 
+        // Also create the organizer's RSVP in game_rsvps
+        try {
+            await supabase.from('game_rsvps').insert({
+                game_id:   gameId,
+                player_id: userId,
+                status:    'yes',
+                position:  game.organizerPosition || '',
+            });
+        } catch (rsvpErr) {
+            console.error('Organizer RSVP Supabase error:', rsvpErr?.message);
+        }
+
+        const organizerName = session.user?.name || '';
+        const organizerPhoto = session.user?.photo || null;
+
         // Return a game object shaped like what the frontend expects
         const savedGame = {
             id: gameId,
@@ -315,7 +337,7 @@ export async function POST(req) {
             skillLevel: game.skillLevel || 'All Levels',
             status: 'open',
             visibility: game.visibility || 'public',
-            approvalRequired: false,
+            approvalRequired: !!game.approvalRequired,
             bookingImage: null,
             pitchType: game.pitchType || null,
             surface: game.surface || null,
@@ -324,8 +346,8 @@ export async function POST(req) {
             gender: game.gender || 'mixed',
             amenities: typeof game.amenities === 'string' ? game.amenities : JSON.stringify(game.amenities || []),
             organizerId: userId,
-            organizer: { id: userId, name: '', photo: null },
-            rsvps: [{ playerId: userId, status: 'yes', position: game.organizerPosition || '', player: null }],
+            organizer: { id: userId, name: organizerName, photo: organizerPhoto },
+            rsvps: [{ playerId: userId, status: 'yes', position: game.organizerPosition || '', player: { id: userId, name: organizerName, photo: organizerPhoto, positions: {}, ratings: {} } }],
             createdAt: new Date().toISOString(),
         };
 

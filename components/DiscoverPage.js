@@ -28,10 +28,11 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
             .filter(g => g.status === 'open')
             .filter(g => {
                 const vis = g.visibility || 'public';
+                const orgId = String(g.organizerId || g.organizer?.id || g.organizer || '');
+                if (vis === 'private') return false;
                 if (vis === 'public') return true;
-                if (g.organizer === currentUserId) return true;  // always show own games
-                if (vis === 'friends') return friendIds.has(g.organizer);
-                return false; // private
+                if (vis === 'friends') return friendIds.has(orgId) || orgId === currentUserId;
+                return false;
             })
             .filter(g => sportFilter === 'all' || g.sport === sportFilter)
             .filter(g => skillFilter === 'all' || g.skillLevel === skillFilter)
