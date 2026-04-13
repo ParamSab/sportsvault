@@ -37,7 +37,8 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
         ? (state.currentUser || getPlayer('p1'))
         : (getPlayer(playerId) || (state.players || []).find(p => p && String(p.id) === String(playerId)) || fetchedPlayer);
 
-    // Fetch DB player if not found in mock/store data
+    // Fetch DB player if not found in mock/store data — MUST be before any early return.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         if (isOwn) return;
         if (getPlayer(playerId) || (state.players || []).find(p => p && String(p.id) === String(playerId))) return;
@@ -45,21 +46,31 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
         setIsLoadingPlayer(true);
         fetch(`/api/users?id=${playerId}`)
             .then(r => r.json())
-            .then(data => { if (data.user) setFetchedPlayer({ ...data.user, gamesPlayed: 0, wins: 0, losses: 0 }); })
+            .then(data => {
+                if (data.user) {
+                    const p = { ...data.user, gamesPlayed: data.user.gamesPlayed ?? 0, wins: data.user.wins ?? 0, losses: data.user.losses ?? 0 };
+                    setFetchedPlayer(p);
+                    // Put into global store so FriendsPage can find this player after an ADD_FRIEND
+                    dispatch({ type: 'LOAD_STATE', payload: { players: [...(state.players || []).filter(x => x.id !== p.id), p] } });
+                }
+            })
             .catch(() => {})
             .finally(() => setIsLoadingPlayer(false));
-    }, [playerId, isOwn, state.players]);
+    // Intentionally omit state.players — including it causes an infinite re-fetch loop.
+    // playerId/isOwn are the only values that should trigger a re-fetch.
+    }, [playerId, isOwn]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Fetch game history from DB (own profile only)
+    // Fetch game history from DB (own profile only) — MUST be before any early return
     useEffect(() => {
-        if (!isOwn || !player?.dbId) return;
+        const uid = player?.dbId || player?.id;
+        if (!isOwn || !uid) return;
         setHistoryLoading(true);
-        fetch(`/api/games/history?userId=${player.dbId}`)
+        fetch(`/api/games/history?userId=${uid}`)
             .then(r => r.json())
             .then(data => { setSavedGames(data.saved || []); setGameHistory(data.history || []); })
             .catch(() => { setSavedGames([]); setGameHistory([]); })
             .finally(() => setHistoryLoading(false));
-    }, [isOwn, player?.dbId]);
+    }, [isOwn, player?.dbId, player?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     if (!player) {
         if (isLoadingPlayer) return <div className="glass-card no-hover text-center" style={{ padding: 48 }}><h3>Loading profile…</h3></div>;
@@ -83,32 +94,82 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
     let rawPositions = {};
     try { rawPositions = typeof player.positions === 'string' ? JSON.parse(player.positions || '{}') : (player.positions || {}); } catch { rawPositions = {}; }
     const playerPosition = rawPositions[currentSport] || 'Not set';
-    const hasRating = rating && rating.count >= 10;
+    const hasRating = rating && rating.count >= 3;
     const thoughts = Array.isArray(player.thoughts) ? player.thoughts : [];
     const playerGames = (state.games || []).filter(g => (g.rsvps || []).some(r => String(r.playerId) === String(player.id)));
     const pastGames = playerGames.filter(g => g.status === 'completed');
     const isFriend = !isOwn && (state.friends || []).some(fId => String(fId) === String(player.id));
+    const isPendingSent = !isOwn && (state.pendingFriends || []).some(f => f.isSender && String(f.id) === String(player.id));
 
     const handleToggleFriend = async () => {
         setFriendLoading(true);
         try {
             if (isFriend) {
-                await fetch('/api/friends', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'remove', friendId: player.id }) });
+                await fetch('/api/friends', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'remove', friendId: player.id }),
+                });
                 dispatch({ type: 'REMOVE_FRIEND', payload: player.id });
                 setToast('Friend removed');
+            } else if (isPendingSent) {
+                // Cancel the pending request
+                await fetch('/api/friends', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'remove', friendId: player.id }),
+                });
+                const fRes = await fetch('/api/friends');
+                if (fRes.ok) {
+                    const fData = await fRes.json();
+                    dispatch({ type: 'LOAD_STATE', payload: {
+                        friends: (fData.friends || []).map(f => f.id || f),
+                        pendingFriends: fData.pendingRequests || [],
+                    }});
+                }
+                setToast('Request withdrawn');
             } else {
-                const res = await fetch('/api/friends/request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send', friendId: player.id }) });
+                // Send a friend request
+                const res = await fetch('/api/friends/request', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'send', friendId: player.id }),
+                });
                 const data = await res.json();
                 if (data.success) {
-                    dispatch({ type: 'ADD_FRIEND', payload: player.id });
+                    const fRes = await fetch('/api/friends');
+                    if (fRes.ok) {
+                        const fData = await fRes.json();
+                        dispatch({ type: 'LOAD_STATE', payload: {
+                            friends: (fData.friends || []).map(f => f.id || f),
+                            pendingFriends: fData.pendingRequests || [],
+                            players: (state.players || []).some(p => String(p.id) === String(player.id))
+                                ? state.players
+                                : [...(state.players || []), player],
+                        }});
+                    }
                     setToast('Friend request sent!');
-                } else if (data.error === 'Already friends' || data.error === 'Request already exists') {
-                    setToast('Request already sent');
+                } else if (data.error === 'Already friends') {
+                    setToast('Already friends!');
                 } else {
                     // Fallback: direct add
-                    await fetch('/api/friends', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'add', friendId: player.id }) });
-                    dispatch({ type: 'ADD_FRIEND', payload: player.id });
-                    setToast('Friend added!');
+                    const res2 = await fetch('/api/friends', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'add', friendId: player.id }),
+                    });
+                    const d2 = await res2.json();
+                    if (d2.success || d2.friendship) {
+                        dispatch({ type: 'LOAD_STATE', payload: {
+                            friends: [...new Set([...(state.friends || []).map(String), String(player.id)])],
+                            players: (state.players || []).some(p => String(p.id) === String(player.id))
+                                ? state.players
+                                : [...(state.players || []), player],
+                        }});
+                        setToast('Friend added!');
+                    } else {
+                        setToast(d2.error || 'Could not add friend');
+                    }
                 }
             }
         } catch (_) {
@@ -137,7 +198,7 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
                 <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 80, background: sports[0] ? SPORTS[sports[0]]?.gradient : 'linear-gradient(135deg, #6366f1, #8b5cf6)', opacity: 0.3 }} />
                 <div style={{ position: 'relative', paddingTop: 24 }}>
                     <div className="avatar avatar-xl" style={{ margin: '0 auto 12px', borderColor: trust.color, background: player.photo ? `url(${player.photo}) center/cover` : `linear-gradient(135deg, ${trust.color}30, var(--bg-card))`, fontSize: player.photo ? '0' : '1.75rem' }}>
-                        {player.photo ? '' : getInitials(player.name)}
+                        {player.photo ? '' : getInitials(player.name || 'U')}
                     </div>
                     <h2 style={{ fontSize: '1.25rem', marginBottom: 2 }}>{player.name || 'Unknown'}</h2>
                     {(player.createdAt || player.joined) && <p className="text-sm text-muted">Member since {formatDate(player.createdAt || player.joined)}</p>}
@@ -148,8 +209,13 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
                     </div>
                     {!isOwn && state.isAuthenticated && (
                         <div style={{ marginBottom: 16 }}>
-                            <button className={`btn btn-sm ${isFriend ? 'btn-outline' : 'btn-primary'}`} onClick={handleToggleFriend} disabled={friendLoading} style={{ minWidth: 120 }}>
-                                {friendLoading ? '…' : isFriend ? '✓ Friends' : '+ Add Friend'}
+                            <button
+                                className={`btn btn-sm ${isFriend ? 'btn-outline' : isPendingSent ? 'btn-ghost' : 'btn-primary'}`}
+                                onClick={handleToggleFriend}
+                                disabled={friendLoading}
+                                style={{ minWidth: 130, opacity: isPendingSent ? 0.85 : 1 }}
+                            >
+                                {friendLoading ? '…' : isFriend ? '✓ Friends' : isPendingSent ? '⏳ Request Sent' : '+ Add Friend'}
                             </button>
                         </div>
                     )}
@@ -169,22 +235,26 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
 
             <div className="glass-card no-hover" style={{ marginBottom: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                    <h3 style={{ fontSize: '1rem' }}>{SPORTS[currentSport]?.emoji} {SPORTS[currentSport]?.name} Rating</h3>
-                    <span className="text-xs text-muted">Position: <span style={{ color: SPORTS[currentSport]?.color, fontWeight: 600 }}>{playerPosition}</span></span>
+                    <h3 style={{ fontSize: '1rem' }}>{SPORTS[currentSport]?.emoji || '🏅'} {SPORTS[currentSport]?.name || currentSport} Rating</h3>
+                    <span className="text-xs text-muted">Position: <span style={{ color: SPORTS[currentSport]?.color || 'var(--primary-color)', fontWeight: 600 }}>{playerPosition}</span></span>
                 </div>
                 {hasRating ? (
                     <>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
                             <span style={{ fontSize: '2.5rem', fontWeight: 800, color: 'var(--warning)', lineHeight: 1 }}>{rating.overall}</span>
-                            <div><div style={{ fontSize: '1.25rem', fontWeight: 700 }}>/ 10</div><div className="text-xs text-muted">{rating.count} ratings</div></div>
+                            <div><div style={{ fontSize: '1.25rem', fontWeight: 700 }}>/ 5</div><div className="text-xs text-muted">{rating.count} rating{rating.count !== 1 ? 's' : ''}</div></div>
                         </div>
                         {rating.attrs && Object.keys(rating.attrs).length > 0 && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                                 {Object.entries(rating.attrs).map(([attr, val]) => (
-                                    <div key={attr} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                        <span className="text-xs" style={{ width: 100, color: 'var(--text-secondary)' }}>{attr}</span>
-                                        <div style={{ flex: 1, height: 8, background: 'var(--bg-input)', borderRadius: 4, overflow: 'hidden' }}><div style={{ width: `${(val / 10) * 100}%`, height: '100%', background: SPORTS[currentSport]?.gradient, borderRadius: 4, transition: 'width 0.5s ease' }} /></div>
-                                        <span className="text-xs font-semibold" style={{ width: 32, textAlign: 'right' }}>{!isNaN(Number(val)) && val !== null ? Number(val).toFixed(1) : 'N/A'}</span>
+                                    <div key={attr} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                        <span className="text-xs" style={{ width: 96, color: 'var(--text-secondary)', flexShrink: 0 }}>{attr}</span>
+                                        <div style={{ flex: 1, height: 7, background: 'var(--bg-input)', borderRadius: 4, overflow: 'hidden' }}>
+                                            <div style={{ width: `${(val / 5) * 100}%`, height: '100%', background: SPORTS[currentSport]?.gradient || 'var(--primary-color)', borderRadius: 4, transition: 'width 0.5s ease' }} />
+                                        </div>
+                                        <span className="text-xs" style={{ width: 28, textAlign: 'right', fontWeight: 700 }}>
+                                            {!isNaN(Number(val)) && val !== null ? Number(val).toFixed(1) : '—'}
+                                        </span>
                                     </div>
                                 ))}
                             </div>
@@ -194,7 +264,7 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
                     <div style={{ textAlign: 'center', padding: 24, background: 'var(--bg-input)', borderRadius: 'var(--radius-md)' }}>
                         <div style={{ fontSize: '1.5rem', marginBottom: 8 }}>🔒</div>
                         <div style={{ fontWeight: 600, marginBottom: 4 }}>Rating Pending</div>
-                        <div className="text-xs text-muted">{rating?.count || 0}/10 ratings received. Need {10 - (rating?.count || 0)} more.</div>
+                        <div className="text-xs text-muted">{rating?.count || 0}/3 ratings received. Need {Math.max(0, 3 - (rating?.count || 0))} more to unlock.</div>
                     </div>
                 )}
             </div>

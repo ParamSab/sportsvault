@@ -10,6 +10,7 @@ import GameDetailPage from './GameDetailPage';
 import RatePage from './RatePage';
 import SportsCVPage from './SportsCVPage';
 import AuthPage from './AuthPage';
+import { getInitials } from '@/lib/mockData';
 
 export default function AppShell() {
     const { state, dispatch } = useStore();
@@ -23,15 +24,30 @@ export default function AppShell() {
     const isGuest = !state.isAuthenticated;
 
     useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const params = new URLSearchParams(window.location.search);
-            const gameId = params.get('game');
-            if (gameId) {
+        if (!state.isLoaded) return;
+
+        const params = new URLSearchParams(window.location.search);
+        const gameId = params.get('game');
+        
+        if (gameId) {
+            if (isGuest) {
+                localStorage.setItem('sportsvault_pending_game', gameId);
+                setShowAuthGate(true);
+            } else {
                 setViewingGame(gameId);
+            }
+            // Add a slight delay before clearing URL to ensure state sticks
+            setTimeout(() => {
                 window.history.replaceState({}, document.title, window.location.pathname);
+            }, 100);
+        } else if (!isGuest) {
+            const pending = localStorage.getItem('sportsvault_pending_game');
+            if (pending) {
+                setViewingGame(pending);
+                localStorage.removeItem('sportsvault_pending_game');
             }
         }
-    }, []);
+    }, [state.isLoaded, isGuest]);
 
     const navigate = (tab) => {
         if (isGuest && tab !== 'discover' && tab !== 'profile') {
@@ -46,7 +62,15 @@ export default function AppShell() {
         setRatingGame(null);
     };
 
-    const unreadCount = state.notifications.filter(n => !n.read).length;
+    const pendingRequestsCount = (state.pendingFriends || []).filter(f => !f.isSender).length;
+    const myUserId = state.currentUser?.dbId || state.currentUser?.id;
+    const pendingApprovalsCount = myUserId
+        ? (state.games || [])
+            .filter(g => g.organizerId === myUserId)
+            .flatMap(g => (g.rsvps || []).filter(r => r.status === 'pending'))
+            .length
+        : 0;
+    const unreadCount = (state.notifications || []).filter(n => !n.read).length + pendingRequestsCount + pendingApprovalsCount;
 
     const renderContent = () => {
         if (showAuthGate) {
@@ -68,7 +92,6 @@ export default function AppShell() {
         }
 
         if (activeTab === 'profile' && isGuest) return <AuthPage />;
-
         if (viewingGame) return <GameDetailPage gameId={viewingGame} onBack={() => setViewingGame(null)} onViewProfile={setViewingProfile} />;
         if (viewingProfile) return <ProfilePage playerId={viewingProfile} onBack={() => setViewingProfile(null)} onViewCV={setViewingCV} onViewGame={setViewingGame} />;
         if (viewingCV) return <SportsCVPage playerId={viewingCV} onBack={() => setViewingCV(null)} />;
@@ -88,10 +111,30 @@ export default function AppShell() {
         <div style={{ minHeight: '100dvh', background: 'var(--bg-primary)' }}>
             {/* Header */}
             <header className="app-header">
-                <div className="app-logo" onClick={() => navigate('discover')} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: '1.5rem', lineHeight: 1 }}>⚽</span>
-                    <span>SportsVault</span>
+                <div onClick={() => navigate('discover')} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{
+                        width: 32, height: 32,
+                        background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+                        borderRadius: 8,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '1rem',
+                        boxShadow: '0 0 12px rgba(99,102,241,0.4)',
+                        flexShrink: 0,
+                    }}>
+                        ⚡
+                    </div>
+                    <span style={{
+                        fontFamily: 'var(--font-heading)',
+                        fontWeight: 800,
+                        fontSize: '1.2rem',
+                        background: 'linear-gradient(135deg, #6366f1, #a855f7, #ec4899)',
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                    }}>
+                        SportsVault
+                    </span>
                 </div>
+
                 {isGuest ? (
                     <button className="btn btn-xs btn-primary" style={{ padding: '7px 16px', borderRadius: 99, fontWeight: 700 }} onClick={() => navigate('profile')}>
                         Join Now
@@ -131,14 +174,18 @@ export default function AppShell() {
                     <span className="nav-icon">🏟️</span>
                     <span className="nav-label">Games</span>
                 </button>
-                <button className={`nav-item ${activeTab === 'friends' ? 'active' : ''}`} onClick={() => navigate('friends')}>
+                <button className={`nav-item ${activeTab === 'friends' && !showAuthGate ? 'active' : ''}`} onClick={() => navigate('friends')}>
                     <span className="nav-icon">👥</span>
-                    <span className="nav-label">Friends</span>
+                    <span className="nav-label">Squad</span>
                 </button>
                 <button className="create-btn-nav" onClick={() => navigate('create')}>
                     <span style={{ fontSize: '1.75rem', lineHeight: 1, fontWeight: 300 }}>＋</span>
                 </button>
-                <button className={`nav-item ${activeTab === 'notifications' ? 'active' : ''}`} onClick={() => navigate('notifications')}>
+                <button
+                    className={`nav-item ${activeTab === 'notifications' && !showAuthGate ? 'active' : ''}`}
+                    onClick={() => navigate('notifications')}
+                    style={{ position: 'relative' }}
+                >
                     <span className="nav-icon">🔔</span>
                     <span className="nav-label">Alerts</span>
                     {(unreadCount > 0 && !isGuest) && <span className="badge-count">{unreadCount > 9 ? '9+' : unreadCount}</span>}

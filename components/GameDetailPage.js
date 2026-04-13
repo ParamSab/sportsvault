@@ -3,6 +3,8 @@ import { useState, useMemo, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { SPORTS, POSITIONS, getPlayer, getSportEmoji, spotsLeft, formatDate, getInitials, getTrustTier } from '@/lib/mockData';
 import { balanceTeams, generateWhatsAppMessage, getWhatsAppUrl } from '@/lib/teamBalancer';
+import PitchView from './PitchView';
+import PaymentPage from './PaymentPage';
 
 const PRIVACY_LABELS = {
     public: { emoji: '🌍', label: 'Public', color: '#22c55e' },
@@ -15,6 +17,8 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     const [selectedPosition, setSelectedPosition] = useState('');
     const [showTeams, setShowTeams] = useState(false);
     const [showBroadcastPanel, setShowBroadcastPanel] = useState(false);
+    const [playerView, setPlayerView] = useState('pitch'); // 'pitch' | 'list'
+    const [showJoinConfirm, setShowJoinConfirm] = useState(false);
     
     const isGuest = !state.isAuthenticated;
     const [broadcastTier, setBroadcastTier] = useState(null);
@@ -24,25 +28,64 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     const [acceptingPlayers, setAcceptingPlayers] = useState(new Set());
 
     const [notFound, setNotFound] = useState(false);
-    const game = state.games.find(g => g.id === gameId);
-    
+    const [msgCopied, setMsgCopied] = useState(false);      // MUST be before any early return
+    const [freshGame, setFreshGame] = useState(null);
+    const [showPayment, setShowPayment] = useState(false);
+    const [scoreInput, setScoreInput] = useState({ team1: '', team2: '' });
+    const [scoreSaving, setScoreSaving] = useState(false);
+    const [scorers, setScorers] = useState({ team1: [], team2: [] }); // goalscorer/assister IDs per team
+    // freshGame (from API) takes priority over stale global state
+    const game = freshGame || state.games.find(g => String(g.id) === String(gameId));
+
+    const refreshGame = () => {
+        fetch(`/api/games/${gameId}`)
+            .then(r => r.json())
+            .then(d => { if (d.game) setFreshGame(d.game); else if (!game) setNotFound(true); })
+            .catch(() => { if (!game) setNotFound(true); });
+    };
+
     useEffect(() => {
-        if (!game && state.isLoaded && !notFound) {
-            fetch(`/api/games/${gameId}`)
-                .then(r => r.json())
-                .then(d => {
-                    if (d.game) {
-                        dispatch({ type: 'LOAD_STATE', payload: { games: [...state.games, d.game] } });
-                    } else {
-                        setNotFound(true);
-                    }
-                })
-                .catch(e => {
-                    console.error('Failed fetching individual game:', e);
-                    setNotFound(true);
-                });
-        }
-    }, [gameId, game, state.isLoaded, notFound, dispatch, state.games]);
+        if (!state.isLoaded) return;
+        refreshGame();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [gameId, state.isLoaded]);
+
+    // All useMemo hooks MUST be before any early return (Rules of Hooks)
+    const confirmedPlayers = useMemo(() => {
+        if (!game) return [];
+        const currentUserId = state.currentUser?.dbId || state.currentUser?.id || 'current';
+        return (game.rsvps || [])
+            .filter(r => r.status === 'yes' || r.status === 'checked_in')
+            .map(r => {
+                const p = r.player || getPlayer(r.playerId) || state.players?.find(pl => pl.id === r.playerId) || (r.playerId === currentUserId ? state.currentUser : null);
+                return p ? { ...p, rsvpPosition: r.position || r.rsvpPosition } : null;
+            }).filter(Boolean);
+    }, [game, state.currentUser, state.players]);
+
+    const teams = useMemo(() => {
+        if (!game || confirmedPlayers.length < 4) return null;
+        return balanceTeams(confirmedPlayers, game.sport);
+    }, [confirmedPlayers, game]);
+
+    const friendsInTiers = useMemo(() => {
+        const tiers = { 1: [], 2: [], 3: [] };
+        if (!game || !state.friendTiers || !state.friends) return tiers;
+        state.friends.forEach(fId => {
+            const t = state.friendTiers[fId]?.[game.sport];
+            if (t) {
+                const p = getPlayer(fId) || state.players?.find(pl => pl.id === fId);
+                if (p) tiers[t].push(p);
+            }
+        });
+        return tiers;
+    }, [game, state.friendTiers, state.friends, state.players]);
+
+    const amenList = useMemo(() => {
+        if (!game) return [];
+        try {
+            return typeof game.amenities === 'string' ? JSON.parse(game.amenities) : (game.amenities || []);
+        } catch { return []; }
+    }, [game]);
 
     if (!game) {
         if (!state.isLoaded || (!notFound && state.isLoaded)) {
@@ -64,19 +107,9 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     const spots = spotsLeft(game);
     const currentUserId = state.currentUser?.dbId || state.currentUser?.id || 'current';
     const myRsvp = (game.rsvps || []).find(r => r.playerId === currentUserId);
-    const organizerId = game.organizerId || game.organizer?.id || game.organizer;
-    const isOrganizer = organizerId === currentUserId;
+    const organizerId = game.organizerId || game.organizer?.id;
+    const isOrganizer = !!organizerId && String(organizerId) === String(currentUserId);
     const privacyInfo = PRIVACY_LABELS[game.visibility || 'public'] || PRIVACY_LABELS.public;
-
-    const confirmedPlayers = confirmedRsvps.map(r => {
-        const p = r.player || getPlayer(r.playerId) || state.players?.find(pl => pl.id === r.playerId) || (r.playerId === currentUserId ? state.currentUser : null);
-        return p ? { ...p, rsvpPosition: r.position || r.rsvpPosition } : null;
-    }).filter(Boolean);
-
-    const teams = useMemo(() => {
-        if (confirmedPlayers.length >= 4) return balanceTeams(confirmedPlayers, game.sport);
-        return null;
-    }, [confirmedPlayers, game.sport]);
 
     const handleRSVP = async (status) => {
         let finalStatus = status;
@@ -103,41 +136,37 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
         const pos = selectedPosition || state.currentUser?.positions?.[game.sport] || POSITIONS[game.sport]?.[0] || '';
         dispatch({ type: 'RSVP', payload: { gameId, playerId: currentUserId, status: finalStatus, position: pos } });
         
-        // Persist to DB using session
+        // Persist to DB using session, then sync server state
         try {
             await fetch('/api/games/rsvp', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    gameId, 
-                    playerId: state.currentUser?.dbId || state.currentUser?.id, 
-                    status: finalStatus, 
-                    position: pos 
+                body: JSON.stringify({
+                    gameId,
+                    playerId: state.currentUser?.dbId || state.currentUser?.id,
+                    status: finalStatus,
+                    position: pos
                 }),
             });
+            refreshGame(); // Sync server state (handles server-side overrides like approval enforcement)
+
+            // If user selected a position, sync it to their profile too
+            if (pos && pos !== (state.currentUser?.positions?.[game.sport])) {
+                const newPositions = { ...(state.currentUser?.positions || {}), [game.sport]: pos };
+                dispatch({ type: 'UPDATE_PROFILE', payload: { positions: newPositions } });
+                fetch('/api/users', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ positions: newPositions }),
+                }).catch(err => console.error('Position profile sync failed:', err));
+            }
         } catch (err) {
             console.error('RSVP persistence failed:', err);
         }
     };
 
-    // Build tier data
-    const friendsInTiers = useMemo(() => {
-        const tiers = { 1: [], 2: [], 3: [] };
-        if (!state.friendTiers || !state.friends) return tiers;
-        state.friends.forEach(fId => {
-            const t = state.friendTiers[fId]?.[game.sport];
-            if (t) {
-                const p = getPlayer(fId) || state.players?.find(pl => pl.id === fId);
-                if (p) tiers[t].push(p);
-            }
-        });
-        return tiers;
-    }, [state.friendTiers, state.friends, game.sport, state.players]);
-
     const selectedTierPlayers = broadcastTier ? friendsInTiers[broadcastTier] : [];
     const validRecipients = selectedTierPlayers.filter(p => p.phone && p.phone.trim());
-
-    const [msgCopied, setMsgCopied] = useState(false);
 
     const getYesButtonText = () => {
         if (myRsvp?.status === 'yes') return '✅ Yes!';
@@ -186,7 +215,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                 const res = await fetch(`/api/games/${gameId}`);
                 if (res.ok) {
                     const data = await res.json();
-                    if (data.game) dispatch({ type: 'UPDATE_GAME', payload: data.game });
+                    if (data.game) { setFreshGame(data.game); dispatch({ type: 'UPDATE_GAME', payload: data.game }); }
                 }
             } catch (_) {}
         } catch (err) {
@@ -236,6 +265,34 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
         setBroadcastResult(null);
     };
 
+    const handleMarkPaid = async () => {
+        try {
+            await fetch('/api/games/payment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ gameId, playerId: currentUserId, action: 'mark_paid' }),
+            });
+            dispatch({ type: 'RSVP', payload: { gameId, playerId: currentUserId, status: myRsvp?.status, position: myRsvp?.position, paymentStatus: 'pending' } });
+        } catch (err) {
+            console.error('Mark paid failed:', err);
+        }
+    };
+
+    const handleFriendRequest = async (friendId) => {
+        try {
+            await fetch('/api/friends', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ friendId, action: 'add' }),
+            });
+            dispatch({ type: 'LOAD_STATE', payload: {
+                friends: [...new Set([...(state.friends || []).map(String), String(friendId)])],
+            }});
+        } catch (err) {
+            console.error('Friend request failed', err);
+        }
+    };
+
     let whatsappMsg = '';
     try {
         whatsappMsg = generateWhatsAppMessage(game, state.players, showTeams ? teams : null);
@@ -243,13 +300,10 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
         console.error('WhatsApp msg generation failed:', e);
     }
 
-    const amenList = useMemo(() => {
-        try {
-            return typeof game.amenities === 'string' ? JSON.parse(game.amenities) : (game.amenities || []);
-        } catch { return []; }
-    }, [game.amenities]);
+
 
     return (
+        <>
         <div className="animate-fade-in">
             <button className="btn btn-ghost" onClick={onBack} style={{ marginBottom: 12, padding: '8px 0' }}>
                 ← Back to games
@@ -386,10 +440,60 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                        Log in to RSVP →
                    </button>
                 </div>
+            ) : game.approvalRequired && !isOrganizer ? (
+                /* ── Approval-required flow ── */
+                <div style={{ marginBottom: 16 }}>
+                    {myRsvp?.status === 'pending' ? (
+                        <div className="glass-card no-hover animate-fade-in" style={{ padding: 20, border: '1px solid rgba(234,179,8,0.4)', marginBottom: 8, textAlign: 'center' }}>
+                            <div style={{ fontSize: '1.75rem', marginBottom: 8 }}>⏳</div>
+                            <div style={{ fontWeight: 700, fontSize: '1rem', marginBottom: 4 }}>Request Sent</div>
+                            <div className="text-sm text-muted">Waiting for the organizer to approve your spot.</div>
+                            <button className="btn btn-sm btn-ghost" style={{ marginTop: 12, color: 'var(--danger)', fontSize: '0.8rem' }} onClick={() => handleRSVP('no')}>
+                                Withdraw Request
+                            </button>
+                        </div>
+                    ) : myRsvp?.status === 'yes' || myRsvp?.status === 'checked_in' ? (
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            <div className="btn btn-sm btn-rsvp-yes" style={{ flex: 1, textAlign: 'center', pointerEvents: 'none' }}>✅ Confirmed</div>
+                            <button className="btn btn-sm btn-outline" style={{ color: 'var(--danger)' }} onClick={() => handleRSVP('no')}>Leave</button>
+                        </div>
+                    ) : showJoinConfirm ? (
+                        /* Confirmation card */
+                        <div className="glass-card no-hover animate-fade-in" style={{ padding: 20, border: '1px solid var(--primary-color)', marginBottom: 8 }}>
+                            <div style={{ fontWeight: 700, fontSize: '1rem', marginBottom: 8 }}>✋ Confirm Join Request</div>
+                            <div className="text-sm text-muted" style={{ marginBottom: 16, lineHeight: 1.6 }}>
+                                You're requesting to join <strong>{game.title}</strong>.<br />
+                                The organizer will review and approve your spot before you're confirmed.
+                            </div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button className="btn btn-sm btn-ghost" style={{ flex: 1 }} onClick={() => setShowJoinConfirm(false)}>Cancel</button>
+                                <button className="btn btn-sm btn-primary" style={{ flex: 2 }} onClick={() => { setShowJoinConfirm(false); handleRSVP('yes'); }}>
+                                    Send Request →
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <button
+                            className="btn btn-lg btn-primary btn-block animate-fade-in"
+                            style={{ marginBottom: 8, background: 'linear-gradient(135deg, #6366f1, #a855f7)', border: 'none' }}
+                            onClick={() => setShowJoinConfirm(true)}
+                        >
+                            ✋ Request to Join
+                        </button>
+                    )}
+                    {/* Still allow Maybe / No even in approval mode */}
+                    {!myRsvp?.status || myRsvp?.status === 'no' ? null : (
+                        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                            <button className={`btn btn-sm ${myRsvp?.status === 'maybe' ? 'btn-rsvp-maybe' : 'btn-outline'}`} style={{ flex: 1 }} onClick={() => handleRSVP('maybe')}>🤔 Maybe</button>
+                            <button className={`btn btn-sm ${myRsvp?.status === 'no' ? 'btn-rsvp-no' : 'btn-outline'}`} style={{ flex: 1 }} onClick={() => handleRSVP('no')}>❌ Can't Go</button>
+                        </div>
+                    )}
+                </div>
             ) : (
+                /* ── Standard open RSVP ── */
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
-                    <button className={`btn btn-sm ${(myRsvp?.status === 'yes' || myRsvp?.status === 'checked_in' || myRsvp?.status === 'pending') ? 'btn-rsvp-yes' : 'btn-outline'}`} onClick={() => handleRSVP('yes')}>
-                        {getYesButtonText()}
+                    <button className={`btn btn-sm ${(myRsvp?.status === 'yes' || myRsvp?.status === 'checked_in') ? 'btn-rsvp-yes' : 'btn-outline'}`} onClick={() => handleRSVP('yes')}>
+                        {myRsvp?.status === 'yes' ? '✅ Going!' : myRsvp?.status === 'checked_in' ? '🏟️ Checked In' : spots <= 0 ? '📝 Join Waitlist' : '✅ Yes'}
                     </button>
                     <button className={`btn btn-sm ${myRsvp?.status === 'backup' ? 'btn-primary' : 'btn-outline'}`} onClick={() => handleRSVP('backup')}>
                         ⏳ Backup
@@ -404,6 +508,29 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
             )}
 
             
+            {/* Payment Button — shown to accepted players when game has a fee + UPI ID */}
+            {!isOrganizer && myRsvp?.status === 'yes' && (game.price > 0) && game.upiId && (
+                <div style={{ marginBottom: 16 }}>
+                    {myRsvp.paymentStatus === 'approved' ? (
+                        <div style={{ padding: '12px 16px', borderRadius: 12, background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <span style={{ fontSize: '1.25rem' }}>✅</span>
+                            <div>
+                                <div style={{ fontWeight: 700, color: '#22c55e', fontSize: '0.9rem' }}>Payment Confirmed</div>
+                                <div className="text-xs text-muted">₹{game.price} received by organizer</div>
+                            </div>
+                        </div>
+                    ) : myRsvp.paymentStatus === 'pending' ? (
+                        <button className="btn btn-outline btn-block" style={{ borderRadius: 12, color: '#f59e0b', borderColor: 'rgba(245,158,11,0.4)', background: 'rgba(245,158,11,0.08)' }} onClick={() => setShowPayment(true)}>
+                            ⏳ Payment Pending Approval — Tap for details
+                        </button>
+                    ) : (
+                        <button className="btn btn-primary btn-block" style={{ borderRadius: 12, background: 'linear-gradient(135deg, #10b981, #059669)', border: 'none', fontWeight: 700 }} onClick={() => setShowPayment(true)}>
+                            💳 Pay ₹{game.price} Entry Fee
+                        </button>
+                    )}
+                </div>
+            )}
+
             {/* Host Approvals */}
             {isOrganizer && pendingRsvps.length > 0 && (
                 <div className="glass-card no-hover animate-fade-in" style={{ marginBottom: 16, border: '1px solid var(--warning)' }}>
@@ -438,7 +565,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
 
             {/* Attendee Lists */}
             <div className="glass-card no-hover" style={{ marginBottom: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                     <h3 style={{ fontSize: '1.125rem', fontWeight: 700 }}>Players ({confirmedRsvps.length}/{game.maxPlayers})</h3>
                     <span style={{
                         background: spots <= 2 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(34, 197, 94, 0.15)',
@@ -450,7 +577,46 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                     </span>
                 </div>
 
-                {confirmedRsvps.length > 0 && (
+                {/* View toggle */}
+                <div style={{ display: 'flex', gap: 0, marginBottom: 16, background: 'var(--bg-input)', borderRadius: 10, padding: 3 }}>
+                    <button
+                        onClick={() => setPlayerView('pitch')}
+                        style={{
+                            flex: 1, padding: '7px 0', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700,
+                            background: playerView === 'pitch' ? 'var(--bg-card)' : 'transparent',
+                            color: playerView === 'pitch' ? 'var(--text-primary)' : 'var(--text-muted)',
+                            boxShadow: playerView === 'pitch' ? '0 1px 4px rgba(0,0,0,0.3)' : 'none',
+                            transition: 'all 0.15s',
+                        }}
+                    >
+                        🏟️ Pitch View
+                    </button>
+                    <button
+                        onClick={() => setPlayerView('list')}
+                        style={{
+                            flex: 1, padding: '7px 0', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700,
+                            background: playerView === 'list' ? 'var(--bg-card)' : 'transparent',
+                            color: playerView === 'list' ? 'var(--text-primary)' : 'var(--text-muted)',
+                            boxShadow: playerView === 'list' ? '0 1px 4px rgba(0,0,0,0.3)' : 'none',
+                            transition: 'all 0.15s',
+                        }}
+                    >
+                        📋 List
+                    </button>
+                </div>
+
+                {/* Pitch view */}
+                {playerView === 'pitch' && (
+                    <PitchView
+                        players={confirmedPlayers}
+                        sport={game.sport}
+                        maxPlayers={game.maxPlayers}
+                        color={sport?.color || '#6366f1'}
+                        onViewProfile={onViewProfile}
+                    />
+                )}
+
+                {playerView === 'list' && confirmedRsvps.length > 0 && (
                     <div style={{ marginBottom: 20 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 8 }}>
                             <div className="text-xs font-semibold" style={{ color: '#22c55e', letterSpacing: '0.5px' }}>✅ GOING ({confirmedRsvps.length})</div>
@@ -516,9 +682,35 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                                         {((state.pendingFriends || []).includes(r.playerId) && r.playerId !== currentUserId) && (
                                             <span className="text-xs text-muted" style={{ fontWeight: 600 }}>Sent ✓</span>
                                         )}
+                                        {/* Payment approval badge/button for organizer */}
+                                        {isOrganizer && game.price > 0 && game.upiId && r.playerId !== currentUserId && (
+                                            r.paymentStatus === 'approved' ? (
+                                                <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#22c55e', background: 'rgba(34,197,94,0.12)', padding: '3px 7px', borderRadius: 6, border: '1px solid rgba(34,197,94,0.3)' }}>₹ Paid</span>
+                                            ) : r.paymentStatus === 'pending' ? (
+                                                <button
+                                                    className="btn btn-xs"
+                                                    style={{ fontSize: '0.65rem', padding: '3px 8px', background: 'rgba(245,158,11,0.15)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.4)', borderRadius: 6, fontWeight: 700 }}
+                                                    onClick={async (e) => {
+                                                        e.stopPropagation();
+                                                        await fetch('/api/games/payment', {
+                                                            method: 'POST',
+                                                            headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify({ gameId: game.id, playerId: r.playerId, action: 'approve' }),
+                                                        });
+                                                        dispatch({ type: 'RSVP', payload: { gameId: game.id, playerId: r.playerId, status: r.status, position: r.position, paymentStatus: 'approved' } });
+                                                        refreshGame();
+                                                    }}
+                                                >
+                                                    ₹ Approve
+                                                </button>
+                                            ) : (
+                                                <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', background: 'var(--bg-input)', padding: '3px 7px', borderRadius: 6, border: '1px solid var(--border-color)' }}>₹ Unpaid</span>
+                                            )
+                                        )}
+
                                         {isOrganizer && r.playerId !== currentUserId && (
-                                            <button 
-                                                className="btn btn-xs btn-ghost" 
+                                            <button
+                                                className="btn btn-xs btn-ghost"
                                                 style={{ color: nudgedPlayers.has(r.playerId) ? 'var(--text-muted)' : 'var(--primary-color)', fontSize: '0.65rem', padding: '4px 8px' }}
                                                 disabled={nudgedPlayers.has(r.playerId)}
                                                 onClick={(e) => {
@@ -571,7 +763,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                     </div>
                 )}
 
-                {backupRsvps.length > 0 && (
+                {playerView === 'list' && backupRsvps.length > 0 && (
                     <div style={{ marginBottom: 16 }}>
                         <div className="text-xs font-semibold" style={{ color: '#3b82f6', letterSpacing: '0.5px', marginBottom: 10, borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 8 }}>⏳ BACKUP ({backupRsvps.length})</div>
                         {backupRsvps.map(r => {
@@ -609,7 +801,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                     </div>
                 )}
 
-                {maybeRsvps.length > 0 && (
+                {playerView === 'list' && maybeRsvps.length > 0 && (
                     <div>
                         <div className="text-xs font-semibold" style={{ color: '#eab308', letterSpacing: '0.5px', marginBottom: 10, borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 8 }}>🤔 MAYBE ({maybeRsvps.length})</div>
                         {maybeRsvps.map(r => {
@@ -666,6 +858,216 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                     )}
                 </div>
             )}
+
+            {/* ── Score Entry / Result ── */}
+            {confirmedRsvps.length >= 2 && (() => {
+                const savedScore = (() => { try { return game.score ? JSON.parse(game.score) : null; } catch { return null; } })();
+                const sportColor = sport?.color || '#6366f1';
+
+                if (savedScore) {
+                    // Score already saved — show result banner
+                    const t1 = savedScore.team1 ?? 0;
+                    const t2 = savedScore.team2 ?? 0;
+                    const draw = t1 === t2;
+                    return (
+                        <div className="glass-card no-hover" style={{ marginBottom: 16 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                                <span style={{ fontSize: '1.25rem' }}>🏆</span>
+                                <h3 style={{ fontSize: '1rem', margin: 0 }}>Final Score</h3>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0 }}>
+                                {/* Team 1 */}
+                                <div style={{ flex: 1, textAlign: 'center', padding: '16px 12px', borderRadius: '12px 0 0 12px', background: t1 > t2 ? 'rgba(34,197,94,0.12)' : t1 < t2 ? 'rgba(239,68,68,0.08)' : 'var(--bg-input)', border: `1px solid ${t1 > t2 ? 'rgba(34,197,94,0.3)' : t1 < t2 ? 'rgba(239,68,68,0.2)' : 'var(--border-color)'}` }}>
+                                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Team 1</div>
+                                    <div style={{ fontSize: '2.5rem', fontWeight: 900, color: t1 > t2 ? '#22c55e' : t1 < t2 ? '#ef4444' : 'var(--text-primary)', lineHeight: 1 }}>{t1}</div>
+                                    {t1 > t2 && <div style={{ fontSize: '0.7rem', color: '#22c55e', marginTop: 4, fontWeight: 700 }}>WIN</div>}
+                                </div>
+                                {/* Divider */}
+                                <div style={{ padding: '0 10px', fontWeight: 900, fontSize: '1.25rem', color: 'var(--text-secondary)', flexShrink: 0 }}>:</div>
+                                {/* Team 2 */}
+                                <div style={{ flex: 1, textAlign: 'center', padding: '16px 12px', borderRadius: '0 12px 12px 0', background: t2 > t1 ? 'rgba(34,197,94,0.12)' : t2 < t1 ? 'rgba(239,68,68,0.08)' : 'var(--bg-input)', border: `1px solid ${t2 > t1 ? 'rgba(34,197,94,0.3)' : t2 < t1 ? 'rgba(239,68,68,0.2)' : 'var(--border-color)'}` }}>
+                                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Team 2</div>
+                                    <div style={{ fontSize: '2.5rem', fontWeight: 900, color: t2 > t1 ? '#22c55e' : t2 < t1 ? '#ef4444' : 'var(--text-primary)', lineHeight: 1 }}>{t2}</div>
+                                    {t2 > t1 && <div style={{ fontSize: '0.7rem', color: '#22c55e', marginTop: 4, fontWeight: 700 }}>WIN</div>}
+                                </div>
+                            </div>
+                            {draw && <div style={{ textAlign: 'center', marginTop: 10, fontWeight: 700, color: 'var(--text-secondary)', fontSize: '0.875rem' }}>🤝 Draw</div>}
+                            {/* Goalscorers */}
+                            {(savedScore.team1Scorers?.length > 0 || savedScore.team2Scorers?.length > 0) && (
+                                <div style={{ marginTop: 12, padding: '10px 12px', background: 'var(--bg-input)', borderRadius: 8 }}>
+                                    <div style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>⚽ Goalscorers</div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                                        {['team1Scorers', 'team2Scorers'].map((key, ti) => (
+                                            <div key={key}>
+                                                <div style={{ fontSize: '0.6rem', color: ti === 0 ? '#3b82f6' : '#ef4444', fontWeight: 700, marginBottom: 4 }}>Team {ti + 1}</div>
+                                                {(savedScore[key] || []).length === 0
+                                                    ? <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>—</div>
+                                                    : (savedScore[key] || []).map(pid => {
+                                                        const p = confirmedPlayers.find(cp => (cp.dbId || cp.id) === pid) || state.players?.find(pl => pl.id === pid);
+                                                        return <div key={pid} style={{ fontSize: '0.78rem', fontWeight: 600 }}>⚽ {p?.name?.split(' ')[0] || 'Player'}</div>;
+                                                    })
+                                                }
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            {isOrganizer && (
+                                <button className="btn btn-xs btn-ghost" style={{ marginTop: 12, width: '100%', color: 'var(--text-secondary)' }}
+                                    onClick={() => {
+                                        setScoreInput({ team1: String(t1), team2: String(t2) });
+                                        setScorers({ team1: savedScore.team1Scorers || [], team2: savedScore.team2Scorers || [] });
+                                        dispatch({ type: 'UPDATE_GAME', payload: { ...game, score: null } });
+                                        if (freshGame) setFreshGame(prev => ({ ...prev, score: null }));
+                                    }}>
+                                    ✏️ Edit Score
+                                </button>
+                            )}
+                        </div>
+                    );
+                }
+
+                if (!isOrganizer) return null;
+
+                // Null-safe team split — balanceTeams returns null for < 4 players
+                const safeTeams = teams || {
+                    team1: confirmedPlayers.filter((_, i) => i % 2 === 0),
+                    team2: confirmedPlayers.filter((_, i) => i % 2 !== 0),
+                };
+
+                const toggleScorer = (team, pid) => {
+                    setScorers(prev => {
+                        const list = prev[team];
+                        return { ...prev, [team]: list.includes(pid) ? list.filter(id => id !== pid) : [...list, pid] };
+                    });
+                };
+
+                const scoreEntered = scoreInput.team1 !== '' || scoreInput.team2 !== '';
+
+                // Score input form (organizer only)
+                return (
+                    <div className="glass-card no-hover" style={{ marginBottom: 16, border: `1px solid ${sportColor}40` }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                            <span style={{ fontSize: '1.25rem' }}>🏆</span>
+                            <div>
+                                <div style={{ fontWeight: 700, fontSize: '1rem' }}>Enter Final Score</div>
+                                <div className="text-xs text-muted">Updates wins / losses for all players</div>
+                            </div>
+                        </div>
+
+                        {/* Team labels with player previews */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 8, alignItems: 'center', marginBottom: 16 }}>
+                            <div style={{ textAlign: 'center' }}>
+                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#3b82f6', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                                    Team 1 ({safeTeams.team1.length})
+                                </div>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                                    {safeTeams.team1.slice(0, 3).map(p => p.name.split(' ')[0]).join(', ')}{safeTeams.team1.length > 3 ? '…' : ''}
+                                </div>
+                            </div>
+                            <div style={{ textAlign: 'center', color: 'var(--text-secondary)', fontWeight: 700, fontSize: '1rem', paddingBottom: 2 }}>vs</div>
+                            <div style={{ textAlign: 'center' }}>
+                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                                    Team 2 ({safeTeams.team2.length})
+                                </div>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                                    {safeTeams.team2.slice(0, 3).map(p => p.name.split(' ')[0]).join(', ')}{safeTeams.team2.length > 3 ? '…' : ''}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Score inputs */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 32px 1fr', gap: 8, alignItems: 'center', marginBottom: 16 }}>
+                            <input
+                                type="number" min="0" max="99" placeholder="0"
+                                value={scoreInput.team1}
+                                onChange={e => setScoreInput(s => ({ ...s, team1: e.target.value }))}
+                                style={{ textAlign: 'center', fontSize: '2rem', fontWeight: 900, padding: '12px 8px', borderRadius: 12, background: 'var(--bg-input)', border: '1.5px solid #3b82f680', color: '#3b82f6' }}
+                            />
+                            <div style={{ textAlign: 'center', fontWeight: 900, color: 'var(--text-secondary)', fontSize: '1.25rem' }}>:</div>
+                            <input
+                                type="number" min="0" max="99" placeholder="0"
+                                value={scoreInput.team2}
+                                onChange={e => setScoreInput(s => ({ ...s, team2: e.target.value }))}
+                                style={{ textAlign: 'center', fontSize: '2rem', fontWeight: 900, padding: '12px 8px', borderRadius: 12, background: 'var(--bg-input)', border: '1.5px solid #ef444480', color: '#ef4444' }}
+                            />
+                        </div>
+
+                        {/* Goalscorers / Assisters — shown once any score is typed */}
+                        {scoreEntered && (
+                            <div style={{ marginBottom: 16 }}>
+                                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                                    ⚽ Tag Goalscorers (optional)
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                                    {['team1', 'team2'].map((t, ti) => (
+                                        <div key={t}>
+                                            <div style={{ fontSize: '0.65rem', fontWeight: 700, color: ti === 0 ? '#3b82f6' : '#ef4444', textTransform: 'uppercase', marginBottom: 6 }}>
+                                                Team {ti + 1}
+                                            </div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                {safeTeams[t].map(p => {
+                                                    const pid = p.dbId || p.id;
+                                                    const isScorer = scorers[t].includes(pid);
+                                                    return (
+                                                        <button key={pid} onClick={() => toggleScorer(t, pid)}
+                                                            style={{ textAlign: 'left', padding: '5px 10px', borderRadius: 8, border: `1px solid ${isScorer ? (ti === 0 ? '#3b82f6' : '#ef4444') : 'var(--border-color)'}`, background: isScorer ? (ti === 0 ? 'rgba(59,130,246,0.15)' : 'rgba(239,68,68,0.15)') : 'var(--bg-input)', fontSize: '0.78rem', fontWeight: isScorer ? 700 : 400, color: isScorer ? (ti === 0 ? '#3b82f6' : '#ef4444') : 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                            <span>{isScorer ? '⚽' : '○'}</span>
+                                                            <span>{p.name?.split(' ')[0]}</span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        <button
+                            className="btn btn-primary btn-block"
+                            style={{ background: `linear-gradient(135deg, ${sportColor}, ${sport?.gradient ? sportColor : '#a855f7'})`, border: 'none', borderRadius: 12, fontWeight: 700 }}
+                            disabled={scoreInput.team1 === '' || scoreInput.team2 === '' || scoreSaving}
+                            onClick={async () => {
+                                setScoreSaving(true);
+                                try {
+                                    const t1ids = safeTeams.team1.map(p => p.dbId || p.id).filter(Boolean);
+                                    const t2ids = safeTeams.team2.map(p => p.dbId || p.id).filter(Boolean);
+                                    const res = await fetch('/api/games/score', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            gameId,
+                                            team1Score: parseInt(scoreInput.team1),
+                                            team2Score: parseInt(scoreInput.team2),
+                                            team1PlayerIds: t1ids,
+                                            team2PlayerIds: t2ids,
+                                            team1Scorers: scorers.team1,
+                                            team2Scorers: scorers.team2,
+                                        }),
+                                    });
+                                    const data = await res.json();
+                                    if (data.success) {
+                                        const scoreJson = JSON.stringify(data.score);
+                                        dispatch({ type: 'UPDATE_GAME', payload: { ...game, score: scoreJson, status: 'completed' } });
+                                        setFreshGame(prev => prev ? { ...prev, score: scoreJson, status: 'completed' } : null);
+                                        setScorers({ team1: [], team2: [] });
+                                    } else {
+                                        alert(data.error || 'Failed to save score');
+                                    }
+                                } catch (err) {
+                                    console.error('Save score failed:', err);
+                                    alert('Failed to save score. Please try again.');
+                                } finally {
+                                    setScoreSaving(false);
+                                }
+                            }}
+                        >
+                            {scoreSaving ? 'Saving…' : '🏁 Save Score & End Game'}
+                        </button>
+                    </div>
+                );
+            })()}
 
             {/* Actions: Text Blast + WhatsApp */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
@@ -832,5 +1234,19 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                 )}
             </div>
         </div>
+
+        {showPayment && (
+            <PaymentPage
+                game={game}
+                myRsvp={myRsvp}
+                currentUserId={currentUserId}
+                onClose={() => setShowPayment(false)}
+                onMarkPaid={async () => {
+                    await handleMarkPaid();
+                    setShowPayment(false);
+                }}
+            />
+        )}
+        </>
     );
 }

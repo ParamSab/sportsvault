@@ -12,6 +12,9 @@ export async function POST(req) {
 
         const { friendId, sport, tier } = await req.json();
 
+        if (!friendId || !sport) return Response.json({ error: 'Missing friendId or sport' }, { status: 400 });
+        if (tier !== null && ![1, 2, 3].includes(Number(tier))) return Response.json({ error: 'Tier must be 1, 2, or 3' }, { status: 400 });
+
         if (tier === null) {
             await prisma.friendTier.deleteMany({
                 where: { userId, friendId, sport }

@@ -25,6 +25,8 @@ export default function CreateGamePage({ onComplete }) {
     const { state, dispatch } = useStore();
     const [step, setStep] = useState(0);
     const [errors, setErrors] = useState({});
+    const [isSuccess, setIsSuccess] = useState(false);
+    const [createdGame, setCreatedGame] = useState(null);
     const [game, setGame] = useState({
         sport: '', format: '', title: '',
         location: '', address: '',
@@ -39,8 +41,11 @@ export default function CreateGamePage({ onComplete }) {
         surface: '3G Astro',
         footwear: 'AG Boots / TF shoes',
         price: 0,
+        upiId: '',
         gender: 'mixed',
         amenities: [],
+        reminderHours: 2,
+        needsHost: false,
     });
 
     const update = (key, val) => setGame(prev => ({ ...prev, [key]: val }));
@@ -96,16 +101,19 @@ export default function CreateGamePage({ onComplete }) {
             if (data.game) {
                 // If saved successfully, use the real DB record which has UUIDs
                 dispatch({ type: 'CREATE_GAME', payload: data.game });
+                setCreatedGame(data.game);
             } else {
                 // Fallback to local if API failed but we want to show it (at least temporarily)
                 dispatch({ type: 'CREATE_GAME', payload: newGame });
+                setCreatedGame(newGame);
             }
+            setIsSuccess(true);
         } catch (err) {
             console.error('Failed to save game to DB:', err);
             dispatch({ type: 'CREATE_GAME', payload: newGame });
+            setCreatedGame(newGame);
+            setIsSuccess(true);
         }
-
-        onComplete();
     };
 
     const inputStyle = { width: '100%', marginBottom: 0 };
@@ -176,6 +184,22 @@ export default function CreateGamePage({ onComplete }) {
             <p className="text-muted text-sm" style={{ marginBottom: 20 }}>Pin your venue and set the time</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
 
+                {/* Recent Venues */}
+                {state.history && state.history.length > 0 && (
+                    <div style={{ marginBottom: 4 }}>
+                        <label style={labelStyle}>Recent Venues</label>
+                        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 8, WebkitOverflowScrolling: 'touch' }}>
+                            {Array.from(new Map(state.history.filter(g => g.location).map(g => [g.location, g])).values()).slice(0, 5).map(v => (
+                                <button key={v.location} type="button" className="chip" 
+                                    style={{ whiteSpace: 'nowrap', background: game.location === v.location ? `${SPORTS[game.sport]?.color}30` : 'var(--bg-input)' }}
+                                    onClick={() => update('location', v.location) || update('address', v.address || '') || update('lat', v.lat || game.lat) || update('lng', v.lng || game.lng)}>
+                                    📍 {v.location}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {/* Interactive Leaflet Map */}
                 <div>
                     <label style={labelStyle}>📍 Drop a Pin</label>
@@ -226,7 +250,13 @@ export default function CreateGamePage({ onComplete }) {
                     <div>
                         <label style={labelStyle}>Max Players</label>
                         <input type="number" value={game.maxPlayers} min={2} max={100}
-                            onChange={e => update('maxPlayers', +e.target.value)} style={inputStyle} />
+                            onChange={e => {
+                                const maxP = +e.target.value;
+                                update('maxPlayers', maxP);
+                                if (game.totalCost) {
+                                    update('price', Math.ceil(game.totalCost / maxP));
+                                }
+                            }} style={inputStyle} />
                     </div>
                 </div>
 
@@ -275,18 +305,72 @@ export default function CreateGamePage({ onComplete }) {
                     </div>
                 </div>
 
-                <div>
-                    <label style={labelStyle}>Price per player (Rs)</label>
-                    <input type="number" value={game.price} onChange={e => update('price', +e.target.value)} style={inputStyle} />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div>
+                        <label style={labelStyle}>Total Pitch Cost (₹)</label>
+                        <input type="number" value={game.totalCost || ''} placeholder="e.g. 2000"
+                            onChange={e => {
+                                const total = +e.target.value;
+                                update('totalCost', total);
+                                update('price', Math.ceil(total / game.maxPlayers));
+                            }} style={inputStyle} />
+                    </div>
+                    <div>
+                        <label style={labelStyle}>Price per player (₹)</label>
+                        <div style={{
+                            ...inputStyle, background: 'var(--bg-card)', color: 'var(--success)', 
+                            fontWeight: 700, display: 'flex', alignItems: 'center'
+                        }}>
+                            {game.price > 0 ? `₹${game.price}` : 'Free'}
+                        </div>
+                    </div>
                 </div>
 
+                {game.price > 0 && (
+                    <div>
+                        <label style={labelStyle}>Your UPI ID (for collecting entry fee)</label>
+                        <input
+                            type="text"
+                            placeholder="e.g. yourname@ybl or 9999999999@okaxis"
+                            value={game.upiId || ''}
+                            onChange={e => update('upiId', e.target.value.trim())}
+                            style={inputStyle}
+                        />
+                        <div className="text-xs text-muted" style={{ marginTop: 4 }}>
+                            Players tap "Pay" and get redirected to GPay / PhonePe with ₹{game.price} pre-filled. You confirm after receiving.
+                        </div>
+                    </div>
+                )}
+
+                {/* Game Host toggle — Footy Addicts style */}
+                <div style={{ padding: '16px 20px', borderRadius: 16, background: game.needsHost ? 'linear-gradient(135deg, rgba(234,179,8,0.08), rgba(249,115,22,0.06))' : 'var(--bg-input)', border: game.needsHost ? '1px solid rgba(234,179,8,0.3)' : '1px solid var(--border-color)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, transition: 'all 0.3s ease' }}>
+                    <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: '1.25rem' }}>🏆</span> Need a Game Host?
+                        </div>
+                        <div className="text-muted text-xs" style={{ marginTop: 4, lineHeight: 1.6 }}>Host plays for free — they bring bibs &amp; ball, organise teams, and keep the game flowing.</div>
+                        {game.needsHost && (
+                            <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                <span style={{ fontSize: '0.7rem', padding: '3px 9px', borderRadius: 99, background: 'rgba(234,179,8,0.15)', color: '#f59e0b', border: '1px solid rgba(234,179,8,0.3)' }}>🎽 Brings bibs</span>
+                                <span style={{ fontSize: '0.7rem', padding: '3px 9px', borderRadius: 99, background: 'rgba(234,179,8,0.15)', color: '#f59e0b', border: '1px solid rgba(234,179,8,0.3)' }}>⚽ Brings ball</span>
+                                <span style={{ fontSize: '0.7rem', padding: '3px 9px', borderRadius: 99, background: 'rgba(34,197,94,0.15)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)' }}>✅ Plays free</span>
+                            </div>
+                        )}
+                    </div>
+                    <label className="ts-toggle" style={{ marginTop: 2 }}>
+                        <input type="checkbox" checked={game.needsHost} onChange={e => update('needsHost', e.target.checked)} />
+                        <span className="ts-slider round" />
+                    </label>
+                </div>
+
+                {/* Amenities */}
                 <div>
                     <label style={labelStyle}>Amenities Included</label>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                         {['Bibs', 'Water', 'Changing Rooms', 'Showers', 'Parking'].map(amn => (
-                            <button key={amn} 
+                            <button key={amn}
                                 onClick={() => {
-                                    const newAmn = game.amenities.includes(amn) 
+                                    const newAmn = game.amenities.includes(amn)
                                         ? game.amenities.filter(a => a !== amn)
                                         : [...game.amenities, amn];
                                     update('amenities', newAmn);
@@ -304,6 +388,7 @@ export default function CreateGamePage({ onComplete }) {
                 </div>
             </div>
         </div>,
+
 
         // 4: Privacy
         <div key="privacy" className="animate-fade-in">
@@ -340,6 +425,19 @@ export default function CreateGamePage({ onComplete }) {
                     <input type="checkbox" checked={game.approvalRequired} onChange={e => update('approvalRequired', e.target.checked)} />
                     <span className="ts-slider round"></span>
                 </label>
+            </div>
+
+            <div style={{ marginTop: 16 }}>
+                <label style={labelStyle}>Send Auto-SMS Reminder</label>
+                <div className="text-muted text-xs" style={{ marginBottom: 12 }}>Text messages will be sent to confirmed players.</div>
+                <select value={game.reminderHours} onChange={e => update('reminderHours', +e.target.value)} style={inputStyle}>
+                    <option value={0}>Do not send reminders</option>
+                    <option value={1}>1 Hour Before</option>
+                    <option value={2}>2 Hours Before (Recommended)</option>
+                    <option value={3}>3 Hours Before</option>
+                    <option value={12}>12 Hours Before</option>
+                    <option value={24}>24 Hours Before</option>
+                </select>
             </div>
         </div>,
 
@@ -409,6 +507,37 @@ export default function CreateGamePage({ onComplete }) {
             </div>
         </div>,
     ];
+
+    if (isSuccess && createdGame) {
+        const shareMsg = `⚽ *${createdGame.title}*\n📅 ${createdGame.date} at ${createdGame.time}\n📍 ${createdGame.location}\n\nRSVP here 👉 ${window.location.origin}/?game=${createdGame.id}`;
+        return (
+            <div className="animate-fade-in text-center" style={{ padding: '40px 20px' }}>
+                <div style={{ fontSize: '4rem', marginBottom: 20 }}>🚀</div>
+                <h2 style={{ marginBottom: 12 }}>Game is Live!</h2>
+                <p className="text-muted text-sm" style={{ marginBottom: 32 }}>Your game has been created and is now discoverable on the map.</p>
+                
+                <div className="glass-card" style={{ padding: 20, marginBottom: 32, textAlign: 'left' }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 8, color: SPORTS[createdGame.sport]?.color }}>{SPORTS[createdGame.sport]?.emoji} {createdGame.title}</div>
+                    <div className="text-xs text-secondary">📍 {createdGame.location}</div>
+                    <div className="text-xs text-secondary">📅 {createdGame.date} · {createdGame.time}</div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <a 
+                        href={`https://wa.me/?text=${encodeURIComponent(shareMsg)}`}
+                        target="_blank"
+                        className="btn btn-primary"
+                        style={{ background: '#25D366', borderColor: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}
+                    >
+                        <span>📱</span> Share to WhatsApp
+                    </a>
+                    <button className="btn btn-outline" onClick={onComplete}>
+                        Go to My Games
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="animate-fade-in">

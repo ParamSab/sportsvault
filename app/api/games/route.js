@@ -21,7 +21,7 @@ function supabaseRowToGame(g) {
         skillLevel: g.skill_level || 'All Levels',
         status: g.status,
         visibility: g.visibility || 'public',
-        approvalRequired: false,
+        approvalRequired: !!g.approval_required,
         bookingImage: null,
         pitchType: g.pitch_type || null,
         surface: g.surface || null,
@@ -36,6 +36,8 @@ function supabaseRowToGame(g) {
     };
 }
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req) {
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get('userId');
@@ -43,6 +45,15 @@ export async function GET(req) {
 
     // --- Try Prisma first ---
     try {
+        // Auto-migrate: add new columns if they don't exist yet (safe — uses IF NOT EXISTS)
+        try {
+            await prisma.$executeRawUnsafe(`ALTER TABLE "Game" ADD COLUMN IF NOT EXISTS "upiId" TEXT`);
+            await prisma.$executeRawUnsafe(`ALTER TABLE "Game" ADD COLUMN IF NOT EXISTS "score" TEXT`);
+            await prisma.$executeRawUnsafe(`ALTER TABLE "Rsvp" ADD COLUMN IF NOT EXISTS "paymentStatus" TEXT DEFAULT 'not_required'`);
+        } catch (migrateErr) {
+            console.error('Auto-migrate error (non-fatal):', migrateErr.message);
+        }
+
         // Auto-expire: single batch UPDATE for all games whose date is >2 days old.
         // This replaces the N+1 loop that fired one UPDATE per expired game.
         try {
@@ -93,6 +104,7 @@ export async function GET(req) {
                 playerId: r.playerId,
                 status: r.status,
                 position: r.position || '',
+                paymentStatus: r.paymentStatus || 'not_required',
                 player: r.player ? {
                     ...r.player,
                     positions: JSON.parse(r.player.positions || '{}'),
@@ -195,11 +207,14 @@ export async function POST(req) {
                 status: 'open',
                 visibility: game.visibility || 'public',
                 approvalRequired: !!game.approvalRequired,
+                reminderHours: game.reminderHours !== undefined ? parseInt(game.reminderHours) : 2,
+                remindersSent: false,
                 bookingImage: game.bookingImage || null,
                 pitchType: game.pitchType || '5-a-side',
                 surface: game.surface || '3G Astro',
                 footwear: game.footwear || '',
                 price: game.price ? parseFloat(game.price.toString()) : 0,
+                upiId: game.upiId || null,
                 gender: game.gender || 'mixed',
                 amenities: typeof game.amenities === 'string' ? game.amenities : JSON.stringify(game.amenities || []),
                 organizerId: userId,
@@ -245,6 +260,8 @@ export async function POST(req) {
                 gender:       newGame.gender || 'mixed',
                 pitch_type:   newGame.pitchType || null,
                 surface:      newGame.surface || null,
+                reminder_hours: newGame.reminderHours,
+                reminders_sent: false,
             }, { onConflict: 'game_id' }).then(({ error }) => {
                 if (error) console.error('Supabase backup save error:', error.message);
             });
@@ -292,12 +309,15 @@ export async function POST(req) {
             lng:          game.lng || null,
             max_players:  game.maxPlayers || 10,
             skill_level:  game.skillLevel || 'All Levels',
-            status:       'open',
-            visibility:   game.visibility || 'public',
-            price:        game.price ? parseFloat(game.price.toString()) : 0,
+            status:            'open',
+            visibility:        game.visibility || 'public',
+            approval_required: !!game.approvalRequired,
+            price:             game.price ? parseFloat(game.price.toString()) : 0,
             gender:       game.gender || 'mixed',
             pitch_type:   game.pitchType || null,
             surface:      game.surface || null,
+            reminder_hours: game.reminderHours !== undefined ? parseInt(game.reminderHours) : 2,
+            reminders_sent: false,
         });
 
         if (error) {
@@ -345,6 +365,8 @@ export async function POST(req) {
             price: game.price ? parseFloat(game.price.toString()) : 0,
             gender: game.gender || 'mixed',
             amenities: typeof game.amenities === 'string' ? game.amenities : JSON.stringify(game.amenities || []),
+            reminderHours: game.reminderHours !== undefined ? parseInt(game.reminderHours) : 2,
+            remindersSent: false,
             organizerId: userId,
             organizer: { id: userId, name: organizerName, photo: organizerPhoto },
             rsvps: [{ playerId: userId, status: 'yes', position: game.organizerPosition || '', player: { id: userId, name: organizerName, photo: organizerPhoto, positions: {}, ratings: {} } }],

@@ -4,7 +4,12 @@ import { StoreProvider } from "@/lib/store";
 export const metadata = {
   title: "SportsVault — Find Players. Join Games. Build Your Rep.",
   description: "Hyperlocal sports social platform for football, padel, and cricket. Connect with nearby players, join pickup games, and build your sporting reputation.",
-  viewport: "width=device-width, initial-scale=1, viewport-fit=cover",
+};
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({ children }) {
