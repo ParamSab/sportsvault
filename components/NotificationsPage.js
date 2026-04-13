@@ -72,9 +72,7 @@ export default function NotificationsPage({ onViewGame }) {
             const res = await fetch(`/api/games/${gameId}`);
             if (res.ok) {
                 const data = await res.json();
-                if (data.game) {
-                    dispatch({ type: 'LOAD_STATE', payload: { games: state.games.map(g => String(g.id) === String(gameId) ? data.game : g) } });
-                }
+                if (data.game) dispatch({ type: 'MERGE_GAME', payload: data.game });
             }
         } catch (_) {}
 

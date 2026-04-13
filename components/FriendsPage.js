@@ -1,5 +1,5 @@
 'use client';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useStore } from '@/lib/store';
 import { PLAYERS, SPORTS, getPlayer, getInitials, getTrustTier } from '@/lib/mockData';
 
@@ -18,6 +18,7 @@ export default function FriendsPage({ onViewProfile }) {
     const [phoneNum, setPhoneNum] = useState('');
     const [phoneName, setPhoneName] = useState('');
     const [phoneStep, setPhoneStep] = useState('phone');
+    const searchTimerRef = useRef(null);
 
     const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
@@ -161,10 +162,10 @@ export default function FriendsPage({ onViewProfile }) {
 
     const handleCancelRequest = async (friendId) => {
         setAddingId(friendId);
-        await fetch('/api/friends', {
+        await fetch('/api/friends/request', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'remove', friendId }),
+            body: JSON.stringify({ action: 'cancel', friendId }),
         });
         await refreshFriends();
         showToast('Request withdrawn');
@@ -181,19 +182,23 @@ export default function FriendsPage({ onViewProfile }) {
         showToast('Removed from squad');
     };
 
-    const handleSearch = async (q) => {
+    const handleSearch = (q) => {
         setSearchQuery(q);
-        if (q.trim().length < 2) { setSearchResults([]); return; }
+        if (q.trim().length < 2) { setSearchResults([]); setIsSearching(false); return; }
         setIsSearching(true);
-        try {
-            const res = await fetch(`/api/users?q=${encodeURIComponent(q.trim())}`);
-            const data = await res.json();
-            setSearchResults(data.users || []);
-        } catch (_) {
-            setSearchResults(PLAYERS.filter(p => p.name?.toLowerCase().includes(q.toLowerCase())));
-        } finally {
-            setIsSearching(false);
-        }
+        // Debounce: wait 350ms after last keystroke before querying
+        if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+        searchTimerRef.current = setTimeout(async () => {
+            try {
+                const res = await fetch(`/api/users?q=${encodeURIComponent(q.trim())}`);
+                const data = await res.json();
+                setSearchResults(data.users || []);
+            } catch (_) {
+                setSearchResults(PLAYERS.filter(p => p.name?.toLowerCase().includes(q.toLowerCase())));
+            } finally {
+                setIsSearching(false);
+            }
+        }, 350);
     };
 
     // Group friends by tier for the selected sport
@@ -423,7 +428,7 @@ export default function FriendsPage({ onViewProfile }) {
                                                 type="tel"
                                                 placeholder="With country code, e.g. 917904008139"
                                                 value={phoneNum}
-                                                onChange={e => setPhoneNum(e.target.value.replace(/[^\d+]/g, ''))}
+                                                onChange={e => { setPhoneNum(e.target.value.replace(/[^\d+]/g, '')); setPhoneStep('phone'); }}
                                                 style={{ flex: 1, fontSize: '0.875rem' }}
                                                 autoFocus
                                             />

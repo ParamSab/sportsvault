@@ -130,18 +130,19 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
         const pos = selectedPosition || state.currentUser?.positions?.[game.sport] || POSITIONS[game.sport]?.[0] || '';
         dispatch({ type: 'RSVP', payload: { gameId, playerId: currentUserId, status: finalStatus, position: pos } });
         
-        // Persist to DB using session
+        // Persist to DB using session, then sync server state
         try {
             await fetch('/api/games/rsvp', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    gameId, 
-                    playerId: state.currentUser?.dbId || state.currentUser?.id, 
-                    status: finalStatus, 
-                    position: pos 
+                body: JSON.stringify({
+                    gameId,
+                    playerId: state.currentUser?.dbId || state.currentUser?.id,
+                    status: finalStatus,
+                    position: pos
                 }),
             });
+            refreshGame(); // Sync server state (handles server-side overrides like approval enforcement)
         } catch (err) {
             console.error('RSVP persistence failed:', err);
         }
