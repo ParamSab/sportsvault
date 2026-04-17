@@ -171,27 +171,27 @@ export default function AppShell() {
             {/* Bottom Navigation */}
             <nav className="bottom-nav">
                 <button className={`nav-item ${activeTab === 'discover' && !viewingGame && !viewingProfile && !showAuthGate ? 'active' : ''}`} onClick={() => navigate('discover')}>
-                    <span className="nav-icon">🏟️</span>
+                    <svg viewBox="0 0 24 24"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/><path d="M9 21V12h6v9"/></svg>
                     <span className="nav-label">Games</span>
                 </button>
                 <button className={`nav-item ${activeTab === 'friends' && !showAuthGate ? 'active' : ''}`} onClick={() => navigate('friends')}>
-                    <span className="nav-icon">👥</span>
+                    <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
                     <span className="nav-label">Squad</span>
                 </button>
                 <button className="create-btn-nav" onClick={() => navigate('create')}>
-                    <span style={{ fontSize: '1.75rem', lineHeight: 1, fontWeight: 300 }}>＋</span>
+                    <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
                 </button>
                 <button
                     className={`nav-item ${activeTab === 'notifications' && !showAuthGate ? 'active' : ''}`}
                     onClick={() => navigate('notifications')}
                     style={{ position: 'relative' }}
                 >
-                    <span className="nav-icon">🔔</span>
+                    <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg>
                     <span className="nav-label">Alerts</span>
                     {(unreadCount > 0 && !isGuest) && <span className="badge-count">{unreadCount > 9 ? '9+' : unreadCount}</span>}
                 </button>
                 <button className={`nav-item ${activeTab === 'profile' || showAuthGate ? 'active' : ''}`} onClick={() => navigate('profile')}>
-                    <span className="nav-icon">👤</span>
+                    <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                     <span className="nav-label">Me</span>
                 </button>
             </nav>

@@ -218,10 +218,19 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
             {/* Game Cards */}
             <div className="stagger" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 {upcomingGames.length === 0 && !state.isLoaded && (
-                    <div className="glass-card no-hover" style={{ textAlign: 'center', padding: 48 }}>
-                        <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>⏳</div>
-                        <h3 style={{ marginBottom: 8 }}>Loading games…</h3>
-                    </div>
+                    <>
+                        {[1,2,3].map(i => (
+                            <div key={i} className="skeleton-card">
+                                <div className="skeleton-banner" />
+                                <div className="skeleton-body">
+                                    <div className="skeleton-line" style={{ width: '70%', height: 18 }} />
+                                    <div className="skeleton-line" style={{ width: '90%' }} />
+                                    <div className="skeleton-line" style={{ width: '60%' }} />
+                                    <div className="skeleton-line" style={{ width: '80%' }} />
+                                </div>
+                            </div>
+                        ))}
+                    </>
                 )}
                 {upcomingGames.length === 0 && state.isLoaded && (
                     <div className="glass-card no-hover" style={{ textAlign: 'center', padding: 48 }}>
