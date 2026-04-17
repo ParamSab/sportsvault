@@ -57,9 +57,15 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
         return (game.rsvps || [])
             .filter(r => r.status === 'yes' || r.status === 'checked_in')
             .map(r => {
-                const p = r.player || getPlayer(r.playerId) || state.players?.find(pl => pl.id === r.playerId) || (r.playerId === currentUserId ? state.currentUser : null);
-                return p ? { ...p, rsvpPosition: r.position || r.rsvpPosition } : null;
-            }).filter(Boolean);
+                const resolved = r.player || getPlayer(r.playerId) || state.players?.find(pl => pl.id === r.playerId) || (r.playerId === currentUserId ? state.currentUser : null);
+                const p = resolved || {
+                    id: r.playerId,
+                    name: r.playerId ? `Player ${String(r.playerId).slice(-6).toUpperCase()}` : 'Unknown',
+                    photo: null,
+                    ratings: {},
+                };
+                return { ...p, rsvpPosition: r.position || r.rsvpPosition };
+            });
     }, [game, state.currentUser, state.players]);
 
     const teams = useMemo(() => {
@@ -656,8 +662,13 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                             )}
                         </div>
                         {confirmedRsvps.map(r => {
-                            const p = r.player || getPlayer(r.playerId) || state.players?.find(pl => pl.id === r.playerId) || (r.playerId === currentUserId ? state.currentUser : null);
-                            if (!p) return null;
+                            const resolved = r.player || getPlayer(r.playerId) || state.players?.find(pl => pl.id === r.playerId) || (r.playerId === currentUserId ? state.currentUser : null);
+                            const p = resolved || {
+                                id: r.playerId,
+                                name: r.playerId ? `Player ${String(r.playerId).slice(-6).toUpperCase()}` : 'Unknown',
+                                photo: null,
+                                ratings: {},
+                            };
                             return (
                                 <div key={r.playerId} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
                                     <div className="avatar avatar-sm" style={{ borderColor: sport?.color, cursor: 'pointer', background: p.photo ? `url(${p.photo}) center/cover` : undefined, fontSize: p.photo ? '0' : undefined }} onClick={() => onViewProfile(r.playerId)}>

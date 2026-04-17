@@ -478,8 +478,16 @@ export default function FriendsPage({ onViewProfile }) {
                         )}
                     </div>
 
+                    {/* Loading state */}
+                    {!state.isLoaded && friendPlayers.length === 0 && pendingReceived.length === 0 && pendingSent.length === 0 && (
+                        <div className="glass-card no-hover text-center" style={{ padding: 40 }}>
+                            <div className="spinner" style={{ margin: '0 auto 16px' }}></div>
+                            <h3 style={{ marginBottom: 8, fontSize: '1.125rem' }}>Loading friends…</h3>
+                        </div>
+                    )}
+
                     {/* Empty state */}
-                    {friendPlayers.length === 0 && pendingReceived.length === 0 && pendingSent.length === 0 && (
+                    {state.isLoaded && friendPlayers.length === 0 && pendingReceived.length === 0 && pendingSent.length === 0 && (
                         <div className="glass-card no-hover text-center" style={{ padding: 40 }}>
                             <div style={{ fontSize: '3rem', marginBottom: 12 }}>👥</div>
                             <h3 style={{ marginBottom: 8, fontSize: '1.125rem' }}>Your squad is empty</h3>
