@@ -60,11 +60,11 @@ export async function GET(req) {
                 orderBy: { date: 'asc' },
                 take: 100,
             }),
-            // Notifications (only if authenticated)
+            // Notifications
             userId
                 ? prisma.notification.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: 50 })
                 : Promise.resolve([]),
-            // Friendships (only if authenticated)
+            // Friendships
             userId
                 ? prisma.friendship.findMany({
                     where: { OR: [{ userId }, { friendId: userId }] },
@@ -75,9 +75,9 @@ export async function GET(req) {
                     take: 500,
                 })
                 : Promise.resolve([]),
-            // Friend tiers
+            // Friend tiers — isolated so a missing table doesn't crash the whole block
             userId
-                ? prisma.friendTier.findMany({ where: { userId } })
+                ? prisma.friendTier.findMany({ where: { userId } }).catch(() => [])
                 : Promise.resolve([]),
         ];
 
