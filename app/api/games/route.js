@@ -38,6 +38,30 @@ function supabaseRowToGame(g) {
 
 export const dynamic = 'force-dynamic';
 
+// Run migrations + auto-expire at most once per 10 minutes per process, off the request path.
+let _lastHousekeeping = 0;
+function scheduleHousekeeping() {
+    const now = Date.now();
+    if (now - _lastHousekeeping < 10 * 60 * 1000) return;
+    _lastHousekeeping = now;
+    (async () => {
+        try {
+            await prisma.$executeRawUnsafe(`ALTER TABLE "Game" ADD COLUMN IF NOT EXISTS "upiId" TEXT`);
+            await prisma.$executeRawUnsafe(`ALTER TABLE "Game" ADD COLUMN IF NOT EXISTS "score" TEXT`);
+            await prisma.$executeRawUnsafe(`ALTER TABLE "Rsvp" ADD COLUMN IF NOT EXISTS "paymentStatus" TEXT DEFAULT 'not_required'`);
+        } catch (e) { console.error('bg migrate:', e.message); }
+        try {
+            const cutoff = new Date();
+            cutoff.setDate(cutoff.getDate() - 2);
+            const cutoffStr = cutoff.toISOString().split('T')[0];
+            await prisma.game.updateMany({
+                where: { status: 'open', date: { lt: cutoffStr } },
+                data:  { status: 'completed' }
+            });
+        } catch (e) { console.error('bg expire:', e.message); }
+    })();
+}
+
 export async function GET(req) {
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get('userId');
@@ -45,28 +69,7 @@ export async function GET(req) {
 
     // --- Try Prisma first ---
     try {
-        // Auto-migrate: add new columns if they don't exist yet (safe — uses IF NOT EXISTS)
-        try {
-            await prisma.$executeRawUnsafe(`ALTER TABLE "Game" ADD COLUMN IF NOT EXISTS "upiId" TEXT`);
-            await prisma.$executeRawUnsafe(`ALTER TABLE "Game" ADD COLUMN IF NOT EXISTS "score" TEXT`);
-            await prisma.$executeRawUnsafe(`ALTER TABLE "Rsvp" ADD COLUMN IF NOT EXISTS "paymentStatus" TEXT DEFAULT 'not_required'`);
-        } catch (migrateErr) {
-            console.error('Auto-migrate error (non-fatal):', migrateErr.message);
-        }
-
-        // Auto-expire: single batch UPDATE for all games whose date is >2 days old.
-        // This replaces the N+1 loop that fired one UPDATE per expired game.
-        try {
-            const cutoff = new Date();
-            cutoff.setDate(cutoff.getDate() - 2);
-            const cutoffStr = cutoff.toISOString().split('T')[0]; // YYYY-MM-DD
-            await prisma.game.updateMany({
-                where: { status: 'open', date: { lt: cutoffStr } },
-                data:  { status: 'completed' }
-            });
-        } catch (expireErr) {
-            console.error('Auto-expire error:', expireErr.message);
-        }
+        scheduleHousekeeping();
 
         // Only return games from 7 days ago onward — no need to load ancient history.
         const windowStart = new Date();

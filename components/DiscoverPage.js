@@ -217,7 +217,13 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
 
             {/* Game Cards */}
             <div className="stagger" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {upcomingGames.length === 0 && (
+                {upcomingGames.length === 0 && !state.isLoaded && (
+                    <div className="glass-card no-hover" style={{ textAlign: 'center', padding: 48 }}>
+                        <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>⏳</div>
+                        <h3 style={{ marginBottom: 8 }}>Loading games…</h3>
+                    </div>
+                )}
+                {upcomingGames.length === 0 && state.isLoaded && (
                     <div className="glass-card no-hover" style={{ textAlign: 'center', padding: 48 }}>
                         <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>🏟️</div>
                         <h3 style={{ marginBottom: 8 }}>No games found</h3>
