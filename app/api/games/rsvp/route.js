@@ -17,11 +17,26 @@ export async function POST(req) {
 
     if (!gameId || !playerId) return Response.json({ error: 'Missing required fields' }, { status: 400 });
 
-    // Verify authorization: Player themselves or the Game Organizer
-    const game = await prisma.game.findUnique({
-        where: { id: gameId },
-        select: { organizerId: true, title: true, approvalRequired: true }
-    });
+    // Look up game — try Prisma first, then Supabase
+    let game = null;
+    try {
+        game = await prisma.game.findUnique({
+            where: { id: gameId },
+            select: { organizerId: true, title: true, approvalRequired: true }
+        });
+    } catch (_) { /* Prisma unavailable, will try Supabase below */ }
+
+    if (!game) {
+        try {
+            const supabase = getSupabase();
+            const { data } = await supabase
+                .from('saved_games')
+                .select('organizer_id, title, approval_required')
+                .eq('game_id', gameId)
+                .single();
+            if (data) game = { organizerId: data.organizer_id, title: data.title, approvalRequired: !!data.approval_required };
+        } catch (_) { /* ignore */ }
+    }
 
     if (!game) return Response.json({ error: 'Game not found' }, { status: 404 });
 
