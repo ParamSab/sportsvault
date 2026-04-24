@@ -33,6 +33,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     const [showPayment, setShowPayment] = useState(false);
     const [scoreInput, setScoreInput] = useState({ team1: '', team2: '' });
     const [scoreSaving, setScoreSaving] = useState(false);
+    const [scorers, setScorers] = useState({ team1: [], team2: [] }); // goalscorer/assister IDs per team
     // freshGame (from API) takes priority over stale global state
     const game = freshGame || state.games.find(g => String(g.id) === String(gameId));
 
@@ -56,9 +57,15 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
         return (game.rsvps || [])
             .filter(r => r.status === 'yes' || r.status === 'checked_in')
             .map(r => {
-                const p = r.player || getPlayer(r.playerId) || state.players?.find(pl => pl.id === r.playerId) || (r.playerId === currentUserId ? state.currentUser : null);
-                return p ? { ...p, rsvpPosition: r.position || r.rsvpPosition } : null;
-            }).filter(Boolean);
+                const resolved = r.player || getPlayer(r.playerId) || state.players?.find(pl => pl.id === r.playerId) || (r.playerId === currentUserId ? state.currentUser : null);
+                const p = resolved || {
+                    id: r.playerId,
+                    name: r.playerId ? `Player ${String(r.playerId).slice(-6).toUpperCase()}` : 'Unknown',
+                    photo: null,
+                    ratings: {},
+                };
+                return { ...p, rsvpPosition: r.position || r.rsvpPosition };
+            });
     }, [game, state.currentUser, state.players]);
 
     const teams = useMemo(() => {
@@ -178,47 +185,53 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
 
     const handleHostAction = async (playerId, status) => {
         if (acceptingPlayers.has(playerId)) return;
-        setAcceptingPlayers(prev => new Set([...prev, playerId]));
 
         const existingRsvp = (game.rsvps || []).find(r => r.playerId === playerId);
         const pos = existingRsvp?.position || '';
-        const p = state.players?.find(pl => pl.id === playerId);
-        const actualPlayerId = p?.dbId || p?.id || playerId;
 
         // Optimistic update
-        dispatch({ type: 'RSVP', payload: { gameId, playerId: actualPlayerId, status, position: pos } });
+        dispatch({ type: 'RSVP', payload: { gameId, playerId, status, position: pos } });
+        setAcceptingPlayers(prev => new Set([...prev, playerId]));
 
         try {
             const rsvpRes = await fetch('/api/games/rsvp', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ gameId, playerId: actualPlayerId, status, position: pos }),
+                body: JSON.stringify({ gameId, playerId, status, position: pos })
             });
+
             if (!rsvpRes.ok) {
-                // Revert optimistic update on failure
-                dispatch({ type: 'RSVP', payload: { gameId, playerId: actualPlayerId, status: existingRsvp?.status || 'pending', position: pos } });
-            } else {
-                if (status === 'yes' && existingRsvp?.status !== 'yes') {
-                    fetch('/api/games/reminder', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ gameId, playerId: actualPlayerId, type: 'approval' }),
-                    }).catch(() => {});
-                }
-                const refreshRes = await fetch(`/api/games/${gameId}`);
-                if (refreshRes.ok) {
-                    const data = await refreshRes.json();
-                    if (data.game) {
-                        setFreshGame(data.game);
-                        dispatch({ type: 'UPDATE_GAME', payload: data.game });
-                    }
-                }
+                const errData = await rsvpRes.json().catch(() => ({}));
+                console.error('RSVP accept failed:', rsvpRes.status, errData);
+                // Revert optimistic update — server rejected it
+                dispatch({ type: 'RSVP', payload: { gameId, playerId, status: existingRsvp?.status || 'pending', position: pos } });
+                return;
             }
+
+            // Fire-and-forget reminder on first approval
+            if (status === 'yes' && existingRsvp?.status !== 'yes') {
+                fetch('/api/games/reminder', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ gameId, playerId, type: 'approval' })
+                }).catch(err => console.error('Reminder send failed:', err));
+            }
+
+            // Refresh game using UPDATE_GAME so the reducer merges into current state
+            // (avoids the stale-closure issue of using state.games here)
+            try {
+                const res = await fetch(`/api/games/${gameId}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.game) { setFreshGame(data.game); dispatch({ type: 'UPDATE_GAME', payload: data.game }); }
+                }
+            } catch (_) {}
         } catch (err) {
-            console.error('Host action failed:', err);
-            dispatch({ type: 'RSVP', payload: { gameId, playerId: actualPlayerId, status: existingRsvp?.status || 'pending', position: pos } });
+            console.error('Host action persistence failed:', err);
+            // Revert optimistic update on network error
+            dispatch({ type: 'RSVP', payload: { gameId, playerId, status: existingRsvp?.status || 'pending', position: pos } });
         } finally {
-            setAcceptingPlayers(prev => { const n = new Set(prev); n.delete(playerId); return n; });
+            setAcceptingPlayers(prev => { const s = new Set(prev); s.delete(playerId); return s; });
         }
     };
     
@@ -546,8 +559,10 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                                         {p.ratings?.[game.sport]?.count >= 10 && <div className="text-xs text-muted">⭐ {p.ratings[game.sport].overall} Reliability</div>}
                                     </div>
                                     <div style={{ display: 'flex', gap: 6 }}>
-                                        <button className="btn btn-sm btn-ghost" style={{ color: 'var(--danger)', padding: '4px 8px' }} onClick={() => handleHostAction(r.playerId, 'no')}>Deny</button>
-                                        <button className="btn btn-sm btn-primary" style={{ padding: '4px 12px' }} onClick={() => handleHostAction(r.playerId, 'yes')}>Accept</button>
+                                        <button className="btn btn-sm btn-ghost" style={{ color: 'var(--danger)', padding: '4px 8px' }} onClick={() => handleHostAction(r.playerId, 'no')} disabled={acceptingPlayers.has(r.playerId)}>Deny</button>
+                                        <button className="btn btn-sm btn-primary" style={{ padding: '4px 12px' }} onClick={() => handleHostAction(r.playerId, 'yes')} disabled={acceptingPlayers.has(r.playerId)}>
+                                            {acceptingPlayers.has(r.playerId) ? '…' : 'Accept'}
+                                        </button>
                                     </div>
                                 </div>
                             );
@@ -647,8 +662,13 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                             )}
                         </div>
                         {confirmedRsvps.map(r => {
-                            const p = r.player || getPlayer(r.playerId) || state.players?.find(pl => pl.id === r.playerId) || (r.playerId === currentUserId ? state.currentUser : null);
-                            if (!p) return null;
+                            const resolved = r.player || getPlayer(r.playerId) || state.players?.find(pl => pl.id === r.playerId) || (r.playerId === currentUserId ? state.currentUser : null);
+                            const p = resolved || {
+                                id: r.playerId,
+                                name: r.playerId ? `Player ${String(r.playerId).slice(-6).toUpperCase()}` : 'Unknown',
+                                photo: null,
+                                ratings: {},
+                            };
                             return (
                                 <div key={r.playerId} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
                                     <div className="avatar avatar-sm" style={{ borderColor: sport?.color, cursor: 'pointer', background: p.photo ? `url(${p.photo}) center/cover` : undefined, fontSize: p.photo ? '0' : undefined }} onClick={() => onViewProfile(r.playerId)}>
@@ -885,12 +905,32 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                                 </div>
                             </div>
                             {draw && <div style={{ textAlign: 'center', marginTop: 10, fontWeight: 700, color: 'var(--text-secondary)', fontSize: '0.875rem' }}>🤝 Draw</div>}
+                            {/* Goalscorers */}
+                            {(savedScore.team1Scorers?.length > 0 || savedScore.team2Scorers?.length > 0) && (
+                                <div style={{ marginTop: 12, padding: '10px 12px', background: 'var(--bg-input)', borderRadius: 8 }}>
+                                    <div style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>⚽ Goalscorers</div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                                        {['team1Scorers', 'team2Scorers'].map((key, ti) => (
+                                            <div key={key}>
+                                                <div style={{ fontSize: '0.6rem', color: ti === 0 ? '#3b82f6' : '#ef4444', fontWeight: 700, marginBottom: 4 }}>Team {ti + 1}</div>
+                                                {(savedScore[key] || []).length === 0
+                                                    ? <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>—</div>
+                                                    : (savedScore[key] || []).map(pid => {
+                                                        const p = confirmedPlayers.find(cp => (cp.dbId || cp.id) === pid) || state.players?.find(pl => pl.id === pid);
+                                                        return <div key={pid} style={{ fontSize: '0.78rem', fontWeight: 600 }}>⚽ {p?.name?.split(' ')[0] || 'Player'}</div>;
+                                                    })
+                                                }
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                             {isOrganizer && (
                                 <button className="btn btn-xs btn-ghost" style={{ marginTop: 12, width: '100%', color: 'var(--text-secondary)' }}
                                     onClick={() => {
                                         setScoreInput({ team1: String(t1), team2: String(t2) });
-                                        // Temporarily clear game.score locally to show editor — re-fetch resets it
-                                        dispatch({ type: 'LOAD_STATE', payload: { games: state.games.map(g => String(g.id) === String(gameId) ? { ...g, score: null } : g) } });
+                                        setScorers({ team1: savedScore.team1Scorers || [], team2: savedScore.team2Scorers || [] });
+                                        dispatch({ type: 'UPDATE_GAME', payload: { ...game, score: null } });
                                         if (freshGame) setFreshGame(prev => ({ ...prev, score: null }));
                                     }}>
                                     ✏️ Edit Score
@@ -901,6 +941,21 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                 }
 
                 if (!isOrganizer) return null;
+
+                // Null-safe team split — balanceTeams returns null for < 4 players
+                const safeTeams = teams || {
+                    team1: confirmedPlayers.filter((_, i) => i % 2 === 0),
+                    team2: confirmedPlayers.filter((_, i) => i % 2 !== 0),
+                };
+
+                const toggleScorer = (team, pid) => {
+                    setScorers(prev => {
+                        const list = prev[team];
+                        return { ...prev, [team]: list.includes(pid) ? list.filter(id => id !== pid) : [...list, pid] };
+                    });
+                };
+
+                const scoreEntered = scoreInput.team1 !== '' || scoreInput.team2 !== '';
 
                 // Score input form (organizer only)
                 return (
@@ -917,19 +972,19 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 8, alignItems: 'center', marginBottom: 16 }}>
                             <div style={{ textAlign: 'center' }}>
                                 <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#3b82f6', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-                                    Team 1 ({teams.team1.length})
+                                    Team 1 ({safeTeams.team1.length})
                                 </div>
                                 <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                                    {teams.team1.slice(0, 3).map(p => p.name.split(' ')[0]).join(', ')}{teams.team1.length > 3 ? '…' : ''}
+                                    {safeTeams.team1.slice(0, 3).map(p => p.name.split(' ')[0]).join(', ')}{safeTeams.team1.length > 3 ? '…' : ''}
                                 </div>
                             </div>
                             <div style={{ textAlign: 'center', color: 'var(--text-secondary)', fontWeight: 700, fontSize: '1rem', paddingBottom: 2 }}>vs</div>
                             <div style={{ textAlign: 'center' }}>
                                 <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-                                    Team 2 ({teams.team2.length})
+                                    Team 2 ({safeTeams.team2.length})
                                 </div>
                                 <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                                    {teams.team2.slice(0, 3).map(p => p.name.split(' ')[0]).join(', ')}{teams.team2.length > 3 ? '…' : ''}
+                                    {safeTeams.team2.slice(0, 3).map(p => p.name.split(' ')[0]).join(', ')}{safeTeams.team2.length > 3 ? '…' : ''}
                                 </div>
                             </div>
                         </div>
@@ -951,6 +1006,54 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                             />
                         </div>
 
+                        {/* Goalscorers / Assisters — always shown for organizer */}
+                        {(() => {
+                            // Build player stubs from RSVPs when full player objects aren't available
+                            const allPlayers = confirmedRsvps.map(r => {
+                                const found = confirmedPlayers.find(p => (p.dbId || p.id) === r.playerId);
+                                if (found) return found;
+                                if (r.player) return r.player;
+                                return { id: r.playerId, name: r.playerId ? r.playerId.slice(-6).toUpperCase() : '???' };
+                            }).filter(p => p.id || p.dbId);
+                            const rsvpTeam1 = allPlayers.filter((_, i) => i % 2 === 0);
+                            const rsvpTeam2 = allPlayers.filter((_, i) => i % 2 !== 0);
+                            const displayTeams = {
+                                team1: safeTeams.team1.length > 0 ? safeTeams.team1 : rsvpTeam1,
+                                team2: safeTeams.team2.length > 0 ? safeTeams.team2 : rsvpTeam2,
+                            };
+                            const hasPlayers = displayTeams.team1.length > 0 || displayTeams.team2.length > 0;
+                            if (!hasPlayers) return null;
+                            return (
+                                <div style={{ marginBottom: 16 }}>
+                                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                                        ⚽ Tag Goalscorers (optional)
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                                        {['team1', 'team2'].map((t, ti) => (
+                                            <div key={t}>
+                                                <div style={{ fontSize: '0.65rem', fontWeight: 700, color: ti === 0 ? '#3b82f6' : '#ef4444', textTransform: 'uppercase', marginBottom: 6 }}>
+                                                    Team {ti + 1}
+                                                </div>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                    {displayTeams[t].map(p => {
+                                                        const pid = p.dbId || p.id;
+                                                        const isScorer = scorers[t].includes(pid);
+                                                        return (
+                                                            <button key={pid} onClick={() => toggleScorer(t, pid)}
+                                                                style={{ textAlign: 'left', padding: '5px 10px', borderRadius: 8, border: `1px solid ${isScorer ? (ti === 0 ? '#3b82f6' : '#ef4444') : 'var(--border-color)'}`, background: isScorer ? (ti === 0 ? 'rgba(59,130,246,0.15)' : 'rgba(239,68,68,0.15)') : 'var(--bg-input)', fontSize: '0.78rem', fontWeight: isScorer ? 700 : 400, color: isScorer ? (ti === 0 ? '#3b82f6' : '#ef4444') : 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                                <span>{isScorer ? '⚽' : '○'}</span>
+                                                                <span>{p.name?.split(' ')[0] || pid?.slice(-4)}</span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
                         <button
                             className="btn btn-primary btn-block"
                             style={{ background: `linear-gradient(135deg, ${sportColor}, ${sport?.gradient ? sportColor : '#a855f7'})`, border: 'none', borderRadius: 12, fontWeight: 700 }}
@@ -958,8 +1061,8 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                             onClick={async () => {
                                 setScoreSaving(true);
                                 try {
-                                    const t1ids = teams.team1.map(p => p.dbId || p.id).filter(Boolean);
-                                    const t2ids = teams.team2.map(p => p.dbId || p.id).filter(Boolean);
+                                    const t1ids = safeTeams.team1.map(p => p.dbId || p.id).filter(Boolean);
+                                    const t2ids = safeTeams.team2.map(p => p.dbId || p.id).filter(Boolean);
                                     const res = await fetch('/api/games/score', {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
@@ -969,17 +1072,22 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                                             team2Score: parseInt(scoreInput.team2),
                                             team1PlayerIds: t1ids,
                                             team2PlayerIds: t2ids,
+                                            team1Scorers: scorers.team1,
+                                            team2Scorers: scorers.team2,
                                         }),
                                     });
                                     const data = await res.json();
                                     if (data.success) {
                                         const scoreJson = JSON.stringify(data.score);
-                                        dispatch({ type: 'LOAD_STATE', payload: { games: state.games.map(g => String(g.id) === String(gameId) ? { ...g, score: scoreJson, status: 'completed' } : g) } });
-                                        if (freshGame) setFreshGame(prev => ({ ...prev, score: scoreJson, status: 'completed' }));
-                                        else refreshGame();
+                                        dispatch({ type: 'UPDATE_GAME', payload: { ...game, score: scoreJson, status: 'completed' } });
+                                        setFreshGame(prev => prev ? { ...prev, score: scoreJson, status: 'completed' } : null);
+                                        setScorers({ team1: [], team2: [] });
+                                    } else {
+                                        alert(data.error || 'Failed to save score');
                                     }
                                 } catch (err) {
                                     console.error('Save score failed:', err);
+                                    alert('Failed to save score. Please try again.');
                                 } finally {
                                     setScoreSaving(false);
                                 }

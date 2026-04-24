@@ -23,7 +23,8 @@ function parseUser(u) {
     };
 }
 
-// Single endpoint — games + notifications + friends + tiers in one DB round-trip.
+// Single endpoint that returns games + notifications + friends in one DB round-trip.
+// Replaces 3 separate cold-start API calls with one parallel query bundle.
 export async function GET(req) {
     const cookieStore = await cookies();
     const session = await getIronSession(cookieStore, sessionOptions);
@@ -32,7 +33,7 @@ export async function GET(req) {
     const { searchParams } = new URL(req.url);
     const friendIds = searchParams.get('friendIds')?.split(',').filter(Boolean) || [];
 
-    // --- Prisma path ---
+    // --- Try Prisma (all queries in parallel) ---
     try {
         const windowStart = new Date();
         windowStart.setDate(windowStart.getDate() - 7);
@@ -44,28 +45,43 @@ export async function GET(req) {
             visibilityFilter.push({ AND: [{ visibility: 'friends' }, { organizerId: { in: friendIds } }] });
         }
 
-        const [games, notifications, friendships, friendTiers] = await Promise.all([
+        const queries = [
+            // Games
             prisma.game.findMany({
                 where: { date: { gte: windowStr }, OR: visibilityFilter },
                 include: {
                     organizer: { select: { id: true, name: true, photo: true } },
-                    rsvps: { include: { player: { select: { id: true, name: true, photo: true, positions: true, ratings: true } } } },
+                    rsvps: {
+                        include: {
+                            player: { select: { id: true, name: true, photo: true, positions: true, ratings: true } }
+                        }
+                    },
                 },
                 orderBy: { date: 'asc' },
                 take: 100,
             }),
-            userId ? prisma.notification.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: 50 }) : Promise.resolve([]),
-            userId ? prisma.friendship.findMany({
-                where: { OR: [{ userId }, { friendId: userId }] },
-                include: {
-                    user: { select: { id: true, name: true, phone: true, photo: true, location: true, sports: true, positions: true, ratings: true, trustScore: true, createdAt: true, privacy: true, gamesPlayed: true } },
-                    friend: { select: { id: true, name: true, phone: true, photo: true, location: true, sports: true, positions: true, ratings: true, trustScore: true, createdAt: true, privacy: true, gamesPlayed: true } },
-                },
-                take: 500,
-            }) : Promise.resolve([]),
-            // Isolated so a missing FriendTier table doesn't crash the whole block
-            userId ? prisma.friendTier.findMany({ where: { userId } }).catch(() => []) : Promise.resolve([]),
-        ]);
+            // Notifications
+            userId
+                ? prisma.notification.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: 50 })
+                : Promise.resolve([]),
+            // Friendships
+            userId
+                ? prisma.friendship.findMany({
+                    where: { OR: [{ userId }, { friendId: userId }] },
+                    include: {
+                        user: { select: { id: true, name: true, phone: true, photo: true, location: true, sports: true, positions: true, ratings: true, trustScore: true, createdAt: true, privacy: true, gamesPlayed: true } },
+                        friend: { select: { id: true, name: true, phone: true, photo: true, location: true, sports: true, positions: true, ratings: true, trustScore: true, createdAt: true, privacy: true, gamesPlayed: true } },
+                    },
+                    take: 500,
+                })
+                : Promise.resolve([]),
+            // Friend tiers — isolated so a missing table doesn't crash the whole block
+            userId
+                ? prisma.friendTier.findMany({ where: { userId } }).catch(() => [])
+                : Promise.resolve([]),
+        ];
+
+        const [games, notifications, friendships, friendTiers] = await Promise.all(queries);
 
         const serializedGames = games.map(g => ({
             ...g,
@@ -74,7 +90,11 @@ export async function GET(req) {
                 status: r.status,
                 position: r.position || '',
                 paymentStatus: r.paymentStatus || 'not_required',
-                player: r.player ? { ...r.player, positions: safeParse(r.player.positions, {}), ratings: safeParse(r.player.ratings, {}) } : null,
+                player: r.player ? {
+                    ...r.player,
+                    positions: safeParse(r.player.positions, {}),
+                    ratings: safeParse(r.player.ratings, {}),
+                } : null,
             })),
         }));
 
@@ -83,12 +103,14 @@ export async function GET(req) {
             if (!raw) return null;
             return { ...parseUser(raw), friendshipStatus: f.status, isSender: f.userId === userId };
         };
+        const accepted = friendships.filter(f => f.status === 'accepted');
+        const pending  = friendships.filter(f => f.status === 'pending');
 
         return Response.json({
             games: serializedGames,
             notifications,
-            friends: friendships.filter(f => f.status === 'accepted').map(formatFriend).filter(Boolean),
-            pendingRequests: friendships.filter(f => f.status === 'pending').map(formatFriend).filter(Boolean),
+            friends: accepted.map(formatFriend).filter(Boolean),
+            pendingRequests: pending.map(formatFriend).filter(Boolean),
             tiers: friendTiers,
         });
     } catch (prismaErr) {
@@ -102,15 +124,17 @@ export async function GET(req) {
 
         const windowStart = new Date();
         windowStart.setDate(windowStart.getDate() - 7);
-        const windowStr = windowStart.toISOString().split('T')[0];
 
-        const [gResult, nResult, fResult, tResult] = await Promise.all([
-            supabase.from('saved_games').select('*').gte('game_date', windowStr).order('game_date', { ascending: true }).limit(100),
+        const sbQueries = [
+            supabase.from('saved_games').select('*').gte('game_date', windowStart.toISOString().split('T')[0]).order('game_date', { ascending: true }).limit(100),
             userId ? supabase.from('notifications').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(50) : Promise.resolve({ data: [] }),
             userId ? supabase.from('friendships').select('user_id, friend_id, status').or(`user_id.eq.${userId},friend_id.eq.${userId}`) : Promise.resolve({ data: [] }),
             userId ? supabase.from('friend_tiers').select('*').eq('user_id', userId) : Promise.resolve({ data: [] }),
-        ]);
+        ];
 
+        const [gResult, nResult, fResult, tResult] = await Promise.all(sbQueries);
+
+        // Games
         const visibleGames = (gResult.data || []).filter(g =>
             g.visibility === 'public' || g.organizer_id === userId ||
             (g.visibility === 'friends' && friendIds.includes(g.organizer_id))
@@ -122,7 +146,6 @@ export async function GET(req) {
         ]);
         const orgMap = {};
         (orgResult.data || []).forEach(u => { orgMap[u.id] = u; });
-
         const games = visibleGames.map(g => ({
             id: g.game_id, title: g.title, sport: g.sport, format: g.format || '',
             date: g.game_date, time: g.game_time, duration: g.duration || 90,
@@ -133,12 +156,11 @@ export async function GET(req) {
             organizer: orgMap[g.organizer_id] || { id: g.organizer_id, name: '', photo: null },
             rsvps: (rsvpResult.data || []).filter(r => r.game_id === g.game_id).map(r => ({
                 playerId: r.player_id, status: r.status, position: r.position || '', player: null,
-                paymentStatus: r.payment_status || 'not_required',
             })),
-            score: g.score || null,
             createdAt: g.created_at,
         }));
 
+        // Friends
         const rows = fResult.data || [];
         const friendUserIds = rows.map(r => String(r.user_id) === String(userId) ? r.friend_id : r.user_id);
         let friendUsers = [];
@@ -146,13 +168,14 @@ export async function GET(req) {
             const { data: fu } = await supabase.from('users').select('id, name, phone, photo, location, sports, positions, ratings, trust_score, privacy, games_played').in('id', friendUserIds);
             friendUsers = (fu || []).map(u => parseUser({ ...u, trustScore: u.trust_score, gamesPlayed: u.games_played }));
         }
+        const tiers = (tResult.data || []).map(t => ({ friendId: t.friend_id, sport: t.sport, tier: t.tier }));
 
         return Response.json({
             games,
-            notifications: nResult.data || [],
+            notifications: (nResult.data || []),
             friends: friendUsers,
             pendingRequests: [],
-            tiers: (tResult.data || []).map(t => ({ friendId: t.friend_id, sport: t.sport, tier: t.tier, userId: t.user_id })),
+            tiers,
         });
     } catch (sbErr) {
         console.error('[init] Supabase error:', sbErr.message);

@@ -84,11 +84,15 @@ export async function GET() {
                     .or(`user_id.eq.${userId},friend_id.eq.${userId}`);
                 if (rows?.length) {
                     const friendIds = rows.map(r => String(r.user_id) === String(userId) ? r.friend_id : r.user_id);
-                    const { data: users } = await supabase.from('users').select('*').in('id', friendIds);
+                    const [{ data: users }, { data: tierRows }] = await Promise.all([
+                        supabase.from('users').select('*').in('id', friendIds),
+                        supabase.from('friend_tiers').select('friend_id, sport, tier').eq('user_id', userId),
+                    ]);
+                    const tiers = (tierRows || []).map(t => ({ friendId: t.friend_id, sport: t.sport, tier: t.tier }));
                     return Response.json({
                         friends: (users || []).map(u => parseUser(u)),
                         pendingRequests: [],
-                        tiers: [],
+                        tiers,
                     });
                 }
             }
