@@ -25,6 +25,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     const [broadcastStatus, setBroadcastStatus] = useState(null); // null | 'sending' | 'sent' | 'error'
     const [broadcastResult, setBroadcastResult] = useState(null);
     const [nudgedPlayers, setNudgedPlayers] = useState(new Set());
+    const [acceptingPlayers, setAcceptingPlayers] = useState(new Set());
 
     const [notFound, setNotFound] = useState(false);
     const [msgCopied, setMsgCopied] = useState(false);      // MUST be before any early return
@@ -176,42 +177,48 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     };
 
     const handleHostAction = async (playerId, status) => {
+        if (acceptingPlayers.has(playerId)) return;
+        setAcceptingPlayers(prev => new Set([...prev, playerId]));
+
         const existingRsvp = (game.rsvps || []).find(r => r.playerId === playerId);
         const pos = existingRsvp?.position || '';
-        
-        // Use either dbId or the id from the player object
         const p = state.players?.find(pl => pl.id === playerId);
         const actualPlayerId = p?.dbId || p?.id || playerId;
-        
+
+        // Optimistic update
         dispatch({ type: 'RSVP', payload: { gameId, playerId: actualPlayerId, status, position: pos } });
 
         try {
-            await fetch('/api/games/rsvp', {
+            const rsvpRes = await fetch('/api/games/rsvp', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ gameId, playerId: actualPlayerId, status, position: pos })
+                body: JSON.stringify({ gameId, playerId: actualPlayerId, status, position: pos }),
             });
-            // Send immediate reminder only on first approval (not if already 'yes')
-            if (status === 'yes' && existingRsvp?.status !== 'yes') {
-              fetch('/api/games/reminder', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ gameId, playerId: actualPlayerId, type: 'approval' })
-              }).catch(err => console.error('Reminder send failed:', err));
+            if (!rsvpRes.ok) {
+                // Revert optimistic update on failure
+                dispatch({ type: 'RSVP', payload: { gameId, playerId: actualPlayerId, status: existingRsvp?.status || 'pending', position: pos } });
+            } else {
+                if (status === 'yes' && existingRsvp?.status !== 'yes') {
+                    fetch('/api/games/reminder', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ gameId, playerId: actualPlayerId, type: 'approval' }),
+                    }).catch(() => {});
+                }
+                const refreshRes = await fetch(`/api/games/${gameId}`);
+                if (refreshRes.ok) {
+                    const data = await refreshRes.json();
+                    if (data.game) {
+                        setFreshGame(data.game);
+                        dispatch({ type: 'UPDATE_GAME', payload: data.game });
+                    }
+                }
             }
         } catch (err) {
-            console.error('Host action persistence failed:', err);
-        }
-        
-        // Refresh game data to reflect updated RSVP status
-        try {
-          const res = await fetch(`/api/games/${gameId}`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.game) setFreshGame(data.game);
-          }
-        } catch (refreshErr) {
-          console.error('Failed to refresh game after host action:', refreshErr);
+            console.error('Host action failed:', err);
+            dispatch({ type: 'RSVP', payload: { gameId, playerId: actualPlayerId, status: existingRsvp?.status || 'pending', position: pos } });
+        } finally {
+            setAcceptingPlayers(prev => { const n = new Set(prev); n.delete(playerId); return n; });
         }
     };
     
