@@ -1,5 +1,6 @@
 import { Resend } from 'resend';
 import { prisma } from '@/lib/prisma';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 export async function POST(req) {
     try {
@@ -8,6 +9,26 @@ export async function POST(req) {
             return Response.json({ error: 'Valid email address is required.' }, { status: 400 });
         }
         const normalizedEmail = email.toLowerCase().trim();
+
+        // In-memory rate limit (per instance)
+        const rl = checkRateLimit(`email:${normalizedEmail}`, 3, 10 * 60 * 1000);
+        if (!rl.allowed) {
+            return Response.json(
+                { error: `Too many requests. Try again in ${Math.ceil(rl.retryAfterSeconds / 60)} minute(s).` },
+                { status: 429 }
+            );
+        }
+
+        // DB-backed rate limit: max 5 codes created in the last 10 min (catches cross-instance abuse)
+        try {
+            const windowStart = new Date(Date.now() - 10 * 60 * 1000);
+            const recentCount = await prisma.otpCode.count({
+                where: { email: normalizedEmail, createdAt: { gte: windowStart } },
+            });
+            if (recentCount >= 5) {
+                return Response.json({ error: 'Too many requests. Try again in 10 minutes.' }, { status: 429 });
+            }
+        } catch (_) { /* DB unavailable — fall through, in-memory check already passed */ }
 
         const code = Math.floor(100000 + Math.random() * 900000).toString();
         const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes

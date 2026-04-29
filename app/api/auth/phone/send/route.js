@@ -1,4 +1,5 @@
 // MSG91 Auth Route
+import { checkRateLimit } from '@/lib/rateLimit';
 
 function normalizePhone(phone) {
     const cleaned = phone.trim();
@@ -26,6 +27,14 @@ export async function POST(req) {
         const normalized = normalizePhone(phone);
         if (!normalized) {
             return Response.json({ error: 'Invalid phone number. Please enter a valid 10-digit number.' }, { status: 400 });
+        }
+
+        const rl = checkRateLimit(`phone:${normalized}`, 3, 10 * 60 * 1000);
+        if (!rl.allowed) {
+            return Response.json(
+                { error: `Too many requests. Try again in ${Math.ceil(rl.retryAfterSeconds / 60)} minute(s).` },
+                { status: 429 }
+            );
         }
 
         // Twilio implementation
