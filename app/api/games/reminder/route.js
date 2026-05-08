@@ -27,8 +27,11 @@ export async function POST(req) {
     });
     if (!game) return Response.json({ error: 'Game not found' }, { status: 404 });
 
-    // Check auth only for manual (non-approval-auto) calls
-    if (sessionUserId && type !== 'approval' && sessionUserId !== game.organizerId) {
+    if (!sessionUserId) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (sessionUserId !== game.organizerId) {
       return Response.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -63,10 +66,10 @@ export async function POST(req) {
     }
 
     const messageBody = type === 'approval'
-      ? `🎉 You're in! Your spot for "${game.title}" has been confirmed. See you at ${game.location}! Game info: https://sportsvault.co.in/?game=${game.id}`
+      ? `You're in! Your spot for "${game.title}" has been confirmed. See you at ${game.location}. Game info: https://sportsvault.co.in/?game=${game.id}`
       : type === 'nudge'
-      ? `👋 Quick nudge from the organizer of "${game.title}"! We're looking forward to seeing you at ${game.location}. Join here: https://sportsvault.co.in/?game=${game.id}`
-      : `⚽ SportsVault Reminder: "${game.title}" starts in ${game.reminderHours || 2}h at ${game.location}. Don't be late!`;
+      ? `Quick nudge from the organizer of "${game.title}". We're looking forward to seeing you at ${game.location}. Join here: https://sportsvault.co.in/?game=${game.id}`
+      : `SportsVault reminder: "${game.title}" starts in ${game.reminderHours || 2}h at ${game.location}. Don't be late!`;
 
     const twilio = (await import('twilio')).default;
     const client = twilio(twilioSid, twilioAuth);

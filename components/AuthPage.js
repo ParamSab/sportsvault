@@ -36,6 +36,7 @@ export default function AuthPage() {
     const [profile, setProfile] = useState({
         name: '', phone: '', password: '', photo: null, location: '', sports: [], positions: {},
     });
+    const onboardingStepKeys = ['name', 'phone-capture', 'photo', 'location', 'sports', 'positions', 'credentials'];
 
     const startResendCountdown = () => {
         setResendCountdown(60);
@@ -49,6 +50,7 @@ export default function AuthPage() {
     };
 
     useEffect(() => () => { if (countdownRef.current) clearInterval(countdownRef.current); }, []);
+    useEffect(() => { setStepError(''); }, [onboardStep]);
 
     const handlePhotoUpload = (e) => {
         const file = e.target.files[0];
@@ -185,7 +187,7 @@ export default function AuthPage() {
         setIsSending(true);
         try {
             const user = state.currentUser;
-            await fetch('/api/users', {
+            const res = await fetch('/api/users', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -199,9 +201,12 @@ export default function AuthPage() {
                     password: setupPassword,
                 }),
             });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to save credentials');
+            if (data.user) dispatch({ type: 'LOGIN', payload: data.user });
             router.push('/invite');
         } catch (err) {
-            setCredError('Failed to save. Please try again.');
+            setCredError(err.message || 'Failed to save. Please try again.');
         } finally {
             setIsSending(false);
         }
@@ -270,17 +275,16 @@ export default function AuthPage() {
     };
 
     const validateOnboardStep = (idx) => {
-        if (idx === 0 && profile.name.trim().length < 2) { setStepError('Please enter your full name (at least 2 characters)'); return false; }
-        if (idx === 1 && authMode === 'email' && (!profile.phone || profile.phone.replace(/\D/g, '').length < 10)) { setStepError('Please enter a valid phone number for game reminders'); return false; }
-        // idx 2 is photo (optional)
-        if (idx === 3 && !profile.location.trim()) { setStepError('Please enter your city or neighbourhood'); return false; }
-        if (idx === 4 && profile.sports.length === 0) { setStepError('Select at least one sport'); return false; }
-        if (idx === 5) {
+        const stepKey = onboardingStepKeys[idx];
+        if (stepKey === 'name' && profile.name.trim().length < 2) { setStepError('Please enter your full name (at least 2 characters)'); return false; }
+        if (stepKey === 'phone-capture' && authMode === 'email' && (!profile.phone || profile.phone.replace(/\D/g, '').length < 10)) { setStepError('Please enter a valid phone number for game reminders'); return false; }
+        if (stepKey === 'location' && !profile.location.trim()) { setStepError('Please enter your city or neighbourhood'); return false; }
+        if (stepKey === 'sports' && profile.sports.length === 0) { setStepError('Select at least one sport'); return false; }
+        if (stepKey === 'positions') {
             const missing = profile.sports.filter(s => !profile.positions[s]);
             if (missing.length > 0) { setStepError(`Select your position for: ${missing.join(', ')}`); return false; }
         }
-        if (idx === 6) {
-            // Credentials step
+        if (stepKey === 'credentials') {
             const credEmail = authMode === 'email' ? (verifiedEmail || email) : setupEmail;
             if (!credEmail || !credEmail.includes('@')) { setStepError('Enter a valid email address'); return false; }
             if (!setupPassword || setupPassword.length < 6) { setStepError('Password must be at least 6 characters'); return false; }
@@ -326,17 +330,16 @@ export default function AuthPage() {
                 }),
             });
             const dbData = await dbRes.json();
+            if (!dbRes.ok) throw new Error(dbData.error || 'Failed to create account');
             if (dbData.user) {
                 newUser.dbId = dbData.user.id;
                 newUser.id = dbData.user.id; // use real DB id so games/rsvps link correctly
             }
 
-            await fetch('/api/auth/session', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user: newUser, rememberMe }),
-            });
-        } catch (_) { /* continue fallback */ }
+        } catch (err) {
+            setStepError(err.message || 'Failed to create account. Please try again.');
+            return;
+        }
 
         dispatch({ type: 'LOGIN', payload: newUser });
         router.push('/invite');
@@ -406,7 +409,7 @@ export default function AuthPage() {
         <div key="location" className="animate-fade-in">
             <h2 style={{ marginBottom: 8 }}>Where are you based?</h2>
             <p className="text-muted text-sm" style={{ marginBottom: 24 }}>We'll show you games nearby.</p>
-            <input type="text" placeholder="e.g. Bandra West, Mumbai" value={profile.location} onChange={e => setProfile(prev => ({ ...prev, location: e.target.value }))} style={{ fontSize: '1.125rem', padding: '16px 20px' }} />
+            <input type="text" placeholder="e.g. Bandra West, Mumbai" value={profile.location} onChange={e => { setStepError(''); setProfile(prev => ({ ...prev, location: e.target.value })); }} style={{ fontSize: '1.125rem', padding: '16px 20px' }} />
             <button
                 type="button"
                 onClick={async () => {
@@ -449,7 +452,7 @@ export default function AuthPage() {
             <p className="text-muted text-sm" style={{ marginBottom: 24 }}>Select all that apply.</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {Object.entries(SPORTS).map(([key, sportObj]) => (
-                    <button key={key} onClick={() => toggleSport(key)} style={{
+                    <button key={key} onClick={() => { setStepError(''); toggleSport(key); }} style={{
                         display: 'flex', alignItems: 'center', gap: 16, padding: '20px 24px', borderRadius: 16,
                         background: profile.sports.includes(key) ? `${sportObj.color}20` : 'var(--bg-card)',
                         border: `2px solid ${profile.sports.includes(key) ? sportObj.color : 'var(--border-color)'}`,
@@ -672,7 +675,7 @@ export default function AuthPage() {
                             </p>
                             {isDevMode && (
                                 <div style={{ background: '#fffbeb', border: '1px solid #f59e0b', borderRadius: 8, padding: '10px 14px', marginBottom: 20, fontSize: '0.82rem', color: '#92400e' }}>
-                                    <strong>Dev mode</strong> — SMS service not configured. Use code <strong style={{ letterSpacing: 2 }}>990770</strong> to continue.
+                                    <strong>Dev mode</strong> - verification service not configured. Use your configured dev OTP to continue.
                                 </div>
                             )}
                             <div className="otp-container" style={{ marginBottom: 24 }}>
@@ -706,8 +709,8 @@ export default function AuthPage() {
                                 <div style={{ display: 'flex', gap: 4 }}>{onboardingSteps.map((_, i) => <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: i === onboardStep ? 'var(--primary-color)' : i < onboardStep ? 'rgba(99,102,241,0.3)' : 'var(--border-color)', transition: 'all 0.3s' }} />)}</div>
                             </div>
                             {onboardingSteps[onboardStep]}
-                            {stepError && <div style={{ color: '#ef4444', fontSize: '0.8125rem', marginTop: 12, padding: '10px 12px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: 8, border: '1px solid rgba(239, 68, 68, 0.2)' }}>⚠️ {stepError}</div>}
-                            <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
+                            {stepError && onboardingStepKeys[onboardStep] !== 'location' && <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: 16, padding: '12px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: 8, border: '1px solid rgba(239, 68, 68, 0.2)' }}>⚠️ {stepError}</div>}
+                            <div style={{ display: 'flex', gap: 12, marginTop: 32 }}>
                                 {onboardStep > 0 && <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => { setOnboardStep(s => s - 1); setStepError(''); }}>← Back</button>}
                                 <button className="btn btn-primary" style={{ flex: 2 }} onClick={() => { if (validateOnboardStep(onboardStep)) { if (onboardStep < onboardingSteps.length - 1) setOnboardStep(s => s + 1); else handleComplete(); } }}>{onboardStep < onboardingSteps.length - 1 ? 'Next →' : 'Create Account 🚀'}</button>
                             </div>

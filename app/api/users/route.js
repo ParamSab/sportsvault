@@ -1,78 +1,140 @@
 import { prisma } from '@/lib/prisma';
 import { getSupabase } from '@/lib/supabase';
 import bcrypt from 'bcryptjs';
+import { getIronSession } from 'iron-session';
+import { cookies } from 'next/headers';
+import { sessionOptions } from '@/lib/session';
+import {
+    getFreshPendingVerifiedAuth,
+    normalizeEmail,
+    normalizePhone,
+    serializeUser,
+} from '@/lib/auth';
+import { findLocalUserByEmail, findLocalUserById, findLocalUserByPhone, upsertLocalUser } from '@/lib/localUserStore';
+
+function canWriteUser({ sessionUserId, pendingAuth, existingUser, email, phone }) {
+    if (sessionUserId && existingUser?.id === sessionUserId) return true;
+    if (!pendingAuth) return false;
+
+    const emailMatches = email && pendingAuth.email && email === pendingAuth.email;
+    const phoneMatches = phone && pendingAuth.phone && phone === pendingAuth.phone;
+    if (!emailMatches && !phoneMatches) return false;
+
+    if (!existingUser) return true;
+    return (emailMatches && existingUser.email === email) || (phoneMatches && existingUser.phone === phone);
+}
 
 export async function POST(req) {
-    const { name, email, phone, photo, location, sports, positions, password } = await req.json();
-    if (!email && !phone) return Response.json({ error: 'Email or phone required' }, { status: 400 });
-
-    const hashedPassword = password ? await bcrypt.hash(password, 10) : undefined;
-
-    // --- Try Prisma first ---
     try {
-        // Find existing user by email or phone
-        let existingUser = null;
-        if (email) existingUser = await prisma.user.findUnique({ where: { email } });
-        if (!existingUser && phone) existingUser = await prisma.user.findUnique({ where: { phone } });
+        const body = await req.json();
+        const { name, photo, location, sports, positions, password } = body;
+        const email = normalizeEmail(body.email);
+        const phone = normalizePhone(body.phone);
+        if (!email && !phone) return Response.json({ error: 'Email or phone required' }, { status: 400 });
 
-        let user;
-        if (existingUser) {
-            const updateData = {
-                name,
-                email: email ?? existingUser.email,
-                phone: phone ?? existingUser.phone,
-                photo: photo ?? existingUser.photo,
-                location: location ?? existingUser.location,
-                sports: JSON.stringify(sports || []),
-                positions: JSON.stringify(positions || {}),
-                ...(hashedPassword && { password: hashedPassword }),
-            };
-            user = await prisma.user.update({ where: { id: existingUser.id }, data: updateData });
-        } else {
-            user = await prisma.user.create({
-                data: {
-                    name,
-                    email: email || null,
-                    phone: phone || null,
-                    photo: photo || null,
-                    location: location || null,
-                    sports: JSON.stringify(sports || []),
-                    positions: JSON.stringify(positions || {}),
-                    ...(hashedPassword && { password: hashedPassword }),
-                },
-            });
-        }
+        const cookieStore = await cookies();
+        const session = await getIronSession(cookieStore, sessionOptions);
+        const sessionUserId = session.user?.dbId || session.user?.id;
+        const pendingAuth = getFreshPendingVerifiedAuth(session);
 
-        const { password: _pw, ...safeUser } = user;
-        return Response.json({
-            user: {
-                ...safeUser,
-                sports: JSON.parse(safeUser.sports || '[]'),
-                positions: JSON.parse(safeUser.positions || '{}'),
-                ratings: JSON.parse(safeUser.ratings || '{}'),
+        const hashedPassword = password ? await bcrypt.hash(password, 10) : undefined;
+
+        try {
+            let existingUser = null;
+            if (sessionUserId) existingUser = await prisma.user.findUnique({ where: { id: sessionUserId } });
+            if (!existingUser && email) existingUser = await prisma.user.findUnique({ where: { email } });
+            if (!existingUser && phone) existingUser = await prisma.user.findUnique({ where: { phone } });
+
+            if (!canWriteUser({ sessionUserId, pendingAuth, existingUser, email, phone })) {
+                return Response.json({ error: 'Verified login required to save this account.' }, { status: 401 });
             }
-        });
-    } catch (prismaErr) {
-        console.error('POST /api/users Prisma error — falling back to Supabase:', prismaErr.message);
-    }
 
-    // --- Supabase fallback ---
-    try {
-        const supabase = getSupabase();
-        if (!supabase) return Response.json({ error: 'No database available' }, { status: 503 });
+            let user;
+            if (existingUser) {
+                user = await prisma.user.update({
+                    where: { id: existingUser.id },
+                    data: {
+                        name: name || existingUser.name,
+                        email: email ?? existingUser.email,
+                        phone: phone ?? existingUser.phone,
+                        photo: photo ?? existingUser.photo,
+                        location: location ?? existingUser.location,
+                        sports: JSON.stringify(sports || []),
+                        positions: JSON.stringify(positions || {}),
+                        ...(hashedPassword && { password: hashedPassword }),
+                    },
+                });
+            } else {
+                user = await prisma.user.create({
+                    data: {
+                        name: name || 'Player',
+                        email: email || null,
+                        phone: phone || null,
+                        photo: photo || null,
+                        location: location || null,
+                        sports: JSON.stringify(sports || []),
+                        positions: JSON.stringify(positions || {}),
+                        ...(hashedPassword && { password: hashedPassword }),
+                    },
+                });
+            }
+
+            const userData = serializeUser(user);
+            session.user = userData;
+            delete session.pendingVerifiedAuth;
+            await session.save();
+            return Response.json({ user: userData });
+        } catch (prismaErr) {
+            console.error('POST /api/users Prisma error, falling back to Supabase:', prismaErr.message);
+        }
 
         const lookupCol = email ? 'email' : 'phone';
         const lookupVal = email || phone;
+        const supabase = getSupabase();
+        if (!supabase) {
+            let existing = null;
+            if (sessionUserId) existing = await findLocalUserById(sessionUserId);
+            if (!existing && email) existing = await findLocalUserByEmail(email);
+            if (!existing && phone) existing = await findLocalUserByPhone(phone);
+
+            if (!canWriteUser({ sessionUserId, pendingAuth, existingUser: existing, email, phone })) {
+                return Response.json({ error: 'Verified login required to save this account.' }, { status: 401 });
+            }
+
+            const localUser = await upsertLocalUser({
+                id: existing?.id,
+                name,
+                email,
+                phone,
+                photo,
+                location,
+                sports: JSON.stringify(sports || []),
+                positions: JSON.stringify(positions || {}),
+                ...(hashedPassword && { password: hashedPassword }),
+            });
+            const serialized = serializeUser(localUser);
+            session.user = serialized;
+            delete session.pendingVerifiedAuth;
+            await session.save();
+            return Response.json({ user: serialized, localFallback: true });
+        }
+
         const { data: existing } = await supabase.from('users').select('*').eq(lookupCol, lookupVal).maybeSingle();
+
+        if (!canWriteUser({ sessionUserId, pendingAuth, existingUser: existing, email, phone })) {
+            return Response.json({ error: 'Verified login required to save this account.' }, { status: 401 });
+        }
 
         let userData;
         if (existing) {
-            const { data: updated } = await supabase
+            const { data: updated, error } = await supabase
                 .from('users')
                 .update({
-                    name,
-                    photo: photo || null,
-                    location: location || null,
+                    name: name || existing.name,
+                    email: email ?? existing.email,
+                    phone: phone ?? existing.phone,
+                    photo: photo ?? existing.photo,
+                    location: location ?? existing.location,
                     sports: JSON.stringify(sports || []),
                     positions: JSON.stringify(positions || {}),
                     ...(hashedPassword && { password: hashedPassword }),
@@ -80,25 +142,35 @@ export async function POST(req) {
                 .eq('id', existing.id)
                 .select()
                 .single();
-            userData = updated || existing;
+            if (error) throw new Error(error.message);
+            userData = updated;
         } else {
             const { data: created, error } = await supabase
                 .from('users')
-                .insert({ name, email: email || null, phone: phone || null, photo: photo || null, location: location || null, sports: JSON.stringify(sports || []), positions: JSON.stringify(positions || {}), ...(hashedPassword && { password: hashedPassword }) })
+                .insert({
+                    name: name || 'Player',
+                    email: email || null,
+                    phone: phone || null,
+                    photo: photo || null,
+                    location: location || null,
+                    sports: JSON.stringify(sports || []),
+                    positions: JSON.stringify(positions || {}),
+                    ...(hashedPassword && { password: hashedPassword }),
+                })
                 .select()
                 .single();
             if (error) throw new Error(error.message);
             userData = created;
         }
 
-        if (!userData) return Response.json({ error: 'Failed to save user' }, { status: 500 });
-        const { password: _pw, ...safeUser } = userData;
-        return Response.json({
-            user: { ...safeUser, sports: JSON.parse(safeUser.sports || '[]'), positions: JSON.parse(safeUser.positions || '{}'), ratings: {} }
-        });
-    } catch (supaErr) {
-        console.error('POST /api/users Supabase fallback error:', supaErr.message);
-        return Response.json({ error: supaErr.message }, { status: 500 });
+        const serialized = serializeUser(userData);
+        session.user = serialized;
+        delete session.pendingVerifiedAuth;
+        await session.save();
+        return Response.json({ user: serialized });
+    } catch (err) {
+        console.error('POST /api/users error:', err.message);
+        return Response.json({ error: err.message }, { status: 500 });
     }
 }
 
@@ -169,37 +241,16 @@ export async function GET(req) {
                 user = await prisma.user.findUnique({ where: { id } });
             } catch (_) {}
 
-            if (user) {
-                const { password: _pw, ...safeUser } = user;
-                return Response.json({
-                    user: {
-                        ...safeUser,
-                        sports: typeof safeUser.sports === 'string' ? JSON.parse(safeUser.sports || '[]') : (safeUser.sports || []),
-                        positions: typeof safeUser.positions === 'string' ? JSON.parse(safeUser.positions || '{}') : (safeUser.positions || {}),
-                        ratings: typeof safeUser.ratings === 'string' ? JSON.parse(safeUser.ratings || '{}') : (safeUser.ratings || {}),
-                    }
-                });
-            }
+            if (user) return Response.json({ user: serializeUser(user) });
 
-            // Supabase fallback
             try {
                 const supabase = getSupabase();
                 if (supabase) {
                     const { data } = await supabase.from('users').select('*').eq('id', id).maybeSingle();
-                    if (data) {
-                        const { password: _pw, ...safeUser } = data;
-                        return Response.json({
-                            user: {
-                                ...safeUser,
-                                sports: typeof safeUser.sports === 'string' ? JSON.parse(safeUser.sports || '[]') : (safeUser.sports || []),
-                                positions: typeof safeUser.positions === 'string' ? JSON.parse(safeUser.positions || '{}') : (safeUser.positions || {}),
-                                ratings: typeof safeUser.ratings === 'string' ? JSON.parse(safeUser.ratings || '{}') : (safeUser.ratings || {}),
-                            }
-                        });
-                    }
+                    if (data) return Response.json({ user: serializeUser(data) });
                 }
             } catch (_) {}
-            
+
             return Response.json({ error: 'Player not found' }, { status: 404 });
         }
 

@@ -1,16 +1,4 @@
-// MSG91 Auth Route
-
-function normalizePhone(phone) {
-    const cleaned = phone.trim();
-    if (cleaned.startsWith('+')) {
-        return cleaned.replace(/\s/g, '');
-    }
-    const digits = cleaned.replace(/\D/g, '');
-    if (digits.length === 11 && digits.startsWith('0')) return `+91${digits.slice(1)}`;
-    if (digits.length === 10) return `+91${digits}`;
-    if (digits.length === 12 && digits.startsWith('91')) return `+${digits}`;
-    return null;
-}
+import { normalizePhone } from '@/lib/auth';
 
 export async function POST(req) {
     try {
@@ -28,20 +16,22 @@ export async function POST(req) {
             return Response.json({ error: 'Invalid phone number. Please enter a valid 10-digit number.' }, { status: 400 });
         }
 
-        // Twilio implementation
         if (!accountSid || !authToken || !serviceSid) {
-            console.log(`[AUTH DEV] Twilio not configured — use bypass code 990770 for ${normalized}`);
-            return Response.json({ success: true, devMode: true });
+            if (process.env.NODE_ENV !== 'production' && process.env.ALLOW_DEV_OTP_BYPASS === 'true' && process.env.DEV_OTP_BYPASS_CODE) {
+                console.log(`[AUTH DEV] Twilio not configured. Use configured dev OTP for ${normalized}`);
+                return Response.json({ success: true, devMode: true });
+            }
+            return Response.json({ error: 'SMS service not configured.' }, { status: 503 });
         }
 
-        const client = require('twilio')(accountSid, authToken);
+        const twilio = (await import('twilio')).default;
+        const client = twilio(accountSid, authToken);
         const verification = await client.verify.v2.services(serviceSid)
             .verifications
             .create({ to: normalized, channel: 'sms' });
 
         console.log(`[AUTH] Twilio Verify sent to ${normalized}, sid: ${verification.sid}`);
         return Response.json({ success: true });
-
     } catch (err) {
         console.error('[PHONE SEND ERROR]', err);
         return Response.json({ error: err.message || 'Failed to send verification code' }, { status: 500 });

@@ -1,5 +1,10 @@
 import { Resend } from 'resend';
+import { getSupabase } from '@/lib/supabase';
 import { prisma } from '@/lib/prisma';
+import { normalizeEmail } from '@/lib/auth';
+import { getIronSession } from 'iron-session';
+import { cookies } from 'next/headers';
+import { sessionOptions } from '@/lib/session';
 
 export async function POST(req) {
     try {
@@ -7,12 +12,12 @@ export async function POST(req) {
         if (!email || typeof email !== 'string' || !email.includes('@')) {
             return Response.json({ error: 'Valid email address is required.' }, { status: 400 });
         }
-        const normalizedEmail = email.toLowerCase().trim();
+        const normalizedEmail = normalizeEmail(email);
 
         const code = Math.floor(100000 + Math.random() * 900000).toString();
-        const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-        // Invalidate old unused codes then store new one
+        let storedOtp = false;
         try {
             await prisma.otpCode.updateMany({
                 where: { email: normalizedEmail, used: false },
@@ -21,16 +26,37 @@ export async function POST(req) {
             await prisma.otpCode.create({
                 data: { email: normalizedEmail, code, expiresAt },
             });
-        } catch (dbErr) {
-            console.error('[EMAIL OTP SEND] DB error:', dbErr.message);
-            return Response.json({ error: 'Could not save verification code. Try again.' }, { status: 500 });
+            storedOtp = true;
+        } catch (prismaErr) {
+            console.error('[EMAIL OTP SEND] Prisma OTP store failed:', prismaErr.message);
         }
 
-        // Send via Resend
+        if (!storedOtp) {
+            const supabase = getSupabase();
+            if (supabase) {
+                await supabase.from('otp_codes').update({ used: true }).eq('email', normalizedEmail).eq('used', false);
+                await supabase.from('otp_codes').insert({ email: normalizedEmail, code, expires_at: expiresAt.toISOString() });
+                storedOtp = true;
+            } else {
+                const cookieStore = await cookies();
+                const session = await getIronSession(cookieStore, sessionOptions);
+                session.pendingEmailOtp = {
+                    email: normalizedEmail,
+                    code,
+                    expiresAt: expiresAt.toISOString(),
+                };
+                await session.save();
+                storedOtp = true;
+            }
+        }
+
         const apiKey = process.env.RESEND_API_KEY;
         if (!apiKey) {
-            console.log(`[AUTH DEV] RESEND not configured — bypass code for ${normalizedEmail}: ${code}`);
-            return Response.json({ success: true, devMode: true });
+            if (process.env.NODE_ENV !== 'production' && process.env.ALLOW_DEV_OTP_BYPASS === 'true' && process.env.DEV_OTP_BYPASS_CODE) {
+                console.log(`[AUTH DEV] RESEND not configured. Use configured dev OTP for ${normalizedEmail}`);
+                return Response.json({ success: true, devMode: true });
+            }
+            return Response.json({ error: 'Email service not configured.' }, { status: 503 });
         }
 
         const resend = new Resend(apiKey);
@@ -52,7 +78,6 @@ export async function POST(req) {
 
         console.log(`[AUTH] Email OTP sent to ${normalizedEmail}`);
         return Response.json({ success: true });
-
     } catch (err) {
         console.error('[EMAIL OTP SEND ERROR]', err);
         return Response.json({ error: err.message || 'Failed to send verification code' }, { status: 500 });

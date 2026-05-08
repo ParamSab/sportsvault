@@ -20,6 +20,7 @@ prisma/migrations/
 
 # debug
 npm-debug.log*
+tmp/
 
 # OS
 .DS_Store
