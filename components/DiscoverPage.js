@@ -14,7 +14,6 @@ function calcDistKm(userLat, userLng, gameLat, gameLng) {
     const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return dist < 1 ? `${Math.round(dist * 1000)} m` : `${dist.toFixed(1)} km`;
 }
-
 export default function DiscoverPage({ onViewGame, onViewProfile }) {
     const { state, dispatch } = useStore();
     const [sportFilter, setSportFilter] = useState('all');
@@ -107,24 +106,23 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
             {/* Welcome banner for new users */}
             {isNewUser && !welcomeDismissed && (
                 <div className="welcome-banner">
-                    <button className="welcome-banner-dismiss" onClick={() => setWelcomeDismissed(true)} aria-label="Dismiss">✕</button>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-                        <div style={{ fontSize: '2rem', flexShrink: 0 }}>👋</div>
-                        <div>
-                            <div style={{ fontWeight: 700, fontSize: '1.0625rem', marginBottom: 4 }}>Welcome to SportsVault!</div>
-                            <div className="text-sm" style={{ color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                    <button className="welcome-banner-dismiss" onClick={() => setWelcomeDismissed(true)} aria-label="Dismiss">x</button>
+                    <div className="welcome-banner-content">
+                        <div className="welcome-banner-icon" aria-hidden="true">SV</div>
+                        <div className="welcome-banner-copy">
+                            <div className="welcome-banner-title">Welcome to SportsVault!</div>
+                            <div className="welcome-banner-text">
                                 New in town or looking for your next game? Scroll below to find games near you and join a community of players.
                             </div>
-                            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                                <span style={{ fontSize: '0.75rem', padding: '3px 10px', borderRadius: 99, background: 'rgba(99,102,241,0.15)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.3)' }}>🔍 Find Games</span>
-                                <span style={{ fontSize: '0.75rem', padding: '3px 10px', borderRadius: 99, background: 'rgba(34,197,94,0.15)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)' }}>✅ RSVP Instantly</span>
-                                <span style={{ fontSize: '0.75rem', padding: '3px 10px', borderRadius: 99, background: 'rgba(249,115,22,0.15)', color: '#f97316', border: '1px solid rgba(249,115,22,0.3)' }}>⭐ Build Your Rep</span>
+                            <div className="welcome-banner-actions">
+                                <span className="welcome-pill welcome-pill-blue">Find Games</span>
+                                <span className="welcome-pill welcome-pill-green">RSVP Instantly</span>
+                                <span className="welcome-pill welcome-pill-orange">Build Your Rep</span>
                             </div>
                         </div>
                     </div>
                 </div>
             )}
-
             {/* Hero stat bar */}
             <div className="stat-bar">
                 <div className="stat-item">
