@@ -1,7 +1,14 @@
 import { prisma } from '@/lib/prisma';
+import { getSupabase } from '@/lib/supabase';
 import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
 import { sessionOptions } from '@/lib/session';
+import {
+    acceptLocalFriendship,
+    deleteLocalFriendship,
+    findLocalFriendship,
+    upsertLocalFriendship,
+} from '@/lib/localFriendStore';
 
 export async function POST(req) {
     try {
@@ -16,21 +23,53 @@ export async function POST(req) {
         }
 
         if (action === 'send') {
-            const existing = await prisma.friendship.findFirst({
-                where: { OR: [
-                    { userId: currentUserId, friendId },
-                    { userId: friendId, friendId: currentUserId }
-                ]}
-            });
+            let friendship;
+            try {
+                const existing = await prisma.friendship.findFirst({
+                    where: { OR: [
+                        { userId: currentUserId, friendId },
+                        { userId: friendId, friendId: currentUserId }
+                    ]}
+                });
 
-            if (existing) {
-                if (existing.status === 'accepted') return Response.json({ error: 'Already friends' }, { status: 400 });
-                return Response.json({ error: 'Request already exists' }, { status: 400 });
+                if (existing) {
+                    if (existing.status === 'accepted') return Response.json({ error: 'Already friends' }, { status: 400 });
+                    return Response.json({ error: 'Request already exists' }, { status: 400 });
+                }
+
+                friendship = await prisma.friendship.create({
+                    data: { userId: currentUserId, friendId, status: 'pending' }
+                });
+            } catch (prismaErr) {
+                const supabase = getSupabase();
+                if (!supabase) {
+                    const existing = await findLocalFriendship(currentUserId, friendId);
+                    if (existing) {
+                        if (existing.status === 'accepted') return Response.json({ error: 'Already friends' }, { status: 400 });
+                        return Response.json({ error: 'Request already exists' }, { status: 400 });
+                    }
+                    friendship = await upsertLocalFriendship(currentUserId, friendId, 'pending');
+                } else {
+                const { data: existingRows, error: existingError } = await supabase
+                    .from('friendships')
+                    .select('*')
+                    .or(`and(user_id.eq.${currentUserId},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${currentUserId})`)
+                    .limit(1);
+                if (existingError) throw existingError;
+                const existing = existingRows?.[0];
+                if (existing) {
+                    if (existing.status === 'accepted') return Response.json({ error: 'Already friends' }, { status: 400 });
+                    return Response.json({ error: 'Request already exists' }, { status: 400 });
+                }
+                const { data, error } = await supabase
+                    .from('friendships')
+                    .insert({ user_id: currentUserId, friend_id: friendId, status: 'pending' })
+                    .select()
+                    .single();
+                if (error) throw error;
+                friendship = data;
+                }
             }
-
-            const friendship = await prisma.friendship.create({
-                data: { userId: currentUserId, friendId, status: 'pending' }
-            });
 
             try {
                 await prisma.notification.create({
@@ -46,15 +85,36 @@ export async function POST(req) {
         }
 
         if (action === 'accept') {
-            const reqRow = await prisma.friendship.findFirst({
-                where: { userId: friendId, friendId: currentUserId, status: 'pending' }
-            });
-            if (!reqRow) return Response.json({ error: 'No pending request found' }, { status: 404 });
+            let friendship;
+            try {
+                const reqRow = await prisma.friendship.findFirst({
+                    where: { userId: friendId, friendId: currentUserId, status: 'pending' }
+                });
+                if (!reqRow) return Response.json({ error: 'No pending request found' }, { status: 404 });
 
-            const friendship = await prisma.friendship.update({
-                where: { id: reqRow.id },
-                data: { status: 'accepted' }
-            });
+                friendship = await prisma.friendship.update({
+                    where: { id: reqRow.id },
+                    data: { status: 'accepted' }
+                });
+            } catch (prismaErr) {
+                const supabase = getSupabase();
+                if (!supabase) {
+                    friendship = await acceptLocalFriendship(friendId, currentUserId);
+                    if (!friendship) return Response.json({ error: 'No pending request found' }, { status: 404 });
+                } else {
+                const { data, error } = await supabase
+                    .from('friendships')
+                    .update({ status: 'accepted' })
+                    .eq('user_id', friendId)
+                    .eq('friend_id', currentUserId)
+                    .eq('status', 'pending')
+                    .select()
+                    .maybeSingle();
+                if (error) throw error;
+                if (!data) return Response.json({ error: 'No pending request found' }, { status: 404 });
+                friendship = data;
+                }
+            }
 
             try {
                 await prisma.notification.create({
@@ -70,14 +130,27 @@ export async function POST(req) {
         }
 
         if (action === 'reject' || action === 'cancel') {
-            await prisma.friendship.deleteMany({
-                where: {
-                    OR: [
-                        { userId: currentUserId, friendId, status: 'pending' },
-                        { userId: friendId, friendId: currentUserId, status: 'pending' }
-                    ]
+            try {
+                await prisma.friendship.deleteMany({
+                    where: {
+                        OR: [
+                            { userId: currentUserId, friendId, status: 'pending' },
+                            { userId: friendId, friendId: currentUserId, status: 'pending' }
+                        ]
+                    }
+                });
+            } catch (prismaErr) {
+                const supabase = getSupabase();
+                if (!supabase) {
+                    await deleteLocalFriendship(currentUserId, friendId, 'pending');
+                } else {
+                    await supabase
+                        .from('friendships')
+                        .delete()
+                        .eq('status', 'pending')
+                        .or(`and(user_id.eq.${currentUserId},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${currentUserId})`);
                 }
-            });
+            }
             return Response.json({ success: true });
         }
 
