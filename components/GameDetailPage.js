@@ -12,6 +12,46 @@ const PRIVACY_LABELS = {
     private: { emoji: '🔒', label: 'Private', color: '#a855f7' },
 };
 
+function ConfirmationCelebration({ sport }) {
+    const type = ['football', 'padel', 'cricket'].includes(sport) ? sport : 'football';
+    const labels = {
+        football: 'Game confirmed',
+        padel: 'Court confirmed',
+        cricket: 'In the lineup',
+    };
+
+    return (
+        <div className={`confirm-celebration confirm-celebration-${type}`} role="status" aria-live="polite">
+            <div className="confirm-scene" aria-hidden="true">
+                {type === 'football' && (
+                    <>
+                        <div className="confirm-net football-net" />
+                        <div className="confirm-ball football-ball" />
+                    </>
+                )}
+                {type === 'padel' && (
+                    <>
+                        <div className="padel-glass" />
+                        <div className="padel-racket" />
+                        <div className="confirm-ball padel-ball" />
+                    </>
+                )}
+                {type === 'cricket' && (
+                    <>
+                        <div className="cricket-stumps"><span /><span /><span /></div>
+                        <div className="cricket-bat" />
+                        <div className="confirm-ball cricket-ball" />
+                    </>
+                )}
+            </div>
+            <div className="confirm-copy">
+                <div className="confirm-title">{labels[type]}</div>
+                <div className="confirm-subtitle">You are in.</div>
+            </div>
+        </div>
+    );
+}
+
 export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     const { state, dispatch } = useStore();
     const [selectedPosition, setSelectedPosition] = useState('');
@@ -19,6 +59,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     const [showBroadcastPanel, setShowBroadcastPanel] = useState(false);
     const [playerView, setPlayerView] = useState('pitch'); // 'pitch' | 'list'
     const [showJoinConfirm, setShowJoinConfirm] = useState(false);
+    const [confirmationAnimation, setConfirmationAnimation] = useState(null);
     
     const isGuest = !state.isAuthenticated;
     const [broadcastTier, setBroadcastTier] = useState(null);
@@ -47,6 +88,12 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
         refreshGame();
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [gameId, state.isLoaded]);
+
+    useEffect(() => {
+        if (!confirmationAnimation) return undefined;
+        const timer = setTimeout(() => setConfirmationAnimation(null), 2600);
+        return () => clearTimeout(timer);
+    }, [confirmationAnimation]);
 
     // All useMemo hooks MUST be before any early return (Rules of Hooks)
     const confirmedPlayers = useMemo(() => {
@@ -132,7 +179,11 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
         }
 
         const pos = selectedPosition || state.currentUser?.positions?.[game.sport] || POSITIONS[game.sport]?.[0] || '';
+        const wasConfirmed = myRsvp?.status === 'yes' || myRsvp?.status === 'checked_in';
         dispatch({ type: 'RSVP', payload: { gameId, playerId: currentUserId, status: finalStatus, position: pos } });
+        if (finalStatus === 'yes' && !wasConfirmed) {
+            setConfirmationAnimation({ sport: game.sport, id: Date.now() });
+        }
         
         // Persist to DB using session, then sync server state
         try {
@@ -292,6 +343,9 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
 
     return (
         <>
+        {confirmationAnimation && (
+            <ConfirmationCelebration key={confirmationAnimation.id} sport={confirmationAnimation.sport} />
+        )}
         <div className="animate-fade-in">
             <button className="btn btn-ghost" onClick={onBack} style={{ marginBottom: 12, padding: '8px 0' }}>
                 ← Back to games
