@@ -49,6 +49,7 @@ export default function AuthPage() {
     };
 
     useEffect(() => () => { if (countdownRef.current) clearInterval(countdownRef.current); }, []);
+    useEffect(() => { setStepError(''); }, [onboardStep]);
 
     const handlePhotoUpload = (e) => {
         const file = e.target.files[0];
