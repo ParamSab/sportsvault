@@ -1,5 +1,8 @@
 import { Resend } from 'resend';
 import { prisma } from '@/lib/prisma';
+import { getIronSession } from 'iron-session';
+import { cookies } from 'next/headers';
+import { sessionOptions } from '@/lib/session';
 import { checkRateLimit } from '@/lib/rateLimit';
 
 export async function POST(req) {
@@ -10,7 +13,6 @@ export async function POST(req) {
         }
         const normalizedEmail = email.toLowerCase().trim();
 
-        // In-memory rate limit (per instance)
         const rl = checkRateLimit(`email:${normalizedEmail}`, 3, 10 * 60 * 1000);
         if (!rl.allowed) {
             return Response.json(
@@ -19,38 +21,25 @@ export async function POST(req) {
             );
         }
 
-        // DB-backed rate limit: max 5 codes created in the last 10 min (catches cross-instance abuse)
-        try {
-            const windowStart = new Date(Date.now() - 10 * 60 * 1000);
-            const recentCount = await prisma.otpCode.count({
-                where: { email: normalizedEmail, createdAt: { gte: windowStart } },
-            });
-            if (recentCount >= 5) {
-                return Response.json({ error: 'Too many requests. Try again in 10 minutes.' }, { status: 429 });
-            }
-        } catch (_) { /* DB unavailable — fall through, in-memory check already passed */ }
-
         const code = Math.floor(100000 + Math.random() * 900000).toString();
-        const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-        // Invalidate old unused codes then store new one
+        // Store in session (works without any DB table)
+        const cookieStore = await cookies();
+        const session = await getIronSession(cookieStore, sessionOptions);
+        session.pendingOtp = { email: normalizedEmail, code, expiresAt: expiresAt.toISOString() };
+        await session.save();
+
+        // Best-effort DB persist (ignored if table doesn't exist)
         try {
-            await prisma.otpCode.updateMany({
-                where: { email: normalizedEmail, used: false },
-                data: { used: true },
-            });
-            await prisma.otpCode.create({
-                data: { email: normalizedEmail, code, expiresAt },
-            });
-        } catch (dbErr) {
-            console.error('[EMAIL OTP SEND] DB error:', dbErr.message);
-            return Response.json({ error: 'Could not save verification code. Try again.' }, { status: 500 });
-        }
+            await prisma.otpCode.updateMany({ where: { email: normalizedEmail, used: false }, data: { used: true } });
+            await prisma.otpCode.create({ data: { email: normalizedEmail, code, expiresAt } });
+        } catch (_) { /* table may not exist — session is the source of truth */ }
 
         // Send via Resend
         const apiKey = process.env.RESEND_API_KEY;
         if (!apiKey) {
-            console.log(`[AUTH DEV] RESEND not configured — bypass code for ${normalizedEmail}: ${code}`);
+            console.log(`[AUTH DEV] RESEND not configured — OTP for ${normalizedEmail}: ${code}`);
             return Response.json({ success: true, devMode: true });
         }
 
