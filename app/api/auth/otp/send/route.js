@@ -40,7 +40,8 @@ export async function POST(req) {
         const apiKey = process.env.RESEND_API_KEY;
         if (!apiKey) {
             console.log(`[AUTH DEV] RESEND not configured — OTP for ${normalizedEmail}: ${code}`);
-            return Response.json({ success: true, devMode: true });
+            // Return the code in dev mode so the app can surface it on-screen
+            return Response.json({ success: true, devMode: true, devCode: code });
         }
 
         const resend = new Resend(apiKey);

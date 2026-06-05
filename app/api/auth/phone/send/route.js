@@ -40,7 +40,7 @@ export async function POST(req) {
         // Twilio implementation
         if (!accountSid || !authToken || !serviceSid) {
             console.log(`[AUTH DEV] Twilio not configured — use bypass code 990770 for ${normalized}`);
-            return Response.json({ success: true, devMode: true });
+            return Response.json({ success: true, devMode: true, devCode: '990770' });
         }
 
         const client = require('twilio')(accountSid, authToken);

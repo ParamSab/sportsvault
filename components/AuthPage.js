@@ -28,6 +28,7 @@ export default function AuthPage() {
     const [isSending, setIsSending] = useState(false);
     const [resendCountdown, setResendCountdown] = useState(0);
     const [isDevMode, setIsDevMode] = useState(false);
+    const [devCode, setDevCode] = useState('');
     const countdownRef = useRef(null);
 
     // Onboarding
@@ -76,7 +77,7 @@ export default function AuthPage() {
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || "Failed to send verification code");
-                if (data.devMode) setIsDevMode(true);
+                if (data.devMode) { setIsDevMode(true); if (data.devCode) setDevCode(data.devCode); }
             } else {
                 if (!phone || phone.replace(/\D/g, '').length < 10) {
                     setAuthError("Enter a valid phone number");
@@ -90,7 +91,7 @@ export default function AuthPage() {
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || "Failed to send verification code");
-                if (data.devMode) setIsDevMode(true);
+                if (data.devMode) { setIsDevMode(true); if (data.devCode) setDevCode(data.devCode); }
             }
             setStep('otp');
             startResendCountdown();
@@ -349,6 +350,8 @@ export default function AuthPage() {
         setPhone('');
         setOtp(['', '', '', '', '', '']);
         setAuthError('');
+        setIsDevMode(false);
+        setDevCode('');
         setStep('login');
     };
 
@@ -672,8 +675,29 @@ export default function AuthPage() {
                                 Enter the 6-digit code sent to {authMode === 'email' ? email : phone}
                             </p>
                             {isDevMode && (
-                                <div style={{ background: '#fffbeb', border: '1px solid #f59e0b', borderRadius: 8, padding: '10px 14px', marginBottom: 20, fontSize: '0.82rem', color: '#92400e' }}>
-                                    <strong>Dev mode</strong> — SMS service not configured. Use code <strong style={{ letterSpacing: 2 }}>990770</strong> to continue.
+                                <div style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.4)', borderRadius: 12, padding: '14px 16px', marginBottom: 20 }}>
+                                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                                        ⚡ Dev Mode — no SMS/email service configured
+                                    </div>
+                                    <div style={{ fontSize: '0.8125rem', color: '#fcd34d', marginBottom: 10 }}>
+                                        Tap the code below to auto-fill it:
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            const c = devCode || '990770';
+                                            setOtp(c.split(''));
+                                        }}
+                                        style={{
+                                            display: 'block', width: '100%',
+                                            fontSize: '2rem', fontWeight: 800, letterSpacing: '0.35em',
+                                            color: '#fbbf24', background: 'rgba(251,191,36,0.1)',
+                                            border: '2px dashed rgba(251,191,36,0.4)',
+                                            borderRadius: 10, padding: '12px 0',
+                                            cursor: 'pointer', textAlign: 'center',
+                                        }}
+                                    >
+                                        {devCode || '990770'}
+                                    </button>
                                 </div>
                             )}
                             <div className="otp-container" style={{ marginBottom: 24 }}>
