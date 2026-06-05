@@ -43,23 +43,20 @@ export async function POST(req) {
             return Response.json({ success: true, devMode: true, devCode: '990770' });
         }
 
-        try {
-            const client = require('twilio')(accountSid, authToken);
-            const verification = await client.verify.v2.services(serviceSid)
-                .verifications
-                .create({ to: normalized, channel: 'sms' });
+        const client = require('twilio')(accountSid, authToken);
+        const verification = await client.verify.v2.services(serviceSid)
+            .verifications
+            .create({ to: normalized, channel: 'sms' });
 
-            console.log(`[AUTH] Twilio Verify sent to ${normalized}, sid: ${verification.sid}`);
-            return Response.json({ success: true });
-        } catch (twilioErr) {
-            // Twilio misconfigured (e.g. invalid SID/token) or unavailable —
-            // fall back to dev mode so testing isn't blocked.
-            console.error(`[AUTH] Twilio send failed (${twilioErr.message}) — falling back to bypass code for ${normalized}`);
-            return Response.json({ success: true, devMode: true, devCode: '990770' });
-        }
+        console.log(`[AUTH] Twilio Verify sent to ${normalized}, sid: ${verification.sid}`);
+        return Response.json({ success: true });
 
     } catch (err) {
         console.error('[PHONE SEND ERROR]', err);
-        return Response.json({ error: err.message || 'Failed to send verification code' }, { status: 500 });
+        let message = err.message || 'Failed to send verification code';
+        if (err.code === 20003) message = 'SMS service auth failed — Twilio Account SID or Auth Token is invalid. Check .env.local.';
+        else if (err.code === 21608) message = 'This number is not verified on your Twilio trial account. Verify it in the Twilio console.';
+        else if (err.code === 60200) message = 'Invalid phone number format. Include country code, e.g. +91...';
+        return Response.json({ error: message, code: err.code }, { status: 500 });
     }
 }
