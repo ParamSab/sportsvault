@@ -60,6 +60,19 @@ if (!service) { console.log('   ❌ missing'); formatOk = false; }
 else if (!service.startsWith('VA')) { console.log('   ❌ should start with "VA" (this is the Verify Service SID, not the Account SID)'); formatOk = false; }
 else if (service.length !== 34) { console.log('   ⚠️  expected 34 chars'); }
 
+// Detect leftover placeholder values from .env.example
+const looksLikePlaceholder =
+    /^AC?x+$/i.test(sid) || sid.includes('xxxx') ||
+    /here$/i.test(token) || token.includes('xxxx') ||
+    service.includes('xxxx');
+if (looksLikePlaceholder) {
+    console.log('\n❌ These are PLACEHOLDER values from .env.example, not real credentials.');
+    console.log('   Replace them in .env.local with your real Twilio values:');
+    console.log('   • Account SID + Auth Token → https://console.twilio.com (Account Info panel)');
+    console.log('   • Verify Service SID → https://console.twilio.com/us1/develop/verify/services');
+    process.exit(1);
+}
+
 if (!formatOk) {
     console.log('\n❌ Fix the format issues above first. Get the correct values from:');
     console.log('   • Account SID + Auth Token → https://console.twilio.com (Account Info panel)');
@@ -69,31 +82,20 @@ if (!formatOk) {
 
 const client = require('twilio')(sid, token);
 
-// 2. Authenticate — fetch the account
-console.log('\n→ Authenticating with Twilio…');
-try {
-    const acct = await client.api.v2.accounts(sid).fetch();
-    console.log(`   ✅ Auth OK — account "${acct.friendlyName}", status: ${acct.status}, type: ${acct.type}`);
-    if (acct.type === 'Trial') {
-        console.log('   ⚠️  TRIAL account — SMS only delivers to numbers you have verified in the console.');
-    }
-} catch (e) {
-    console.log(`   ❌ Auth FAILED — ${e.message} (Twilio code ${e.code || '?'})`);
-    if (e.code === 20003) {
-        console.log('      → Account SID or Auth Token is wrong. Re-copy both from the Twilio console.');
-        console.log('      → Make sure you used the LIVE Auth Token, not a test credential, and no stray spaces.');
-    }
-    process.exit(1);
-}
-
-// 3. Validate the Verify service
-console.log('\n→ Checking Verify service…');
+// 2. Validate auth + Verify service in one call (fetching the service requires valid auth)
+console.log('\n→ Authenticating with Twilio + checking Verify service…');
 try {
     const svc = await client.verify.v2.services(service).fetch();
-    console.log(`   ✅ Verify service OK — "${svc.friendlyName}"`);
+    console.log(`   ✅ Auth OK and Verify service found — "${svc.friendlyName}"`);
 } catch (e) {
-    console.log(`   ❌ Verify service FAILED — ${e.message} (code ${e.code || '?'})`);
-    console.log('      → The VERIFY_SERVICE_SID is wrong or belongs to a different account.');
+    console.log(`   ❌ FAILED — ${e.message} (Twilio code ${e.code || '?'})`);
+    if (e.code === 20003) {
+        console.log('      → Account SID or Auth Token is wrong. Re-copy both from the Twilio console.');
+        console.log('      → Use the LIVE Auth Token, no stray spaces or newlines.');
+    } else if (e.code === 20404) {
+        console.log('      → Auth worked but the VERIFY_SERVICE_SID does not exist on this account.');
+        console.log('      → Create one at https://console.twilio.com/us1/develop/verify/services');
+    }
     process.exit(1);
 }
 
