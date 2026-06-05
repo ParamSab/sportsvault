@@ -644,6 +644,8 @@ h3 { font-size: clamp(1.0625rem, 2.5vw, 1.25rem); }
   align-items: center;
   justify-content: space-between;
   padding: 11px 16px;
+  /* Push header content below the iOS status bar / notch (viewport-fit=cover) */
+  padding-top: calc(env(safe-area-inset-top) + 11px);
   background: rgba(7, 11, 21, 0.96);
   backdrop-filter: blur(32px);
   -webkit-backdrop-filter: blur(32px);
