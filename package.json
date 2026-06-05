@@ -6,9 +6,19 @@
     "dev": "next dev",
     "build": "next build --webpack",
     "start": "next start",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "mobile:sync": "npx cap sync ios",
+    "mobile:open": "npx cap open ios",
+    "mobile:run": "npx cap run ios"
   },
   "dependencies": {
+    "@capacitor/app": "^8.1.0",
+    "@capacitor/cli": "^8.4.0",
+    "@capacitor/core": "^8.4.0",
+    "@capacitor/ios": "^8.4.0",
+    "@capacitor/push-notifications": "^8.1.1",
+    "@capacitor/splash-screen": "^8.0.1",
+    "@capacitor/status-bar": "^8.0.2",
     "@ducanh2912/next-pwa": "^10.2.9",
     "@prisma/client": "^5.22.0",
     "@supabase/supabase-js": "^2.100.0",
@@ -24,7 +34,8 @@
     "twilio": "^5.13.1"
   },
   "devDependencies": {
-    "prisma": "^5.22.0"
+    "prisma": "^5.22.0",
+    "typescript": "^6.0.3"
   },
   "engines": {
     "node": ">=20.0.0"
