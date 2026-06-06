@@ -31,6 +31,12 @@ export default function AuthPage() {
     const [devCode, setDevCode] = useState('');
     const countdownRef = useRef(null);
 
+    // Forgot/reset password (via SMS)
+    const [resetPhone, setResetPhone] = useState('');
+    const [resetNewPassword, setResetNewPassword] = useState('');
+    const [resetConfirm, setResetConfirm] = useState('');
+    const [resetError, setResetError] = useState('');
+
     // Onboarding
     const [onboardStep, setOnboardStep] = useState(0);
     const [stepError, setStepError] = useState('');
@@ -124,6 +130,60 @@ export default function AuthPage() {
         } catch (err) {
             console.error(err);
             setAuthError("Login failed. Check your connection.");
+        } finally {
+            setIsSending(false);
+        }
+    };
+
+    const handleForgotSend = async () => {
+        setResetError('');
+        if (!resetPhone || resetPhone.replace(/\D/g, '').length < 10) {
+            setResetError('Enter the phone number on your account');
+            return;
+        }
+        setIsSending(true);
+        try {
+            const res = await fetch('/api/auth/phone/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone: resetPhone }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to send reset code');
+            if (data.devMode) { setIsDevMode(true); if (data.devCode) setDevCode(data.devCode); }
+            setOtp(['', '', '', '', '', '']);
+            setStep('reset');
+            startResendCountdown();
+        } catch (err) {
+            setResetError(err.message || 'Could not send reset code.');
+        } finally {
+            setIsSending(false);
+        }
+    };
+
+    const handleResetPassword = async () => {
+        setResetError('');
+        const entered = otp.join('');
+        if (entered.length < 6) { setResetError('Enter the full 6-digit code'); return; }
+        if (!resetNewPassword || resetNewPassword.length < 6) { setResetError('Password must be at least 6 characters'); return; }
+        if (resetNewPassword !== resetConfirm) { setResetError('Passwords do not match'); return; }
+
+        setIsSending(true);
+        try {
+            const res = await fetch('/api/auth/password/reset', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone: resetPhone, code: entered, newPassword: resetNewPassword, rememberMe }),
+            });
+            const data = await res.json();
+            if (res.ok && data.user) {
+                dispatch({ type: 'LOGIN', payload: data.user });
+                router.push('/invite');
+            } else {
+                setResetError(data.error || 'Could not reset password');
+            }
+        } catch (err) {
+            setResetError('Something went wrong. Please try again.');
         } finally {
             setIsSending(false);
         }
@@ -352,6 +412,10 @@ export default function AuthPage() {
         setAuthError('');
         setIsDevMode(false);
         setDevCode('');
+        setResetPhone('');
+        setResetNewPassword('');
+        setResetConfirm('');
+        setResetError('');
         setStep('login');
     };
 
@@ -562,17 +626,6 @@ export default function AuthPage() {
                             {/* Auth mode toggle */}
                             <div style={{ display: 'flex', gap: 6, marginBottom: 20, background: 'var(--bg-secondary)', borderRadius: 12, padding: 4 }}>
                                 <button
-                                    onClick={() => switchMode('email')}
-                                    style={{
-                                        flex: 1, padding: '9px 4px', borderRadius: 8, fontSize: '0.8125rem', fontWeight: 600,
-                                        background: authMode === 'email' ? 'var(--primary-color)' : 'transparent',
-                                        color: authMode === 'email' ? '#fff' : 'var(--text-secondary)',
-                                        border: 'none', cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap',
-                                    }}
-                                >
-                                    Email Code
-                                </button>
-                                <button
                                     onClick={() => switchMode('phone')}
                                     style={{
                                         flex: 1, padding: '9px 4px', borderRadius: 8, fontSize: '0.8125rem', fontWeight: 600,
@@ -644,9 +697,19 @@ export default function AuthPage() {
                             </div>
 
                             {authMode === 'password' ? (
-                                <button className="btn btn-primary btn-block btn-lg" onClick={handlePasswordLogin} disabled={isSending}>
-                                    {isSending ? 'Logging in...' : 'Login →'}
-                                </button>
+                                <>
+                                    <button className="btn btn-primary btn-block btn-lg" onClick={handlePasswordLogin} disabled={isSending}>
+                                        {isSending ? 'Logging in...' : 'Login →'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-ghost btn-block"
+                                        style={{ marginTop: 10, fontSize: '0.8125rem', color: 'var(--text-secondary)' }}
+                                        onClick={() => { setResetError(''); setResetPhone(''); setStep('forgot'); }}
+                                    >
+                                        Forgot password?
+                                    </button>
+                                </>
                             ) : (
                                 <button className="btn btn-primary btn-block btn-lg" onClick={handleSendOTP} disabled={isSending}>
                                     {isSending ? (
@@ -718,6 +781,79 @@ export default function AuthPage() {
                             </button>
                             <button className="btn btn-ghost btn-block" style={{ marginTop: 4, fontSize: '0.8rem', opacity: 0.7 }} onClick={() => { setStep('login'); setOtp(['', '', '', '', '', '']); setResendCountdown(0); setIsDevMode(false); if (countdownRef.current) clearInterval(countdownRef.current); }}>
                                 ← Change {authMode === 'email' ? 'email' : 'phone'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {step === 'forgot' && (
+                    <div className="animate-fade-in">
+                        <div className="glass-card no-hover" style={{ padding: '24px 20px' }}>
+                            <h3 style={{ marginBottom: 4 }}>Reset your password</h3>
+                            <p className="text-muted text-sm" style={{ marginBottom: 20 }}>
+                                Enter the phone number on your account and we'll text you a code to reset your password.
+                            </p>
+                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Phone Number</label>
+                            <input type="tel" placeholder="e.g. 9876543210" value={resetPhone} onChange={e => setResetPhone(e.target.value)} style={{ fontSize: '1rem', padding: '14px 16px', width: '100%' }} autoFocus />
+                            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 6 }}>India numbers auto-prefixed with +91.</p>
+                            {resetError && <div style={{ color: '#ef4444', fontSize: '0.8125rem', marginTop: 14, padding: '10px 12px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: 8, border: '1px solid rgba(239, 68, 68, 0.2)' }}>⚠️ {resetError}</div>}
+                            <button className="btn btn-primary btn-block btn-lg" style={{ marginTop: 20 }} onClick={handleForgotSend} disabled={isSending}>
+                                {isSending ? 'Sending...' : 'Send reset code →'}
+                            </button>
+                            <button className="btn btn-ghost btn-block" style={{ marginTop: 8, fontSize: '0.8rem', opacity: 0.7 }} onClick={() => { setStep('login'); setAuthMode('password'); }}>
+                                ← Back to login
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {step === 'reset' && (
+                    <div className="animate-fade-in">
+                        <div className="glass-card no-hover" style={{ padding: '24px 20px' }}>
+                            <h3 style={{ marginBottom: 4 }}>Enter code & new password</h3>
+                            <p className="text-muted text-sm" style={{ marginBottom: isDevMode ? 8 : 20 }}>
+                                We sent a 6-digit code to {resetPhone}. Enter it and choose a new password.
+                            </p>
+                            {isDevMode && (
+                                <div style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.4)', borderRadius: 12, padding: '14px 16px', marginBottom: 18 }}>
+                                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                                        ⚡ Dev Mode — tap to auto-fill
+                                    </div>
+                                    <button
+                                        onClick={() => setOtp((devCode || '990770').split(''))}
+                                        style={{ display: 'block', width: '100%', fontSize: '2rem', fontWeight: 800, letterSpacing: '0.35em', color: '#fbbf24', background: 'rgba(251,191,36,0.1)', border: '2px dashed rgba(251,191,36,0.4)', borderRadius: 10, padding: '12px 0', cursor: 'pointer', textAlign: 'center' }}
+                                    >
+                                        {devCode || '990770'}
+                                    </button>
+                                </div>
+                            )}
+                            <div className="otp-container" style={{ marginBottom: 18 }}>
+                                {otp.map((digit, i) => (
+                                    <input key={i} id={`otp-${i}`} type="text" inputMode="numeric" className="otp-input" value={digit} onChange={e => handleOtpChange(i, e.target.value)} onKeyDown={e => handleOtpKeyDown(i, e)} onPaste={handleOtpPaste} maxLength={1} autoFocus={i === 0} />
+                                ))}
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>New Password</label>
+                                    <div style={{ position: 'relative' }}>
+                                        <input type={showPassword ? 'text' : 'password'} placeholder="Min. 6 characters" value={resetNewPassword} onChange={e => setResetNewPassword(e.target.value)} style={{ fontSize: '1rem', padding: '14px 48px 14px 16px', width: '100%' }} />
+                                        <button type="button" onClick={() => setShowPassword(p => !p)} style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: 'var(--text-secondary)' }}>{showPassword ? '🙈' : '👁'}</button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Confirm Password</label>
+                                    <input type={showPassword ? 'text' : 'password'} placeholder="Repeat password" value={resetConfirm} onChange={e => setResetConfirm(e.target.value)} style={{ fontSize: '1rem', padding: '14px 16px', width: '100%' }} />
+                                </div>
+                            </div>
+                            {resetError && <div style={{ color: '#ef4444', fontSize: '0.8125rem', marginTop: 14, padding: '10px 12px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: 8, border: '1px solid rgba(239, 68, 68, 0.2)' }}>⚠️ {resetError}</div>}
+                            <button className="btn btn-primary btn-block btn-lg" style={{ marginTop: 18 }} onClick={handleResetPassword} disabled={isSending}>
+                                {isSending ? 'Resetting...' : 'Reset password & log in →'}
+                            </button>
+                            <button className="btn btn-ghost btn-block" style={{ marginTop: 8, fontSize: '0.8rem', opacity: 0.7 }} onClick={handleForgotSend} disabled={resendCountdown > 0 || isSending}>
+                                {resendCountdown > 0 ? `Resend code in ${resendCountdown}s` : 'Resend code'}
+                            </button>
+                            <button className="btn btn-ghost btn-block" style={{ marginTop: 4, fontSize: '0.8rem', opacity: 0.6 }} onClick={() => { setStep('forgot'); setOtp(['', '', '', '', '', '']); }}>
+                                ← Change phone number
                             </button>
                         </div>
                     </div>
