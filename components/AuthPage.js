@@ -725,6 +725,10 @@ export default function AuthPage() {
                         <div style={{ display: 'flex', justifyContent: 'center', gap: 20, marginTop: 24 }}>
                             {Object.values(SPORTS).map(s => <span key={s.name} style={{ fontSize: '1.375rem', opacity: 0.35, animation: 'float 3s ease-in-out infinite' }}>{s.emoji}</span>)}
                         </div>
+                        <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginTop: 20, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-muted)', textDecoration: 'underline' }}>Privacy Policy</a>
+                            <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-muted)', textDecoration: 'underline' }}>Terms of Use</a>
+                        </div>
                     </div>
                 )}
 

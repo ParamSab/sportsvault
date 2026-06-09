@@ -47,6 +47,8 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
     const [isLoadingPlayer, setIsLoadingPlayer] = useState(false);
     const [friendLoading, setFriendLoading] = useState(false);
     const [toast, setToast] = useState('');
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [deleteLoading, setDeleteLoading] = useState(false);
 
     const player = isOwn
         ? (state.currentUser || getPlayer('p1'))
@@ -325,8 +327,63 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
             <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
                 <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={() => onViewCV(player.id)}>📄 Sports CV</button>
                 {isOwn && pastGames.length > 0 && <button className="btn btn-outline btn-sm" style={{ flex: 1 }} onClick={() => onRateGame(pastGames[0]?.id)}>⭐ Rate Players</button>}
-                {isOwn && <button className="btn btn-ghost btn-sm" onClick={() => { localStorage.removeItem('sportsvault_state'); dispatch({ type: 'LOGOUT' }); }}>🚪</button>}
+                {isOwn && <button className="btn btn-ghost btn-sm" onClick={() => { localStorage.removeItem('sportsvault_state'); fetch('/api/auth/session', { method: 'DELETE' }).catch(() => {}); dispatch({ type: 'LOGOUT' }); }} title="Log out">🚪 Log out</button>}
             </div>
+
+            {isOwn && (
+                <div className="glass-card no-hover" style={{ marginBottom: 16, borderColor: 'rgba(239,68,68,0.2)' }}>
+                    <h3 style={{ fontSize: '0.9375rem', marginBottom: 4, color: 'var(--text-primary)' }}>Account</h3>
+                    <p className="text-sm text-muted" style={{ marginBottom: 14 }}>
+                        Permanently delete your account and all data — games, history, ratings. This cannot be undone.
+                    </p>
+                    {!showDeleteConfirm ? (
+                        <button
+                            className="btn btn-sm"
+                            style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)' }}
+                            onClick={() => setShowDeleteConfirm(true)}
+                        >
+                            🗑 Delete my account
+                        </button>
+                    ) : (
+                        <div style={{ background: 'rgba(239,68,68,0.08)', borderRadius: 10, padding: '14px 16px', border: '1px solid rgba(239,68,68,0.25)' }}>
+                            <p style={{ fontSize: '0.875rem', color: '#ef4444', fontWeight: 600, marginBottom: 14 }}>
+                                Are you sure? All your data will be permanently deleted.
+                            </p>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button
+                                    className="btn btn-sm"
+                                    style={{ background: '#ef4444', color: '#fff', border: 'none', flex: 1 }}
+                                    disabled={deleteLoading}
+                                    onClick={async () => {
+                                        setDeleteLoading(true);
+                                        try {
+                                            const res = await fetch('/api/users/delete', { method: 'DELETE' });
+                                            if (res.ok) {
+                                                localStorage.removeItem('sportsvault_state');
+                                                dispatch({ type: 'LOGOUT' });
+                                            } else {
+                                                const d = await res.json();
+                                                setToast(d.error || 'Delete failed');
+                                                setShowDeleteConfirm(false);
+                                            }
+                                        } catch {
+                                            setToast('Delete failed — please try again');
+                                            setShowDeleteConfirm(false);
+                                        } finally {
+                                            setDeleteLoading(false);
+                                        }
+                                    }}
+                                >
+                                    {deleteLoading ? 'Deleting…' : 'Yes, delete everything'}
+                                </button>
+                                <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => setShowDeleteConfirm(false)}>
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
 
             {(isOwn || !isOwn) && (
                 <>

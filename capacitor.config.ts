@@ -1,9 +1,13 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
-// For Xcode simulator testing: defaults to the local dev server on port 3005.
-// For App Store build: set CAPACITOR_LIVE_URL to your Vercel URL, e.g.
-//   CAPACITOR_LIVE_URL=https://sportsvault.vercel.app npx cap sync ios
+// Simulator / local dev:
+//   npm run mobile:sync   (defaults to http://localhost:3005)
+//
+// App Store build — run ONCE after deploying to Vercel:
+//   CAPACITOR_LIVE_URL=https://your-app.vercel.app npx cap sync ios
+//   then Archive in Xcode.
 const LIVE_URL = process.env.CAPACITOR_LIVE_URL || 'http://localhost:3005';
+const isProduction = LIVE_URL.startsWith('https://');
 
 const config: CapacitorConfig = {
   appId: 'com.paramsab.sportsvault',
@@ -12,14 +16,17 @@ const config: CapacitorConfig = {
 
   server: {
     url: LIVE_URL,
-    cleartext: LIVE_URL.startsWith('http://'),
+    // cleartext only allowed for local dev (http). Never true for App Store build.
+    cleartext: !isProduction,
+    allowNavigation: isProduction ? [`${new URL(LIVE_URL).hostname}`] : [],
   },
 
   ios: {
     contentInset: 'always',
     scrollEnabled: false,
     backgroundColor: '#070b15',
-    limitsNavigationsToAppBoundDomains: false,
+    // Restrict navigation to our own domain in production builds.
+    limitsNavigationsToAppBoundDomains: isProduction,
     preferredContentMode: 'mobile',
   },
 
