@@ -11,13 +11,18 @@ export default function MapPicker({ lat = 19.076, lng = 72.877, onLocationChange
     // Update iframe src whenever pin changes
     const mapSrc = `https://maps.google.com/maps?q=${pinned.lat},${pinned.lng}&z=16&output=embed`;
 
+    // Greater Mumbai metro bounding box (lon/lat): bias search results toward Mumbai.
+    // viewbox = left,top,right,bottom = minLon,maxLat,maxLon,minLat
+    const MUMBAI_VIEWBOX = '72.775,19.300,73.060,18.890';
+
     const searchPlaces = async (q) => {
         if (!q || q.trim().length < 3) { setResults([]); return; }
         setSearching(true);
         try {
             const res = await fetch(
                 `https://nominatim.openstreetmap.org/search?` +
-                `format=json&q=${encodeURIComponent(q)}&countrycodes=in&limit=6&addressdetails=1`,
+                `format=json&q=${encodeURIComponent(q)}&countrycodes=in&limit=6&addressdetails=1` +
+                `&viewbox=${MUMBAI_VIEWBOX}&bounded=0`,
                 { headers: { 'Accept-Language': 'en' } }
             );
             const data = await res.json();

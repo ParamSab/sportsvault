@@ -22,7 +22,7 @@ function supabaseRowToGame(g) {
         skillLevel: g.skill_level || 'All Levels',
         status: g.status,
         visibility: g.visibility || 'public',
-        approvalRequired: false,
+        approvalRequired: !!g.approval_required,
         bookingImage: null,
         pitchType: g.pitch_type || null,
         surface: g.surface || null,
@@ -39,6 +39,30 @@ function supabaseRowToGame(g) {
 
 export const dynamic = 'force-dynamic';
 
+// Run migrations + auto-expire at most once per 10 minutes per process, off the request path.
+let _lastHousekeeping = 0;
+function scheduleHousekeeping() {
+    const now = Date.now();
+    if (now - _lastHousekeeping < 10 * 60 * 1000) return;
+    _lastHousekeeping = now;
+    (async () => {
+        try {
+            await prisma.$executeRawUnsafe(`ALTER TABLE "Game" ADD COLUMN IF NOT EXISTS "upiId" TEXT`);
+            await prisma.$executeRawUnsafe(`ALTER TABLE "Game" ADD COLUMN IF NOT EXISTS "score" TEXT`);
+            await prisma.$executeRawUnsafe(`ALTER TABLE "Rsvp" ADD COLUMN IF NOT EXISTS "paymentStatus" TEXT DEFAULT 'not_required'`);
+        } catch (e) { console.error('bg migrate:', e.message); }
+        try {
+            const cutoff = new Date();
+            cutoff.setDate(cutoff.getDate() - 2);
+            const cutoffStr = cutoff.toISOString().split('T')[0];
+            await prisma.game.updateMany({
+                where: { status: 'open', date: { lt: cutoffStr } },
+                data:  { status: 'completed' }
+            });
+        } catch (e) { console.error('bg expire:', e.message); }
+    })();
+}
+
 export async function GET(req) {
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get('userId');
@@ -46,28 +70,7 @@ export async function GET(req) {
 
     // --- Try Prisma first ---
     try {
-        // Auto-migrate: add new columns if they don't exist yet (safe — uses IF NOT EXISTS)
-        try {
-            await prisma.$executeRawUnsafe(`ALTER TABLE "Game" ADD COLUMN IF NOT EXISTS "upiId" TEXT`);
-            await prisma.$executeRawUnsafe(`ALTER TABLE "Game" ADD COLUMN IF NOT EXISTS "score" TEXT`);
-            await prisma.$executeRawUnsafe(`ALTER TABLE "Rsvp" ADD COLUMN IF NOT EXISTS "paymentStatus" TEXT DEFAULT 'not_required'`);
-        } catch (migrateErr) {
-            console.error('Auto-migrate error (non-fatal):', migrateErr.message);
-        }
-
-        // Auto-expire: single batch UPDATE for all games whose date is >2 days old.
-        // This replaces the N+1 loop that fired one UPDATE per expired game.
-        try {
-            const cutoff = new Date();
-            cutoff.setDate(cutoff.getDate() - 2);
-            const cutoffStr = cutoff.toISOString().split('T')[0]; // YYYY-MM-DD
-            await prisma.game.updateMany({
-                where: { status: 'open', date: { lt: cutoffStr } },
-                data:  { status: 'completed' }
-            });
-        } catch (expireErr) {
-            console.error('Auto-expire error:', expireErr.message);
-        }
+        scheduleHousekeeping();
 
         // Only return games from 7 days ago onward — no need to load ancient history.
         const windowStart = new Date();
@@ -188,6 +191,13 @@ export async function POST(req) {
     if (!userId) {
         return Response.json({ error: 'Authentication required' }, { status: 401 });
     }
+
+    // Ensure new columns exist before attempting to create (idempotent)
+    try {
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Game" ADD COLUMN IF NOT EXISTS "upiId" TEXT`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Game" ADD COLUMN IF NOT EXISTS "score" TEXT`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Rsvp" ADD COLUMN IF NOT EXISTS "paymentStatus" TEXT DEFAULT 'not_required'`);
+    } catch (_) { /* non-fatal */ }
 
     // --- Try Prisma first ---
     try {
@@ -312,9 +322,10 @@ export async function POST(req) {
             lng:          game.lng || null,
             max_players:  game.maxPlayers || 10,
             skill_level:  game.skillLevel || 'All Levels',
-            status:       'open',
-            visibility:   game.visibility || 'public',
-            price:        game.price ? parseFloat(game.price.toString()) : 0,
+            status:            'open',
+            visibility:        game.visibility || 'public',
+            approval_required: !!game.approvalRequired,
+            price:             game.price ? parseFloat(game.price.toString()) : 0,
             gender:       game.gender || 'mixed',
             pitch_type:   game.pitchType || null,
             surface:      game.surface || null,
@@ -326,6 +337,21 @@ export async function POST(req) {
             console.error('Supabase fallback POST error:', error.message);
             return Response.json({ error: error.message }, { status: 500 });
         }
+
+        // Also create the organizer's RSVP in game_rsvps
+        try {
+            await supabase.from('game_rsvps').insert({
+                game_id:   gameId,
+                player_id: userId,
+                status:    'yes',
+                position:  game.organizerPosition || '',
+            });
+        } catch (rsvpErr) {
+            console.error('Organizer RSVP Supabase error:', rsvpErr?.message);
+        }
+
+        const organizerName = session.user?.name || '';
+        const organizerPhoto = session.user?.photo || null;
 
         // Return a game object shaped like what the frontend expects
         const savedGame = {
@@ -344,7 +370,7 @@ export async function POST(req) {
             skillLevel: game.skillLevel || 'All Levels',
             status: 'open',
             visibility: game.visibility || 'public',
-            approvalRequired: false,
+            approvalRequired: !!game.approvalRequired,
             bookingImage: null,
             pitchType: game.pitchType || null,
             surface: game.surface || null,
@@ -355,8 +381,8 @@ export async function POST(req) {
             reminderHours: game.reminderHours !== undefined ? parseInt(game.reminderHours) : 2,
             remindersSent: false,
             organizerId: userId,
-            organizer: { id: userId, name: '', photo: null },
-            rsvps: [{ playerId: userId, status: 'yes', position: game.organizerPosition || '', player: null }],
+            organizer: { id: userId, name: organizerName, photo: organizerPhoto },
+            rsvps: [{ playerId: userId, status: 'yes', position: game.organizerPosition || '', player: { id: userId, name: organizerName, photo: organizerPhoto, positions: {}, ratings: {} } }],
             createdAt: new Date().toISOString(),
         };
 

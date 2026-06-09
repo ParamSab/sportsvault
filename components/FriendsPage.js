@@ -92,12 +92,24 @@ export default function FriendsPage({ onViewProfile }) {
     };
 
     const handleSetTier = async (friendId, tier) => {
-        await fetch('/api/friends/tier', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ friendId, sport: tierSport, tier }),
-        });
+        // Optimistic update immediately so UI feels instant
         dispatch({ type: 'SET_FRIEND_TIER', payload: { friendId, sport: tierSport, tier } });
+        try {
+            const res = await fetch('/api/friends/tier', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ friendId, sport: tierSport, tier }),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                console.error('Tier save failed:', err);
+                // Revert optimistic update on failure
+                dispatch({ type: 'SET_FRIEND_TIER', payload: { friendId, sport: tierSport, tier: null } });
+            }
+        } catch (err) {
+            console.error('Tier save network error:', err);
+            dispatch({ type: 'SET_FRIEND_TIER', payload: { friendId, sport: tierSport, tier: null } });
+        }
     };
 
     const handleWhatsApp = (friend) => {
@@ -466,8 +478,16 @@ export default function FriendsPage({ onViewProfile }) {
                         )}
                     </div>
 
+                    {/* Loading state */}
+                    {!state.isLoaded && friendPlayers.length === 0 && pendingReceived.length === 0 && pendingSent.length === 0 && (
+                        <div className="glass-card no-hover text-center" style={{ padding: 40 }}>
+                            <div className="spinner" style={{ margin: '0 auto 16px' }}></div>
+                            <h3 style={{ marginBottom: 8, fontSize: '1.125rem' }}>Loading friends…</h3>
+                        </div>
+                    )}
+
                     {/* Empty state */}
-                    {friendPlayers.length === 0 && pendingReceived.length === 0 && pendingSent.length === 0 && (
+                    {state.isLoaded && friendPlayers.length === 0 && pendingReceived.length === 0 && pendingSent.length === 0 && (
                         <div className="glass-card no-hover text-center" style={{ padding: 40 }}>
                             <div style={{ fontSize: '3rem', marginBottom: 12 }}>👥</div>
                             <h3 style={{ marginBottom: 8, fontSize: '1.125rem' }}>Your squad is empty</h3>

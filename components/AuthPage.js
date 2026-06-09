@@ -28,7 +28,14 @@ export default function AuthPage() {
     const [isSending, setIsSending] = useState(false);
     const [resendCountdown, setResendCountdown] = useState(0);
     const [isDevMode, setIsDevMode] = useState(false);
+    const [devCode, setDevCode] = useState('');
     const countdownRef = useRef(null);
+
+    // Forgot/reset password (via SMS)
+    const [resetPhone, setResetPhone] = useState('');
+    const [resetNewPassword, setResetNewPassword] = useState('');
+    const [resetConfirm, setResetConfirm] = useState('');
+    const [resetError, setResetError] = useState('');
 
     // Onboarding
     const [onboardStep, setOnboardStep] = useState(0);
@@ -36,7 +43,6 @@ export default function AuthPage() {
     const [profile, setProfile] = useState({
         name: '', phone: '', password: '', photo: null, location: '', sports: [], positions: {},
     });
-    const onboardingStepKeys = ['name', 'phone-capture', 'photo', 'location', 'sports', 'positions', 'credentials'];
 
     const startResendCountdown = () => {
         setResendCountdown(60);
@@ -77,7 +83,7 @@ export default function AuthPage() {
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || "Failed to send verification code");
-                if (data.devMode) setIsDevMode(true);
+                if (data.devMode) { setIsDevMode(true); if (data.devCode) setDevCode(data.devCode); }
             } else {
                 if (!phone || phone.replace(/\D/g, '').length < 10) {
                     setAuthError("Enter a valid phone number");
@@ -91,7 +97,7 @@ export default function AuthPage() {
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || "Failed to send verification code");
-                if (data.devMode) setIsDevMode(true);
+                if (data.devMode) { setIsDevMode(true); if (data.devCode) setDevCode(data.devCode); }
             }
             setStep('otp');
             startResendCountdown();
@@ -124,6 +130,60 @@ export default function AuthPage() {
         } catch (err) {
             console.error(err);
             setAuthError("Login failed. Check your connection.");
+        } finally {
+            setIsSending(false);
+        }
+    };
+
+    const handleForgotSend = async () => {
+        setResetError('');
+        if (!resetPhone || resetPhone.replace(/\D/g, '').length < 10) {
+            setResetError('Enter the phone number on your account');
+            return;
+        }
+        setIsSending(true);
+        try {
+            const res = await fetch('/api/auth/phone/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone: resetPhone }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to send reset code');
+            if (data.devMode) { setIsDevMode(true); if (data.devCode) setDevCode(data.devCode); }
+            setOtp(['', '', '', '', '', '']);
+            setStep('reset');
+            startResendCountdown();
+        } catch (err) {
+            setResetError(err.message || 'Could not send reset code.');
+        } finally {
+            setIsSending(false);
+        }
+    };
+
+    const handleResetPassword = async () => {
+        setResetError('');
+        const entered = otp.join('');
+        if (entered.length < 6) { setResetError('Enter the full 6-digit code'); return; }
+        if (!resetNewPassword || resetNewPassword.length < 6) { setResetError('Password must be at least 6 characters'); return; }
+        if (resetNewPassword !== resetConfirm) { setResetError('Passwords do not match'); return; }
+
+        setIsSending(true);
+        try {
+            const res = await fetch('/api/auth/password/reset', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone: resetPhone, code: entered, newPassword: resetNewPassword, rememberMe }),
+            });
+            const data = await res.json();
+            if (res.ok && data.user) {
+                dispatch({ type: 'LOGIN', payload: data.user });
+                router.push('/invite');
+            } else {
+                setResetError(data.error || 'Could not reset password');
+            }
+        } catch (err) {
+            setResetError('Something went wrong. Please try again.');
         } finally {
             setIsSending(false);
         }
@@ -187,7 +247,7 @@ export default function AuthPage() {
         setIsSending(true);
         try {
             const user = state.currentUser;
-            const res = await fetch('/api/users', {
+            await fetch('/api/users', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -201,12 +261,9 @@ export default function AuthPage() {
                     password: setupPassword,
                 }),
             });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Failed to save credentials');
-            if (data.user) dispatch({ type: 'LOGIN', payload: data.user });
             router.push('/invite');
         } catch (err) {
-            setCredError(err.message || 'Failed to save. Please try again.');
+            setCredError('Failed to save. Please try again.');
         } finally {
             setIsSending(false);
         }
@@ -275,16 +332,17 @@ export default function AuthPage() {
     };
 
     const validateOnboardStep = (idx) => {
-        const stepKey = onboardingStepKeys[idx];
-        if (stepKey === 'name' && profile.name.trim().length < 2) { setStepError('Please enter your full name (at least 2 characters)'); return false; }
-        if (stepKey === 'phone-capture' && authMode === 'email' && (!profile.phone || profile.phone.replace(/\D/g, '').length < 10)) { setStepError('Please enter a valid phone number for game reminders'); return false; }
-        if (stepKey === 'location' && !profile.location.trim()) { setStepError('Please enter your city or neighbourhood'); return false; }
-        if (stepKey === 'sports' && profile.sports.length === 0) { setStepError('Select at least one sport'); return false; }
-        if (stepKey === 'positions') {
+        if (idx === 0 && profile.name.trim().length < 2) { setStepError('Please enter your full name (at least 2 characters)'); return false; }
+        if (idx === 1 && authMode === 'email' && (!profile.phone || profile.phone.replace(/\D/g, '').length < 10)) { setStepError('Please enter a valid phone number for game reminders'); return false; }
+        // idx 2 is photo (optional)
+        if (idx === 3 && !profile.location.trim()) { setStepError('Please enter your city or neighbourhood'); return false; }
+        if (idx === 4 && profile.sports.length === 0) { setStepError('Select at least one sport'); return false; }
+        if (idx === 5) {
             const missing = profile.sports.filter(s => !profile.positions[s]);
             if (missing.length > 0) { setStepError(`Select your position for: ${missing.join(', ')}`); return false; }
         }
-        if (stepKey === 'credentials') {
+        if (idx === 6) {
+            // Credentials step
             const credEmail = authMode === 'email' ? (verifiedEmail || email) : setupEmail;
             if (!credEmail || !credEmail.includes('@')) { setStepError('Enter a valid email address'); return false; }
             if (!setupPassword || setupPassword.length < 6) { setStepError('Password must be at least 6 characters'); return false; }
@@ -330,16 +388,17 @@ export default function AuthPage() {
                 }),
             });
             const dbData = await dbRes.json();
-            if (!dbRes.ok) throw new Error(dbData.error || 'Failed to create account');
             if (dbData.user) {
                 newUser.dbId = dbData.user.id;
                 newUser.id = dbData.user.id; // use real DB id so games/rsvps link correctly
             }
 
-        } catch (err) {
-            setStepError(err.message || 'Failed to create account. Please try again.');
-            return;
-        }
+            await fetch('/api/auth/session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user: newUser, rememberMe }),
+            });
+        } catch (_) { /* continue fallback */ }
 
         dispatch({ type: 'LOGIN', payload: newUser });
         router.push('/invite');
@@ -351,6 +410,12 @@ export default function AuthPage() {
         setPhone('');
         setOtp(['', '', '', '', '', '']);
         setAuthError('');
+        setIsDevMode(false);
+        setDevCode('');
+        setResetPhone('');
+        setResetNewPassword('');
+        setResetConfirm('');
+        setResetError('');
         setStep('login');
     };
 
@@ -409,7 +474,7 @@ export default function AuthPage() {
         <div key="location" className="animate-fade-in">
             <h2 style={{ marginBottom: 8 }}>Where are you based?</h2>
             <p className="text-muted text-sm" style={{ marginBottom: 24 }}>We'll show you games nearby.</p>
-            <input type="text" placeholder="e.g. Bandra West, Mumbai" value={profile.location} onChange={e => { setStepError(''); setProfile(prev => ({ ...prev, location: e.target.value })); }} style={{ fontSize: '1.125rem', padding: '16px 20px' }} />
+            <input type="text" placeholder="e.g. Bandra West, Mumbai" value={profile.location} onChange={e => setProfile(prev => ({ ...prev, location: e.target.value }))} style={{ fontSize: '1.125rem', padding: '16px 20px' }} />
             <button
                 type="button"
                 onClick={async () => {
@@ -452,7 +517,7 @@ export default function AuthPage() {
             <p className="text-muted text-sm" style={{ marginBottom: 24 }}>Select all that apply.</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {Object.entries(SPORTS).map(([key, sportObj]) => (
-                    <button key={key} onClick={() => { setStepError(''); toggleSport(key); }} style={{
+                    <button key={key} onClick={() => toggleSport(key)} style={{
                         display: 'flex', alignItems: 'center', gap: 16, padding: '20px 24px', borderRadius: 16,
                         background: profile.sports.includes(key) ? `${sportObj.color}20` : 'var(--bg-card)',
                         border: `2px solid ${profile.sports.includes(key) ? sportObj.color : 'var(--border-color)'}`,
@@ -561,17 +626,6 @@ export default function AuthPage() {
                             {/* Auth mode toggle */}
                             <div style={{ display: 'flex', gap: 6, marginBottom: 20, background: 'var(--bg-secondary)', borderRadius: 12, padding: 4 }}>
                                 <button
-                                    onClick={() => switchMode('email')}
-                                    style={{
-                                        flex: 1, padding: '9px 4px', borderRadius: 8, fontSize: '0.8125rem', fontWeight: 600,
-                                        background: authMode === 'email' ? 'var(--primary-color)' : 'transparent',
-                                        color: authMode === 'email' ? '#fff' : 'var(--text-secondary)',
-                                        border: 'none', cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap',
-                                    }}
-                                >
-                                    Email Code
-                                </button>
-                                <button
                                     onClick={() => switchMode('phone')}
                                     style={{
                                         flex: 1, padding: '9px 4px', borderRadius: 8, fontSize: '0.8125rem', fontWeight: 600,
@@ -643,9 +697,19 @@ export default function AuthPage() {
                             </div>
 
                             {authMode === 'password' ? (
-                                <button className="btn btn-primary btn-block btn-lg" onClick={handlePasswordLogin} disabled={isSending}>
-                                    {isSending ? 'Logging in...' : 'Login →'}
-                                </button>
+                                <>
+                                    <button className="btn btn-primary btn-block btn-lg" onClick={handlePasswordLogin} disabled={isSending}>
+                                        {isSending ? 'Logging in...' : 'Login →'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-ghost btn-block"
+                                        style={{ marginTop: 10, fontSize: '0.8125rem', color: 'var(--text-secondary)' }}
+                                        onClick={() => { setResetError(''); setResetPhone(''); setStep('forgot'); }}
+                                    >
+                                        Forgot password?
+                                    </button>
+                                </>
                             ) : (
                                 <button className="btn btn-primary btn-block btn-lg" onClick={handleSendOTP} disabled={isSending}>
                                     {isSending ? (
@@ -661,6 +725,10 @@ export default function AuthPage() {
                         <div style={{ display: 'flex', justifyContent: 'center', gap: 20, marginTop: 24 }}>
                             {Object.values(SPORTS).map(s => <span key={s.name} style={{ fontSize: '1.375rem', opacity: 0.35, animation: 'float 3s ease-in-out infinite' }}>{s.emoji}</span>)}
                         </div>
+                        <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginTop: 20, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-muted)', textDecoration: 'underline' }}>Privacy Policy</a>
+                            <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-muted)', textDecoration: 'underline' }}>Terms of Use</a>
+                        </div>
                     </div>
                 )}
 
@@ -674,8 +742,29 @@ export default function AuthPage() {
                                 Enter the 6-digit code sent to {authMode === 'email' ? email : phone}
                             </p>
                             {isDevMode && (
-                                <div style={{ background: '#fffbeb', border: '1px solid #f59e0b', borderRadius: 8, padding: '10px 14px', marginBottom: 20, fontSize: '0.82rem', color: '#92400e' }}>
-                                    <strong>Dev mode</strong> - verification service not configured. Use your configured dev OTP to continue.
+                                <div style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.4)', borderRadius: 12, padding: '14px 16px', marginBottom: 20 }}>
+                                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                                        ⚡ Dev Mode — no SMS/email service configured
+                                    </div>
+                                    <div style={{ fontSize: '0.8125rem', color: '#fcd34d', marginBottom: 10 }}>
+                                        Tap the code below to auto-fill it:
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            const c = devCode || '990770';
+                                            setOtp(c.split(''));
+                                        }}
+                                        style={{
+                                            display: 'block', width: '100%',
+                                            fontSize: '2rem', fontWeight: 800, letterSpacing: '0.35em',
+                                            color: '#fbbf24', background: 'rgba(251,191,36,0.1)',
+                                            border: '2px dashed rgba(251,191,36,0.4)',
+                                            borderRadius: 10, padding: '12px 0',
+                                            cursor: 'pointer', textAlign: 'center',
+                                        }}
+                                    >
+                                        {devCode || '990770'}
+                                    </button>
                                 </div>
                             )}
                             <div className="otp-container" style={{ marginBottom: 24 }}>
@@ -701,6 +790,79 @@ export default function AuthPage() {
                     </div>
                 )}
 
+                {step === 'forgot' && (
+                    <div className="animate-fade-in">
+                        <div className="glass-card no-hover" style={{ padding: '24px 20px' }}>
+                            <h3 style={{ marginBottom: 4 }}>Reset your password</h3>
+                            <p className="text-muted text-sm" style={{ marginBottom: 20 }}>
+                                Enter the phone number on your account and we'll text you a code to reset your password.
+                            </p>
+                            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Phone Number</label>
+                            <input type="tel" placeholder="e.g. 9876543210" value={resetPhone} onChange={e => setResetPhone(e.target.value)} style={{ fontSize: '1rem', padding: '14px 16px', width: '100%' }} autoFocus />
+                            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 6 }}>India numbers auto-prefixed with +91.</p>
+                            {resetError && <div style={{ color: '#ef4444', fontSize: '0.8125rem', marginTop: 14, padding: '10px 12px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: 8, border: '1px solid rgba(239, 68, 68, 0.2)' }}>⚠️ {resetError}</div>}
+                            <button className="btn btn-primary btn-block btn-lg" style={{ marginTop: 20 }} onClick={handleForgotSend} disabled={isSending}>
+                                {isSending ? 'Sending...' : 'Send reset code →'}
+                            </button>
+                            <button className="btn btn-ghost btn-block" style={{ marginTop: 8, fontSize: '0.8rem', opacity: 0.7 }} onClick={() => { setStep('login'); setAuthMode('password'); }}>
+                                ← Back to login
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {step === 'reset' && (
+                    <div className="animate-fade-in">
+                        <div className="glass-card no-hover" style={{ padding: '24px 20px' }}>
+                            <h3 style={{ marginBottom: 4 }}>Enter code & new password</h3>
+                            <p className="text-muted text-sm" style={{ marginBottom: isDevMode ? 8 : 20 }}>
+                                We sent a 6-digit code to {resetPhone}. Enter it and choose a new password.
+                            </p>
+                            {isDevMode && (
+                                <div style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.4)', borderRadius: 12, padding: '14px 16px', marginBottom: 18 }}>
+                                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                                        ⚡ Dev Mode — tap to auto-fill
+                                    </div>
+                                    <button
+                                        onClick={() => setOtp((devCode || '990770').split(''))}
+                                        style={{ display: 'block', width: '100%', fontSize: '2rem', fontWeight: 800, letterSpacing: '0.35em', color: '#fbbf24', background: 'rgba(251,191,36,0.1)', border: '2px dashed rgba(251,191,36,0.4)', borderRadius: 10, padding: '12px 0', cursor: 'pointer', textAlign: 'center' }}
+                                    >
+                                        {devCode || '990770'}
+                                    </button>
+                                </div>
+                            )}
+                            <div className="otp-container" style={{ marginBottom: 18 }}>
+                                {otp.map((digit, i) => (
+                                    <input key={i} id={`otp-${i}`} type="text" inputMode="numeric" className="otp-input" value={digit} onChange={e => handleOtpChange(i, e.target.value)} onKeyDown={e => handleOtpKeyDown(i, e)} onPaste={handleOtpPaste} maxLength={1} autoFocus={i === 0} />
+                                ))}
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>New Password</label>
+                                    <div style={{ position: 'relative' }}>
+                                        <input type={showPassword ? 'text' : 'password'} placeholder="Min. 6 characters" value={resetNewPassword} onChange={e => setResetNewPassword(e.target.value)} style={{ fontSize: '1rem', padding: '14px 48px 14px 16px', width: '100%' }} />
+                                        <button type="button" onClick={() => setShowPassword(p => !p)} style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: 'var(--text-secondary)' }}>{showPassword ? '🙈' : '👁'}</button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Confirm Password</label>
+                                    <input type={showPassword ? 'text' : 'password'} placeholder="Repeat password" value={resetConfirm} onChange={e => setResetConfirm(e.target.value)} style={{ fontSize: '1rem', padding: '14px 16px', width: '100%' }} />
+                                </div>
+                            </div>
+                            {resetError && <div style={{ color: '#ef4444', fontSize: '0.8125rem', marginTop: 14, padding: '10px 12px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: 8, border: '1px solid rgba(239, 68, 68, 0.2)' }}>⚠️ {resetError}</div>}
+                            <button className="btn btn-primary btn-block btn-lg" style={{ marginTop: 18 }} onClick={handleResetPassword} disabled={isSending}>
+                                {isSending ? 'Resetting...' : 'Reset password & log in →'}
+                            </button>
+                            <button className="btn btn-ghost btn-block" style={{ marginTop: 8, fontSize: '0.8rem', opacity: 0.7 }} onClick={handleForgotSend} disabled={resendCountdown > 0 || isSending}>
+                                {resendCountdown > 0 ? `Resend code in ${resendCountdown}s` : 'Resend code'}
+                            </button>
+                            <button className="btn btn-ghost btn-block" style={{ marginTop: 4, fontSize: '0.8rem', opacity: 0.6 }} onClick={() => { setStep('forgot'); setOtp(['', '', '', '', '', '']); }}>
+                                ← Change phone number
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 {step === 'onboarding' && (
                     <div className="animate-slide-up">
                         <div className="glass-card no-hover" style={{ padding: '20px 18px' }}>
@@ -709,8 +871,8 @@ export default function AuthPage() {
                                 <div style={{ display: 'flex', gap: 4 }}>{onboardingSteps.map((_, i) => <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: i === onboardStep ? 'var(--primary-color)' : i < onboardStep ? 'rgba(99,102,241,0.3)' : 'var(--border-color)', transition: 'all 0.3s' }} />)}</div>
                             </div>
                             {onboardingSteps[onboardStep]}
-                            {stepError && onboardingStepKeys[onboardStep] !== 'location' && <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: 16, padding: '12px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: 8, border: '1px solid rgba(239, 68, 68, 0.2)' }}>⚠️ {stepError}</div>}
-                            <div style={{ display: 'flex', gap: 12, marginTop: 32 }}>
+                            {stepError && <div style={{ color: '#ef4444', fontSize: '0.8125rem', marginTop: 12, padding: '10px 12px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: 8, border: '1px solid rgba(239, 68, 68, 0.2)' }}>⚠️ {stepError}</div>}
+                            <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
                                 {onboardStep > 0 && <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => { setOnboardStep(s => s - 1); setStepError(''); }}>← Back</button>}
                                 <button className="btn btn-primary" style={{ flex: 2 }} onClick={() => { if (validateOnboardStep(onboardStep)) { if (onboardStep < onboardingSteps.length - 1) setOnboardStep(s => s + 1); else handleComplete(); } }}>{onboardStep < onboardingSteps.length - 1 ? 'Next →' : 'Create Account 🚀'}</button>
                             </div>

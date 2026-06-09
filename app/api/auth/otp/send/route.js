@@ -1,10 +1,9 @@
 import { Resend } from 'resend';
-import { getSupabase } from '@/lib/supabase';
 import { prisma } from '@/lib/prisma';
-import { normalizeEmail } from '@/lib/auth';
 import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
 import { sessionOptions } from '@/lib/session';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 export async function POST(req) {
     try {
@@ -12,51 +11,37 @@ export async function POST(req) {
         if (!email || typeof email !== 'string' || !email.includes('@')) {
             return Response.json({ error: 'Valid email address is required.' }, { status: 400 });
         }
-        const normalizedEmail = normalizeEmail(email);
+        const normalizedEmail = email.toLowerCase().trim();
+
+        const rl = checkRateLimit(`email:${normalizedEmail}`, 3, 10 * 60 * 1000);
+        if (!rl.allowed) {
+            return Response.json(
+                { error: `Too many requests. Try again in ${Math.ceil(rl.retryAfterSeconds / 60)} minute(s).` },
+                { status: 429 }
+            );
+        }
 
         const code = Math.floor(100000 + Math.random() * 900000).toString();
         const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-        let storedOtp = false;
+        // Store in session (works without any DB table)
+        const cookieStore = await cookies();
+        const session = await getIronSession(cookieStore, sessionOptions);
+        session.pendingOtp = { email: normalizedEmail, code, expiresAt: expiresAt.toISOString() };
+        await session.save();
+
+        // Best-effort DB persist (ignored if table doesn't exist)
         try {
-            await prisma.otpCode.updateMany({
-                where: { email: normalizedEmail, used: false },
-                data: { used: true },
-            });
-            await prisma.otpCode.create({
-                data: { email: normalizedEmail, code, expiresAt },
-            });
-            storedOtp = true;
-        } catch (prismaErr) {
-            console.error('[EMAIL OTP SEND] Prisma OTP store failed:', prismaErr.message);
-        }
+            await prisma.otpCode.updateMany({ where: { email: normalizedEmail, used: false }, data: { used: true } });
+            await prisma.otpCode.create({ data: { email: normalizedEmail, code, expiresAt } });
+        } catch (_) { /* table may not exist — session is the source of truth */ }
 
-        if (!storedOtp) {
-            const supabase = getSupabase();
-            if (supabase) {
-                await supabase.from('otp_codes').update({ used: true }).eq('email', normalizedEmail).eq('used', false);
-                await supabase.from('otp_codes').insert({ email: normalizedEmail, code, expires_at: expiresAt.toISOString() });
-                storedOtp = true;
-            } else {
-                const cookieStore = await cookies();
-                const session = await getIronSession(cookieStore, sessionOptions);
-                session.pendingEmailOtp = {
-                    email: normalizedEmail,
-                    code,
-                    expiresAt: expiresAt.toISOString(),
-                };
-                await session.save();
-                storedOtp = true;
-            }
-        }
-
+        // Send via Resend
         const apiKey = process.env.RESEND_API_KEY;
         if (!apiKey) {
-            if (process.env.NODE_ENV !== 'production' && process.env.ALLOW_DEV_OTP_BYPASS === 'true' && process.env.DEV_OTP_BYPASS_CODE) {
-                console.log(`[AUTH DEV] RESEND not configured. Use configured dev OTP for ${normalizedEmail}`);
-                return Response.json({ success: true, devMode: true });
-            }
-            return Response.json({ error: 'Email service not configured.' }, { status: 503 });
+            console.log(`[AUTH DEV] RESEND not configured — OTP for ${normalizedEmail}: ${code}`);
+            // Return the code in dev mode so the app can surface it on-screen
+            return Response.json({ success: true, devMode: true, devCode: code });
         }
 
         const resend = new Resend(apiKey);
@@ -78,6 +63,7 @@ export async function POST(req) {
 
         console.log(`[AUTH] Email OTP sent to ${normalizedEmail}`);
         return Response.json({ success: true });
+
     } catch (err) {
         console.error('[EMAIL OTP SEND ERROR]', err);
         return Response.json({ error: err.message || 'Failed to send verification code' }, { status: 500 });

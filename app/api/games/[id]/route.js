@@ -50,7 +50,7 @@ export async function GET(req, props) {
                         date: g.game_date, time: g.game_time, duration: g.duration || 90,
                         location: g.location || '', address: g.address || '', lat: g.lat, lng: g.lng,
                         maxPlayers: g.max_players || 10, skillLevel: g.skill_level || 'All Levels',
-                        status: g.status, visibility: g.visibility || 'public', approvalRequired: false,
+                        status: g.status, visibility: g.visibility || 'public', approvalRequired: !!g.approval_required,
                         price: g.price || 0, gender: g.gender || 'mixed', amenities: '[]',
                         organizerId: g.organizer_id,
                         organizer: org || { id: g.organizer_id, name: '', photo: null },

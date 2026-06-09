@@ -17,11 +17,26 @@ export async function POST(req) {
 
     if (!gameId || !playerId) return Response.json({ error: 'Missing required fields' }, { status: 400 });
 
-    // Verify authorization: Player themselves or the Game Organizer
-    const game = await prisma.game.findUnique({
-        where: { id: gameId },
-        select: { organizerId: true, title: true, approvalRequired: true }
-    });
+    // Look up game — try Prisma first, then Supabase
+    let game = null;
+    try {
+        game = await prisma.game.findUnique({
+            where: { id: gameId },
+            select: { organizerId: true, title: true, approvalRequired: true }
+        });
+    } catch (_) { /* Prisma unavailable, will try Supabase below */ }
+
+    if (!game) {
+        try {
+            const supabase = getSupabase();
+            const { data } = await supabase
+                .from('saved_games')
+                .select('organizer_id, title, approval_required')
+                .eq('game_id', gameId)
+                .single();
+            if (data) game = { organizerId: data.organizer_id, title: data.title, approvalRequired: !!data.approval_required };
+        } catch (_) { /* ignore */ }
+    }
 
     if (!game) return Response.json({ error: 'Game not found' }, { status: 404 });
 
@@ -98,18 +113,44 @@ export async function POST(req) {
         const supabase = getSupabase();
         if (!supabase) return Response.json({ error: 'Database unavailable' }, { status: 503 });
 
+        // If game lookup failed via Prisma, try to get approvalRequired from Supabase
+        if (!game) {
+            const { data: sbGame } = await supabase
+                .from('saved_games')
+                .select('organizer_id, title, approval_required')
+                .eq('game_id', gameId)
+                .single();
+            if (sbGame) {
+                if (finalStatus === 'yes' && !!sbGame.approval_required && isSelf && !isOrganizer) {
+                    finalStatus = 'pending';
+                }
+            }
+        }
+
         const { data, error } = await supabase
             .from('game_rsvps')
-            .upsert({ game_id: gameId, player_id: playerId, status, position: position || null },
+            .upsert({ game_id: gameId, player_id: playerId, status: finalStatus, position: position || null },
                 { onConflict: 'game_id,player_id' })
             .select()
             .single();
 
         if (error) return Response.json({ error: error.message }, { status: 500 });
-        
-        // Notification fallback for Supabase if needed (omitted for brevity unless Prisma fails completely)
-        // Usually Prisma is the primary for these complex relations.
-        
+
+        // Create notification for organizer on pending request
+        if (finalStatus === 'pending' && game?.organizerId) {
+            try {
+                const { data: player } = await supabase.from('users').select('name').eq('id', playerId).single();
+                await supabase.from('notifications').insert({
+                    user_id: game.organizerId,
+                    title: 'New Join Request',
+                    message: `${player?.name || 'Someone'} requested to join "${game.title}"`,
+                    game_id: gameId,
+                    action: `/?game=${gameId}`,
+                    read: false,
+                });
+            } catch (_) { /* notification optional */ }
+        }
+
         return Response.json({ rsvp: data });
     } catch (supaErr) {
         console.error('RSVP Supabase fallback error:', supaErr.message);

@@ -40,9 +40,9 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
             .filter(g => {
                 const vis = g.visibility || 'public';
                 const orgId = String(g.organizerId || g.organizer?.id || g.organizer || '');
-                if (orgId === currentUserId) return true;
+                if (vis === 'private') return false;
                 if (vis === 'public') return true;
-                if (vis === 'friends') return friendIdSet.has(orgId);
+                if (vis === 'friends') return friendIdSet.has(orgId) || orgId === currentUserId;
                 return false;
             })
             .filter(g => sportFilter === 'all' || g.sport === sportFilter)
@@ -215,7 +215,22 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
 
             {/* Game Cards */}
             <div className="stagger" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {upcomingGames.length === 0 && (
+                {upcomingGames.length === 0 && !state.isLoaded && (
+                    <>
+                        {[1,2,3].map(i => (
+                            <div key={i} className="skeleton-card">
+                                <div className="skeleton-banner" />
+                                <div className="skeleton-body">
+                                    <div className="skeleton-line" style={{ width: '70%', height: 18 }} />
+                                    <div className="skeleton-line" style={{ width: '90%' }} />
+                                    <div className="skeleton-line" style={{ width: '60%' }} />
+                                    <div className="skeleton-line" style={{ width: '80%' }} />
+                                </div>
+                            </div>
+                        ))}
+                    </>
+                )}
+                {upcomingGames.length === 0 && state.isLoaded && (
                     <div className="glass-card no-hover" style={{ textAlign: 'center', padding: 48 }}>
                         <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>🏟️</div>
                         <h3 style={{ marginBottom: 8 }}>No games found</h3>
@@ -231,68 +246,60 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
                     const confirmedPlayers = (game.rsvps || []).filter(r => r.status === 'yes' || r.status === 'checked_in');
                     const isFilling = spots > 0 && spots <= 3;
                     const isFull = spots <= 0;
+                    const spotsClass = isFull ? 'gray' : isFilling ? 'red' : 'green';
 
                     return (
-                        <button key={game.id} className="glass-card" onClick={() => onViewGame(game.id)}
-                            style={{ textAlign: 'left', cursor: 'pointer', padding: 0, overflow: 'hidden', border: `1px solid ${isFilling ? 'rgba(239,68,68,0.25)' : 'var(--border-color)'}` }}>
+                        <button key={game.id} className="game-card" onClick={() => onViewGame(game.id)}
+                            style={{ borderColor: isFilling ? 'rgba(239,68,68,0.3)' : undefined }}>
 
-                            {/* Venue banner header with pitch-line pattern */}
-                            <div className="card-venue-banner" style={{ height: 72, background: sportGradient, position: 'relative', display: 'flex', alignItems: 'center' }}>
-                                <span style={{ fontSize: '4rem', opacity: 0.12, position: 'absolute', right: 8, bottom: -16, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))' }}>{SPORTS[game.sport]?.emoji || '🏅'}</span>
-                                <div style={{ position: 'absolute', top: 10, left: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    <span className={`sport-badge ${game.sport}`} style={{ background: 'rgba(0,0,0,0.3)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', backdropFilter: 'blur(4px)', padding: '3px 10px', fontSize: '0.68rem' }}>{game.format}</span>
+                            {/* Sport color banner */}
+                            <div className="game-card-banner" style={{ background: sportGradient }}>
+                                <span className="game-card-banner-emoji">{SPORTS[game.sport]?.emoji || '🏅'}</span>
+                                <div className="game-card-banner-top">
+                                    <span className="banner-tag">{game.format}</span>
                                     {game.visibility && game.visibility !== 'public' && (
-                                        <span style={{ background: 'rgba(0,0,0,0.4)', color: '#fff', backdropFilter: 'blur(4px)', padding: '2px 8px', borderRadius: 99, fontSize: '0.63rem', fontWeight: 700 }}>
+                                        <span className="banner-tag">
                                             {game.visibility === 'friends' ? '👥 Friends' : '🔒 Private'}
                                         </span>
                                     )}
-                                    {game.needsHost && (
-                                        <span className="badge-host" style={{ backdropFilter: 'blur(4px)', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(234,179,8,0.4)' }}>🏆 Host Needed</span>
-                                    )}
+                                    {game.needsHost && <span className="badge-host">🏆 Host Needed</span>}
                                 </div>
-                                <div style={{ position: 'absolute', bottom: 10, right: 14, display: 'flex', gap: 6, alignItems: 'center' }}>
+                                <div className="game-card-banner-bottom">
                                     {isFilling && <span className="badge-urgent">⚡ Filling Fast</span>}
-                                    {isFull && <span style={{ fontSize: '0.63rem', fontWeight: 800, padding: '3px 9px', borderRadius: 99, background: 'rgba(0,0,0,0.5)', color: '#94a3b8', border: '1px solid rgba(255,255,255,0.1)' }}>FULL</span>}
+                                    {isFull && <span className="banner-tag" style={{ color: '#94a3b8' }}>FULL</span>}
                                 </div>
                             </div>
 
                             {/* Card body */}
-                            <div style={{ padding: '16px 18px' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                                    <h3 style={{ fontSize: '1.0625rem', fontWeight: 800, lineHeight: 1.3, margin: 0, flex: 1, paddingRight: 8 }}>{game.title}</h3>
-                                    <div style={{
-                                        background: spots <= 0 ? 'rgba(100,100,100,0.15)' : spots <= 3 ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)',
-                                        color: spots <= 0 ? '#64748b' : spots <= 3 ? '#ef4444' : '#22c55e',
-                                        padding: '4px 10px', borderRadius: 'var(--radius-full)', fontSize: '0.68rem', fontWeight: 800,
-                                        whiteSpace: 'nowrap', flexShrink: 0,
-                                        border: `1px solid ${spots <= 0 ? 'rgba(100,100,100,0.2)' : spots <= 3 ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)'}`,
-                                    }}>
-                                        {spots} SPOT{spots !== 1 ? 'S' : ''} LEFT
+                            <div className="game-card-body">
+                                <div className="game-card-title">
+                                    <span>{game.title}</span>
+                                    <span className={`spots-pill ${spotsClass}`}>
+                                        {spots <= 0 ? 'FULL' : `${spots} LEFT`}
+                                    </span>
+                                </div>
+
+                                <div className="game-card-info">
+                                    <div className="game-card-info-row">
+                                        <span className="info-icon">📍</span>
+                                        <span className="info-text">{game.location}</span>
+                                        {distance && <span className="distance-chip">{distance}</span>}
+                                    </div>
+                                    <div className="game-card-info-row">
+                                        <span className="info-icon">📅</span>
+                                        <span className="info-text">{formatDate(game.date)} · {game.time}</span>
+                                        {game.price > 0 && <span className="price-badge">₹{game.price}/player</span>}
+                                    </div>
+                                    <div className="game-card-info-row">
+                                        <span className="info-icon">⭐</span>
+                                        <span className="info-text">{game.skillLevel || 'All Levels'}</span>
+                                        {game.surface && <span className="surface-tag">🌱 {game.surface}</span>}
                                     </div>
                                 </div>
 
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
-                                    <div className="text-sm text-muted" style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                                        <span style={{ fontSize: '1rem' }}>📍</span>
-                                        <span style={{ fontWeight: 500, color: 'var(--text-primary)', flex: 1 }}>{game.location}</span>
-                                        {distance && <span className="distance-chip">📏 {distance}</span>}
-                                    </div>
-                                    <div className="text-sm text-muted" style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                                        <span style={{ fontSize: '1rem' }}>📅</span>
-                                        <span>{formatDate(game.date)} <span style={{ opacity: 0.5 }}>•</span> {game.time}</span>
-                                        {game.price > 0 && <span style={{ marginLeft: 'auto', fontSize: '0.75rem', fontWeight: 700, color: '#22c55e' }}>₹{game.price}/player</span>}
-                                    </div>
-                                    <div className="text-sm text-muted" style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                                        <span style={{ fontSize: '1rem' }}>⭐</span>
-                                        <span>{game.skillLevel || 'All Levels'}</span>
-                                        {game.surface && <span style={{ marginLeft: 8, fontSize: '0.7rem', padding: '2px 7px', borderRadius: 99, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-muted)' }}>🌱 {game.surface}</span>}
-                                    </div>
-                                </div>
-
-                                {/* Footer: organizer + avatar stack + open button */}
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 14 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                        {/* Organizer avatar */}
+                                {/* Footer: organizer + avatar stack + join button */}
+                                <div className="game-card-footer">
+                                    <div className="game-card-organizer">
                                         <div className="avatar avatar-sm" style={{
                                             borderColor: sportColor,
                                             background: organizer?.photo ? `url(${organizer.photo}) center/cover` : undefined,
@@ -301,19 +308,17 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
                                             {organizer?.photo ? '' : getInitials(organizer?.name || 'O')}
                                         </div>
                                         <div>
-                                            <div style={{ fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-secondary)' }}>By</div>
-                                            <div style={{ fontSize: '0.8125rem', fontWeight: 600 }}>{organizer?.name?.split(' ')[0] || 'Unknown'}</div>
+                                            <div className="organizer-label">By</div>
+                                            <div className="organizer-name">{organizer?.name?.split(' ')[0] || 'Unknown'}</div>
                                         </div>
-
-                                        {/* Avatar stack of confirmed players */}
                                         {confirmedPlayers.length > 0 && (
-                                            <div className="avatar-stack" style={{ marginLeft: 6 }}>
+                                            <div className="avatar-stack" style={{ marginLeft: 4 }}>
                                                 {confirmedPlayers.slice(0, 3).map((r, i) => {
                                                     const p = getPlayer(r.playerId) || r.player;
                                                     if (!p) return null;
                                                     return (
                                                         <div key={r.playerId || i} className="avatar" style={{
-                                                            width: 26, height: 26, fontSize: '0.55rem',
+                                                            width: 24, height: 24, fontSize: '0.5rem',
                                                             background: p.photo ? `url(${p.photo}) center/cover` : `${sportColor}30`,
                                                             color: sportColor, borderColor: 'var(--bg-card)',
                                                         }}>
@@ -322,21 +327,19 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
                                                     );
                                                 })}
                                                 {confirmedPlayers.length > 3 && (
-                                                    <div className="avatar-stack-count" style={{ width: 26, height: 26, fontSize: '0.55rem' }}>
-                                                        +{confirmedPlayers.length - 3}
-                                                    </div>
+                                                    <div className="avatar-stack-count">+{confirmedPlayers.length - 3}</div>
                                                 )}
                                             </div>
                                         )}
                                     </div>
 
-                                    <button className="btn btn-sm" style={{
-                                        background: `${sportColor}20`, color: sportColor,
-                                        border: `1px solid ${sportColor}50`, padding: '6px 16px',
-                                        borderRadius: 'var(--radius-full)', fontWeight: 600, fontSize: '0.8125rem',
+                                    <span className="join-btn" style={{
+                                        background: `${sportColor}18`,
+                                        color: sportColor,
+                                        border: `1.5px solid ${sportColor}45`,
                                     }}>
-                                        Open →
-                                    </button>
+                                        View →
+                                    </span>
                                 </div>
                             </div>
                         </button>

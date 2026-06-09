@@ -3,14 +3,26 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "postinstall": "prisma generate"
+    "dev": "next dev -p 3005",
+    "build": "next build --webpack",
+    "start": "next start -p 3005",
+    "postinstall": "prisma generate",
+    "mobile:sync": "CAPACITOR_LIVE_URL=http://localhost:3005 npx cap sync ios",
+    "mobile:prod": "CAPACITOR_LIVE_URL=https://sportsvault.co.in npx cap sync ios",
+    "mobile:open": "npx cap open ios",
+    "mobile:run": "CAPACITOR_LIVE_URL=http://localhost:3005 npx cap run ios"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.100.0",
+    "@capacitor/app": "^8.1.0",
+    "@capacitor/cli": "^8.4.0",
+    "@capacitor/core": "^8.4.0",
+    "@capacitor/ios": "^8.4.0",
+    "@capacitor/push-notifications": "^8.1.1",
+    "@capacitor/splash-screen": "^8.0.1",
+    "@capacitor/status-bar": "^8.0.2",
+    "@ducanh2912/next-pwa": "^10.2.9",
     "@prisma/client": "^5.22.0",
+    "@supabase/supabase-js": "^2.100.0",
     "bcryptjs": "^3.0.3",
     "iron-session": "^8.0.4",
     "leaflet": "^1.9.4",
@@ -23,7 +35,8 @@
     "twilio": "^5.13.1"
   },
   "devDependencies": {
-    "prisma": "^5.22.0"
+    "prisma": "^5.22.0",
+    "typescript": "^6.0.3"
   },
   "engines": {
     "node": ">=20.0.0"

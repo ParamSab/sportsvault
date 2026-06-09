@@ -5,18 +5,33 @@ import { SPORTS, getPlayer, getInitials, getTrustTier, formatDate } from '@/lib/
 
 function GameRow({ g, onClick }) {
     const sport = SPORTS[g.sport];
+    const m = g.match; // { result, myTeam, score, iScored } or null
+    const resultColor = m?.result === 'win' ? '#22c55e' : m?.result === 'loss' ? '#ef4444' : '#94a3b8';
+    const resultLabel = m?.result === 'win' ? 'W' : m?.result === 'loss' ? 'L' : m?.result === 'draw' ? 'D' : null;
     return (
         <div onClick={onClick} style={{ cursor: onClick ? 'pointer' : 'default', background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', padding: '12px 14px', borderLeft: `3px solid ${sport?.color || '#6366f1'}` }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                    <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: 2 }}>{sport?.emoji} {g.title}</div>
-                    <div className="text-xs text-muted">{g.game_date} · {g.game_time} · {g.location || g.address || 'Location TBD'}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.875rem', marginBottom: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {sport?.emoji} {g.title}
+                        {g.role === 'organizer' && <span style={{ fontSize: '0.6rem', padding: '1px 5px', borderRadius: 99, background: 'rgba(99,102,241,0.2)', color: '#818cf8', fontWeight: 700 }}>ORG</span>}
+                    </div>
+                    <div className="text-xs text-muted">{g.game_date} · {g.location || 'Location TBD'}</div>
+                    {m?.iScored && <div style={{ fontSize: '0.7rem', color: '#f59e0b', fontWeight: 700, marginTop: 2 }}>⚽ Scored</div>}
                 </div>
-                <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: 'var(--bg-card)', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    {g.status === 'completed' ? 'completed' : 'saved'}
-                </span>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
+                    {resultLabel && (
+                        <span style={{ fontSize: '0.7rem', fontWeight: 800, padding: '2px 7px', borderRadius: 99, background: `${resultColor}20`, color: resultColor, border: `1px solid ${resultColor}40` }}>
+                            {resultLabel} {m.score}
+                        </span>
+                    )}
+                    {!resultLabel && (
+                        <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '2px 7px', borderRadius: 99, background: 'var(--bg-card)', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
+                            {g.status === 'completed' ? 'done' : 'live'}
+                        </span>
+                    )}
+                </div>
             </div>
-            {g.max_players && <div className="text-xs text-muted" style={{ marginTop: 4 }}>{g.format} · Up to {g.max_players} players · {g.skill_level}</div>}
         </div>
     );
 }
@@ -32,6 +47,8 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
     const [isLoadingPlayer, setIsLoadingPlayer] = useState(false);
     const [friendLoading, setFriendLoading] = useState(false);
     const [toast, setToast] = useState('');
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [deleteLoading, setDeleteLoading] = useState(false);
 
     const player = isOwn
         ? (state.currentUser || getPlayer('p1'))
@@ -60,17 +77,19 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
     // playerId/isOwn are the only values that should trigger a re-fetch.
     }, [playerId, isOwn]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Fetch game history from DB (own profile only) — MUST be before any early return
+    // Fetch game history — works for own profile AND other players
     useEffect(() => {
         const uid = player?.dbId || player?.id;
-        if (!isOwn || !uid) return;
+        if (!uid) return;
+        // For non-own profiles, skip mock players (IDs starting with 'p')
+        if (!isOwn && String(uid).startsWith('p')) return;
         setHistoryLoading(true);
         fetch(`/api/games/history?userId=${uid}`)
             .then(r => r.json())
             .then(data => { setSavedGames(data.saved || []); setGameHistory(data.history || []); })
             .catch(() => { setSavedGames([]); setGameHistory([]); })
             .finally(() => setHistoryLoading(false));
-    }, [isOwn, player?.dbId, player?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [player?.dbId, player?.id, isOwn]); // eslint-disable-line react-hooks/exhaustive-deps
 
     if (!player) {
         if (isLoadingPlayer) return <div className="glass-card no-hover text-center" style={{ padding: 48 }}><h3>Loading profile…</h3></div>;
@@ -308,22 +327,82 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
             <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
                 <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={() => onViewCV(player.id)}>📄 Sports CV</button>
                 {isOwn && pastGames.length > 0 && <button className="btn btn-outline btn-sm" style={{ flex: 1 }} onClick={() => onRateGame(pastGames[0]?.id)}>⭐ Rate Players</button>}
-                {isOwn && <button className="btn btn-ghost btn-sm" onClick={() => { localStorage.removeItem('sportsvault_state'); dispatch({ type: 'LOGOUT' }); }}>🚪</button>}
+                {isOwn && <button className="btn btn-ghost btn-sm" onClick={() => { localStorage.removeItem('sportsvault_state'); fetch('/api/auth/session', { method: 'DELETE' }).catch(() => {}); dispatch({ type: 'LOGOUT' }); }} title="Log out">🚪 Log out</button>}
             </div>
 
             {isOwn && (
+                <div className="glass-card no-hover" style={{ marginBottom: 16, borderColor: 'rgba(239,68,68,0.2)' }}>
+                    <h3 style={{ fontSize: '0.9375rem', marginBottom: 4, color: 'var(--text-primary)' }}>Account</h3>
+                    <p className="text-sm text-muted" style={{ marginBottom: 14 }}>
+                        Permanently delete your account and all data — games, history, ratings. This cannot be undone.
+                    </p>
+                    {!showDeleteConfirm ? (
+                        <button
+                            className="btn btn-sm"
+                            style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)' }}
+                            onClick={() => setShowDeleteConfirm(true)}
+                        >
+                            🗑 Delete my account
+                        </button>
+                    ) : (
+                        <div style={{ background: 'rgba(239,68,68,0.08)', borderRadius: 10, padding: '14px 16px', border: '1px solid rgba(239,68,68,0.25)' }}>
+                            <p style={{ fontSize: '0.875rem', color: '#ef4444', fontWeight: 600, marginBottom: 14 }}>
+                                Are you sure? All your data will be permanently deleted.
+                            </p>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button
+                                    className="btn btn-sm"
+                                    style={{ background: '#ef4444', color: '#fff', border: 'none', flex: 1 }}
+                                    disabled={deleteLoading}
+                                    onClick={async () => {
+                                        setDeleteLoading(true);
+                                        try {
+                                            const res = await fetch('/api/users/delete', { method: 'DELETE' });
+                                            if (res.ok) {
+                                                localStorage.removeItem('sportsvault_state');
+                                                dispatch({ type: 'LOGOUT' });
+                                            } else {
+                                                const d = await res.json();
+                                                setToast(d.error || 'Delete failed');
+                                                setShowDeleteConfirm(false);
+                                            }
+                                        } catch {
+                                            setToast('Delete failed — please try again');
+                                            setShowDeleteConfirm(false);
+                                        } finally {
+                                            setDeleteLoading(false);
+                                        }
+                                    }}
+                                >
+                                    {deleteLoading ? 'Deleting…' : 'Yes, delete everything'}
+                                </button>
+                                <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => setShowDeleteConfirm(false)}>
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {(isOwn || !isOwn) && (
                 <>
+                    {savedGames.length > 0 && (
+                        <div className="glass-card no-hover" style={{ marginBottom: 16 }}>
+                            <h3 style={{ fontSize: '1rem', marginBottom: 12 }}>📌 Active Games</h3>
+                            {historyLoading ? <p className="text-sm text-muted">Loading…</p> : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{savedGames.map((g, i) => <GameRow key={g.game_id || i} g={g} onClick={() => onViewGame?.(g.game_id)} />)}</div>
+                            )}
+                        </div>
+                    )}
                     <div className="glass-card no-hover" style={{ marginBottom: 16 }}>
-                        <h3 style={{ fontSize: '1rem', marginBottom: 12 }}>📌 Saved Games</h3>
-                        {historyLoading ? <p className="text-sm text-muted">Loading…</p> : savedGames.length === 0 ? <p className="text-sm text-muted">No active saved games. Games you create appear here instantly.</p> : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{savedGames.map((g, i) => <GameRow key={g.game_id || i} g={g} onClick={() => onViewGame?.(g.game_id)} />)}</div>
-                        )}
-                    </div>
-                    <div className="glass-card no-hover" style={{ marginBottom: 16 }}>
-                        <h3 style={{ fontSize: '1rem', marginBottom: 12 }}>🕒 Game History</h3>
-                        {historyLoading ? <p className="text-sm text-muted">Loading history…</p> : gameHistory.length === 0 ? <p className="text-sm text-muted">No past games yet. Games move here 24 hours after their scheduled time.</p> : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{gameHistory.map((g, i) => <GameRow key={g.game_id || i} g={g} onClick={() => onViewGame?.(g.game_id)} />)}</div>
-                        )}
+                        <h3 style={{ fontSize: '1rem', marginBottom: 12 }}>🕒 Match History</h3>
+                        {historyLoading
+                            ? <p className="text-sm text-muted">Loading…</p>
+                            : gameHistory.length === 0
+                                ? <p className="text-sm text-muted">{isOwn ? 'No past games yet.' : 'No match history.'}</p>
+                                : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{gameHistory.map((g, i) => <GameRow key={g.game_id || i} g={g} onClick={onViewGame ? () => onViewGame(g.game_id) : undefined} />)}</div>
+                        }
                     </div>
                 </>
             )}
