@@ -8,6 +8,7 @@
     "start": "next start -p 3005",
     "postinstall": "prisma generate",
     "mobile:sync": "CAPACITOR_LIVE_URL=http://localhost:3005 npx cap sync ios",
+    "mobile:prod": "CAPACITOR_LIVE_URL=https://sportsvault.co.in npx cap sync ios",
     "mobile:open": "npx cap open ios",
     "mobile:run": "CAPACITOR_LIVE_URL=http://localhost:3005 npx cap run ios"
   },
