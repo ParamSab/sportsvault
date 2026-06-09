@@ -3,6 +3,7 @@ import { getSupabase } from '@/lib/supabase';
 import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
 import { sessionOptions } from '@/lib/session';
+import { listLocalGames, saveLocalGame } from '@/lib/localGameStore';
 
 function supabaseRowToGame(g) {
     return {
@@ -168,7 +169,14 @@ export async function GET(req) {
         console.error('Supabase fallback GET exception:', supaErr.message);
     }
 
-    // Both failed — return error so the client keeps existing state
+    try {
+        const localGames = await listLocalGames({ userId, friendIds });
+        return Response.json({ games: localGames, localFallback: true });
+    } catch (localErr) {
+        console.error('Local game fallback GET error:', localErr.message);
+    }
+
+    // Both failed - return error so the client keeps existing state
     return Response.json({ error: 'Database unavailable' }, { status: 503 });
 }
 
@@ -293,6 +301,8 @@ export async function POST(req) {
     try {
         const supabase = getSupabase();
         if (!supabase) {
+            const localGame = await saveLocalGame(game, userId);
+            if (localGame) return Response.json({ game: localGame, localFallback: true });
             return Response.json({ error: 'No database available' }, { status: 503 });
         }
 
@@ -379,6 +389,12 @@ export async function POST(req) {
         return Response.json({ game: savedGame });
     } catch (supaErr) {
         console.error('Supabase fallback POST exception:', supaErr.message);
+        try {
+            const localGame = await saveLocalGame(game, userId);
+            if (localGame) return Response.json({ game: localGame, localFallback: true });
+        } catch (localErr) {
+            console.error('Local game fallback POST error:', localErr.message);
+        }
         return Response.json({ error: supaErr.message }, { status: 500 });
     }
 }

@@ -3,6 +3,8 @@ import bcrypt from 'bcryptjs';
 import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
 import { sessionOptions } from '@/lib/session';
+import { findLocalUserByEmail } from '@/lib/localUserStore';
+import { serializeUser } from '@/lib/auth';
 
 export async function POST(req) {
     try {
@@ -13,9 +15,15 @@ export async function POST(req) {
             return Response.json({ error: 'Email and password required' }, { status: 400 });
         }
 
-        const user = await prisma.user.findUnique({
-            where: { email },
-        });
+        let user = null;
+        try {
+            user = await prisma.user.findUnique({
+                where: { email },
+            });
+        } catch (prismaErr) {
+            console.error('Password login Prisma error, trying local fallback:', prismaErr.message);
+            user = await findLocalUserByEmail(email);
+        }
 
         if (!user || !user.password) {
             return Response.json({ error: 'Invalid email or password' }, { status: 401 });
@@ -30,14 +38,7 @@ export async function POST(req) {
         const cookieStore = await cookies();
         const session = await getIronSession(cookieStore, sessionOptions);
 
-        session.user = {
-            id: user.id,
-            dbId: user.id,
-            name: user.name,
-            email: user.email,
-            phone: user.phone,
-            photo: user.photo,
-        };
+        session.user = serializeUser(user);
         session.isLoaded = true;
 
         if (rememberMe) {
@@ -49,21 +50,7 @@ export async function POST(req) {
         await session.save();
 
         const frontendUser = {
-            id: user.id,
-            dbId: user.id,
-            name: user.name,
-            email: user.email,
-            phone: user.phone,
-            photo: user.photo,
-            location: user.location,
-            sports: Array.isArray(user.sports) ? user.sports : (typeof user.sports === 'string' ? JSON.parse(user.sports || '[]') : []),
-            positions: typeof user.positions === 'object' ? user.positions : (typeof user.positions === 'string' ? JSON.parse(user.positions || '{}') : {}),
-            ratings: typeof user.ratings === 'object' ? user.ratings : (typeof user.ratings === 'string' ? JSON.parse(user.ratings || '{}') : {}),
-            trustScore: user.trustScore,
-            gamesPlayed: user.gamesPlayed,
-            wins: user.wins,
-            losses: user.losses,
-            draws: user.draws,
+            ...session.user,
             joined: user.createdAt,
         };
 

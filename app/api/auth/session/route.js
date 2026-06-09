@@ -2,7 +2,6 @@ import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
 import { sessionOptions } from '@/lib/session';
 
-
 export async function GET() {
     try {
         const cookieStore = await cookies();
@@ -17,24 +16,8 @@ export async function GET() {
     }
 }
 
-export async function POST(req) {
-    try {
-        const cookieStore = await cookies();
-        const session = await getIronSession(cookieStore, sessionOptions);
-        const { user } = await req.json();
-        const parsedUser = {
-            ...user,
-            sports: Array.isArray(user.sports) ? user.sports : (typeof user.sports === 'string' ? JSON.parse(user.sports || '[]') : []),
-            positions: typeof user.positions === 'object' ? user.positions : (typeof user.positions === 'string' ? JSON.parse(user.positions || '{}') : {}),
-            ratings: typeof user.ratings === 'object' ? user.ratings : (typeof user.ratings === 'string' ? JSON.parse(user.ratings || '{}') : {}),
-        };
-        session.user = parsedUser;
-        await session.save();
-        return Response.json({ success: true });
-    } catch (err) {
-        console.error('Session POST error:', err);
-        return Response.json({ error: 'Failed to save session' }, { status: 500 });
-    }
+export async function POST() {
+    return Response.json({ error: 'Session creation must use a verified auth route.' }, { status: 405 });
 }
 
 export async function DELETE() {

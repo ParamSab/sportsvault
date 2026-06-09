@@ -90,9 +90,7 @@ export async function DELETE(req, props) {
         const cookieStore = await cookies();
         const session = await getIronSession(cookieStore, sessionOptions);
         
-        // Allow passing userId for API-only clients, but fallback to secure session
-        const { searchParams } = new URL(req.url);
-        const userId = searchParams.get('userId') || session.user?.dbId || session.user?.id;
+        const userId = session.user?.dbId || session.user?.id;
         const gameId = params.id;
 
         if (!userId) {

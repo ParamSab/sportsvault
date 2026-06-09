@@ -88,3 +88,21 @@ CREATE TABLE IF NOT EXISTS game_rsvps (
 
 CREATE INDEX IF NOT EXISTS idx_game_rsvps_game   ON game_rsvps (game_id);
 CREATE INDEX IF NOT EXISTS idx_game_rsvps_player ON game_rsvps (player_id);
+
+-- Friend requests / friendships fallback when Prisma is not available.
+CREATE TABLE IF NOT EXISTS friendships (
+  id         UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id    TEXT        NOT NULL,
+  friend_id  TEXT        NOT NULL,
+  status     TEXT        NOT NULL DEFAULT 'pending', -- pending | accepted
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT uq_friendship_pair UNIQUE (user_id, friend_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_friendships_user_status   ON friendships (user_id, status);
+CREATE INDEX IF NOT EXISTS idx_friendships_friend_status ON friendships (friend_id, status);
+
+CREATE OR REPLACE TRIGGER friendships_updated_at
+  BEFORE UPDATE ON friendships
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();

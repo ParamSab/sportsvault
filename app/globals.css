@@ -1256,6 +1256,283 @@ h3 { font-size: clamp(1.0625rem, 2.5vw, 1.25rem); }
   line-height: 1.6;
 }
 
+/* Toast notification */
+.confirm-celebration {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-toast) + 20);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  pointer-events: none;
+  background: radial-gradient(circle at center, rgba(15,23,42,0.28), rgba(15,23,42,0));
+  animation: confirmOverlay 2.6s ease forwards;
+}
+
+.confirm-scene {
+  position: relative;
+  width: min(440px, 82vw);
+  height: 180px;
+  border-radius: 18px;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02)),
+    linear-gradient(135deg, rgba(34,197,94,0.2), rgba(99,102,241,0.16));
+  border: 1px solid rgba(255,255,255,0.16);
+  box-shadow: 0 24px 80px rgba(0,0,0,0.45);
+}
+
+.confirm-scene::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 32px;
+  height: 2px;
+  background: rgba(255,255,255,0.24);
+}
+
+.confirm-copy {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 118px);
+  transform: translateX(-50%);
+  min-width: 220px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  text-align: center;
+  background: rgba(15,23,42,0.88);
+  border: 1px solid rgba(255,255,255,0.16);
+  box-shadow: 0 16px 40px rgba(0,0,0,0.35);
+  animation: confirmCopyPop 2.6s ease forwards;
+}
+
+.confirm-title {
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.confirm-subtitle {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  margin-top: 3px;
+}
+
+.confirm-ball {
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  z-index: 3;
+}
+
+.football-ball {
+  left: 28px;
+  bottom: 35px;
+  background:
+    radial-gradient(circle at 50% 50%, #111 0 18%, transparent 19%),
+    conic-gradient(from 18deg, #fff 0 13%, #111 13% 20%, #fff 20% 38%, #111 38% 45%, #fff 45% 63%, #111 63% 70%, #fff 70% 100%);
+  box-shadow: inset -4px -6px 0 rgba(0,0,0,0.12), 0 8px 14px rgba(0,0,0,0.24);
+  animation: footballRoll 1.55s cubic-bezier(.17,.84,.44,1) forwards;
+}
+
+.football-net {
+  position: absolute;
+  right: 34px;
+  bottom: 34px;
+  width: 112px;
+  height: 80px;
+  border: 5px solid rgba(255,255,255,0.86);
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.22) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.22) 1px, transparent 1px);
+  background-size: 18px 16px;
+  animation: netBounce 1.55s ease forwards;
+}
+
+.padel-glass {
+  position: absolute;
+  right: 42px;
+  top: 28px;
+  width: 112px;
+  height: 110px;
+  border: 2px solid rgba(125,211,252,0.7);
+  border-radius: 12px;
+  background:
+    linear-gradient(90deg, transparent 48%, rgba(125,211,252,0.34) 49% 51%, transparent 52%),
+    rgba(14,165,233,0.08);
+  animation: padelGlassGlow 1.8s ease forwards;
+}
+
+.padel-racket {
+  position: absolute;
+  left: 48px;
+  bottom: 34px;
+  width: 54px;
+  height: 70px;
+  border-radius: 50%;
+  border: 7px solid #f97316;
+  transform: rotate(-24deg);
+  transform-origin: 50% 90%;
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,0.35);
+  animation: padelSwing 1.1s ease forwards;
+}
+
+.padel-racket::after {
+  content: '';
+  position: absolute;
+  left: 19px;
+  bottom: -42px;
+  width: 12px;
+  height: 46px;
+  border-radius: 999px;
+  background: #f59e0b;
+}
+
+.padel-ball {
+  left: 104px;
+  bottom: 78px;
+  width: 24px;
+  height: 24px;
+  background: radial-gradient(circle at 35% 30%, #fef08a, #a3e635 62%, #65a30d);
+  box-shadow: 0 0 18px rgba(190,242,100,0.7);
+  animation: padelShot 1.55s cubic-bezier(.2,.9,.3,1) forwards;
+}
+
+.cricket-stumps {
+  position: absolute;
+  right: 54px;
+  bottom: 34px;
+  display: flex;
+  gap: 7px;
+  align-items: flex-end;
+  animation: stumpHit 1.55s ease forwards;
+}
+
+.cricket-stumps span {
+  display: block;
+  width: 9px;
+  height: 78px;
+  border-radius: 999px 999px 2px 2px;
+  background: #f8fafc;
+  box-shadow: 0 0 0 1px rgba(15,23,42,0.18);
+}
+
+.cricket-bat {
+  position: absolute;
+  left: 58px;
+  bottom: 32px;
+  width: 22px;
+  height: 92px;
+  border-radius: 8px 8px 4px 4px;
+  background: linear-gradient(90deg, #fde68a, #d97706);
+  transform: rotate(38deg);
+  transform-origin: 50% 92%;
+  animation: cricketSwing 1.05s ease forwards;
+}
+
+.cricket-bat::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: -34px;
+  width: 10px;
+  height: 42px;
+  border-radius: 999px;
+  background: #78350f;
+}
+
+.cricket-ball {
+  left: 104px;
+  bottom: 78px;
+  width: 22px;
+  height: 22px;
+  background: radial-gradient(circle at 35% 32%, #fecaca, #dc2626 62%, #7f1d1d);
+  box-shadow: 0 0 18px rgba(248,113,113,0.62);
+  animation: cricketDrive 1.55s cubic-bezier(.19,.92,.36,1) forwards;
+}
+
+@keyframes confirmOverlay {
+  0% { opacity: 0; transform: scale(0.98); }
+  12%, 78% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.02); }
+}
+
+@keyframes confirmCopyPop {
+  0%, 18% { opacity: 0; transform: translateX(-50%) translateY(12px) scale(0.94); }
+  32%, 82% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-4px) scale(0.98); }
+}
+
+@keyframes footballRoll {
+  0% { transform: translateX(0) rotate(0deg) scale(1); }
+  74% { transform: translateX(calc(min(440px, 82vw) - 176px)) rotate(760deg) scale(1); }
+  100% { transform: translateX(calc(min(440px, 82vw) - 150px)) translateY(-18px) rotate(920deg) scale(0.74); }
+}
+
+@keyframes netBounce {
+  0%, 64% { transform: scale(1); }
+  78% { transform: scale(1.04, 0.96); }
+  100% { transform: scale(1); }
+}
+
+@keyframes padelSwing {
+  0% { transform: rotate(-24deg); }
+  32% { transform: rotate(18deg); }
+  100% { transform: rotate(-6deg); }
+}
+
+@keyframes padelShot {
+  0% { transform: translate(0, 0) scale(1); }
+  56% { transform: translate(calc(min(440px, 82vw) - 204px), -50px) scale(0.92); }
+  76% { transform: translate(calc(min(440px, 82vw) - 168px), -22px) scale(0.82); }
+  100% { transform: translate(calc(min(440px, 82vw) - 190px), 18px) scale(0.72); }
+}
+
+@keyframes padelGlassGlow {
+  0%, 58% { box-shadow: none; }
+  72% { box-shadow: 0 0 32px rgba(125,211,252,0.6); }
+  100% { box-shadow: 0 0 12px rgba(125,211,252,0.28); }
+}
+
+@keyframes cricketSwing {
+  0% { transform: rotate(38deg); }
+  32% { transform: rotate(-32deg); }
+  100% { transform: rotate(-10deg); }
+}
+
+@keyframes cricketDrive {
+  0% { transform: translate(0, 0) scale(1); }
+  68% { transform: translate(calc(min(440px, 82vw) - 190px), -36px) scale(0.86); }
+  100% { transform: translate(calc(min(440px, 82vw) - 154px), -4px) scale(0.7); }
+}
+
+@keyframes stumpHit {
+  0%, 70% { transform: rotate(0deg); }
+  82% { transform: rotate(-2deg); }
+  100% { transform: rotate(0deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .confirm-celebration,
+  .confirm-copy,
+  .football-ball,
+  .football-net,
+  .padel-racket,
+  .padel-ball,
+  .padel-glass,
+  .cricket-bat,
+  .cricket-ball,
+  .cricket-stumps {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
 .toast {
   position: fixed;
   bottom: 88px;
@@ -1353,4 +1630,195 @@ h3 { font-size: clamp(1.0625rem, 2.5vw, 1.25rem); }
   .page-content { padding: 0; }
   body { background: #fff; color: #000; }
   .glass-card { background: #fff; border-color: #ddd; }
+}
+
+/* Stat bar */
+.welcome-banner {
+  position: relative;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 36px;
+  padding: 20px 22px;
+  background: rgba(17, 24, 39, 0.72);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  clear: both;
+  overflow: visible;
+}
+
+.welcome-banner-dismiss {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.welcome-banner-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding-right: 28px;
+}
+
+.welcome-banner-icon {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgba(99,102,241,0.16);
+  border: 1px solid rgba(99,102,241,0.3);
+  color: #a78bfa;
+  font-size: 0.8rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.welcome-banner-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.welcome-banner-title {
+  margin-bottom: 4px;
+  color: var(--text-primary);
+  font-size: 1.0625rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.welcome-banner-text {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+.welcome-banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.welcome-pill {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.welcome-pill-blue {
+  background: rgba(99,102,241,0.15);
+  border: 1px solid rgba(99,102,241,0.3);
+  color: #818cf8;
+}
+
+.welcome-pill-green {
+  background: rgba(34,197,94,0.15);
+  border: 1px solid rgba(34,197,94,0.3);
+  color: #22c55e;
+}
+
+.welcome-pill-orange {
+  background: rgba(249,115,22,0.15);
+  border: 1px solid rgba(249,115,22,0.3);
+  color: #f97316;
+}
+
+.stat-bar {
+  display: flex;
+  align-items: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  gap: 4px;
+}
+
+.welcome-banner + .stat-bar {
+  margin-top: 0;
+}
+
+@media (max-width: 520px) {
+  .welcome-banner {
+    padding: 16px;
+    margin-bottom: 24px;
+  }
+
+  .welcome-banner-content {
+    gap: 10px;
+    padding-right: 24px;
+  }
+
+  .welcome-banner-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 0.72rem;
+  }
+
+  .welcome-banner-actions {
+    gap: 6px;
+  }
+
+  .welcome-pill {
+    font-size: 0.7rem;
+  }
+
+  .stat-bar {
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .stat-item {
+    flex: 1 1 calc(50% - 10px);
+  }
+
+  .stat-divider {
+    display: none;
+  }
+}
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.stat-value {
+  font-size: 1.125rem;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--text-primary);
+}
+.stat-label {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stat-divider {
+  width: 1px;
+  height: 32px;
+  background: var(--border-color);
+  flex-shrink: 0;
+  margin: 0 4px;
 }

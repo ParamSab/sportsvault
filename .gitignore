@@ -27,6 +27,7 @@ public/swe-worker-*.js
 
 # debug
 npm-debug.log*
+tmp/
 
 # OS
 .DS_Store

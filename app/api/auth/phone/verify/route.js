@@ -3,26 +3,15 @@ import { getSupabase } from '@/lib/supabase';
 import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
 import { sessionOptions } from '@/lib/session';
-
-
-function normalizePhone(phone) {
-    const cleaned = phone.trim();
-    if (cleaned.startsWith('+')) return cleaned.replace(/\s/g, '');
-    const digits = cleaned.replace(/\D/g, '');
-    if (digits.length === 11 && digits.startsWith('0')) return `+91${digits.slice(1)}`;
-    if (digits.length === 10) return `+91${digits}`;
-    if (digits.length === 12 && digits.startsWith('91')) return `+${digits}`;
-    return null;
-}
+import { isDevOtpBypass, normalizePhone, serializeUser, setPendingVerifiedAuth } from '@/lib/auth';
+import { findLocalUserByPhone } from '@/lib/localUserStore';
 
 async function findUserByPhone(normalized) {
-    // Try Prisma first
     try {
         const user = await prisma.user.findUnique({ where: { phone: normalized } });
         if (user) return user;
     } catch (_) { /* fall through to Supabase */ }
 
-    // Supabase fallback
     try {
         const supabase = getSupabase();
         if (supabase) {
@@ -31,7 +20,7 @@ async function findUserByPhone(normalized) {
         }
     } catch (_) { /* ignore */ }
 
-    return null;
+    return findLocalUserByPhone(normalized);
 }
 
 export async function POST(req) {
@@ -42,18 +31,17 @@ export async function POST(req) {
         const normalized = normalizePhone(phone);
         if (!normalized) return Response.json({ error: 'Invalid phone number' }, { status: 400 });
 
-        const MASTER_BYPASS = '990770';
-
-        if (code !== MASTER_BYPASS) {
+        if (!isDevOtpBypass(code)) {
             const accountSid = process.env.TWILIO_ACCOUNT_SID;
             const authToken = process.env.TWILIO_AUTH_TOKEN;
             const serviceSid = process.env.TWILIO_VERIFY_SERVICE_SID;
-            
+
             if (!accountSid || !authToken || !serviceSid) {
                 return Response.json({ error: 'SMS service not configured' }, { status: 500 });
             }
 
-            const client = require('twilio')(accountSid, authToken);
+            const twilio = (await import('twilio')).default;
+            const client = twilio(accountSid, authToken);
             const verificationCheck = await client.verify.v2.services(serviceSid)
                 .verificationChecks
                 .create({ to: normalized, code });
@@ -72,27 +60,28 @@ export async function POST(req) {
             delete opts.cookieOptions.maxAge;
         }
         const session = await getIronSession(cookieStore, opts);
+        setPendingVerifiedAuth(session, { phone: normalized, rememberMe });
 
         if (user) {
+            const userData = serializeUser(user);
             if (!user.password) {
-                return Response.json({ exists: false, phone: normalized, existingProfile: user });
+                await session.save();
+                return Response.json({
+                    exists: false,
+                    phone: normalized,
+                    existingProfile: userData,
+                    needsPasswordSetup: true,
+                });
             }
 
-            const userData = {
-                ...user,
-                sports: Array.isArray(user.sports) ? user.sports : (typeof user.sports === 'string' ? JSON.parse(user.sports || '[]') : []),
-                positions: typeof user.positions === 'object' ? user.positions : (typeof user.positions === 'string' ? JSON.parse(user.positions || '{}') : {}),
-                ratings: typeof user.ratings === 'object' ? user.ratings : (typeof user.ratings === 'string' ? JSON.parse(user.ratings || '{}') : {}),
-                dbId: user.id,
-            };
-            delete userData.password;
             session.user = userData;
+            delete session.pendingVerifiedAuth;
             await session.save();
-            return Response.json({ user: userData, exists: true, needsPasswordSetup: !user.password });
+            return Response.json({ user: userData, exists: true, needsPasswordSetup: false });
         }
 
+        await session.save();
         return Response.json({ exists: false, phone: normalized });
-
     } catch (err) {
         console.error('[PHONE VERIFY ERROR]', err);
         return Response.json({ error: err.message || 'Verification failed' }, { status: 500 });

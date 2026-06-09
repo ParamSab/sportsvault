@@ -27,8 +27,11 @@ export async function POST(req) {
     });
     if (!game) return Response.json({ error: 'Game not found' }, { status: 404 });
 
-    // Check auth only for manual (non-approval-auto) calls
-    if (sessionUserId && type !== 'approval' && sessionUserId !== game.organizerId) {
+    if (!sessionUserId) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (sessionUserId !== game.organizerId) {
       return Response.json({ error: 'Forbidden' }, { status: 403 });
     }
 
