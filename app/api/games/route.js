@@ -153,12 +153,41 @@ export async function GET(req) {
                 const organizerMap = {};
                 (organizers || []).forEach(u => { organizerMap[u.id] = u; });
 
+                // Resolve RSVP player names from Supabase users table
+                const allRsvps = rsvps || [];
+                const playerIds = [...new Set(allRsvps.map(r => r.player_id))];
+                const playerMap = {};
+                if (playerIds.length) {
+                    const { data: sbPlayers } = await supabase
+                        .from('users')
+                        .select('id, name, photo, positions, ratings')
+                        .in('id', playerIds);
+                    (sbPlayers || []).forEach(p => { playerMap[p.id] = p; });
+                    // Fill in missing players from Prisma
+                    const missingIds = playerIds.filter(id => !playerMap[id]);
+                    if (missingIds.length) {
+                        try {
+                            const prismaPlayers = await prisma.user.findMany({
+                                where: { id: { in: missingIds } },
+                                select: { id: true, name: true, photo: true, positions: true, ratings: true },
+                            });
+                            prismaPlayers.forEach(p => { playerMap[p.id] = p; });
+                        } catch (_) {}
+                    }
+                }
+
                 const games = visible.map(g => ({
                     ...supabaseRowToGame(g),
                     organizer: organizerMap[g.organizer_id] || { id: g.organizer_id, name: '', photo: null },
-                    rsvps: (rsvps || [])
+                    rsvps: allRsvps
                         .filter(r => r.game_id === g.game_id)
-                        .map(r => ({ playerId: r.player_id, status: r.status, position: r.position || '', player: null })),
+                        .map(r => {
+                            const p = playerMap[r.player_id];
+                            return {
+                                playerId: r.player_id, status: r.status, position: r.position || '',
+                                player: p ? { id: p.id, name: p.name, photo: p.photo, positions: p.positions || {}, ratings: p.ratings || {} } : null,
+                            };
+                        }),
                 }));
 
                 return Response.json({ games });

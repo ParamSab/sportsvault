@@ -140,12 +140,37 @@ export async function GET(req) {
             (g.visibility === 'friends' && friendIds.includes(g.organizer_id))
         );
         const gameIds = visibleGames.map(g => g.game_id);
+        const organizerIds = [...new Set(visibleGames.map(g => g.organizer_id))];
         const [rsvpResult, orgResult] = await Promise.all([
             gameIds.length ? supabase.from('game_rsvps').select('*').in('game_id', gameIds) : Promise.resolve({ data: [] }),
-            visibleGames.length ? supabase.from('users').select('id, name, photo').in('id', [...new Set(visibleGames.map(g => g.organizer_id))]) : Promise.resolve({ data: [] }),
+            organizerIds.length ? supabase.from('users').select('id, name, photo').in('id', organizerIds) : Promise.resolve({ data: [] }),
         ]);
         const orgMap = {};
         (orgResult.data || []).forEach(u => { orgMap[u.id] = u; });
+
+        // Resolve RSVP player names from both Supabase users and Prisma User tables
+        const allRsvps = rsvpResult.data || [];
+        const playerIds = [...new Set(allRsvps.map(r => r.player_id))];
+        const playerMap = {};
+        if (playerIds.length) {
+            const { data: sbPlayers } = await supabase
+                .from('users')
+                .select('id, name, photo, positions, ratings')
+                .in('id', playerIds);
+            (sbPlayers || []).forEach(p => { playerMap[p.id] = p; });
+            // Fill in missing players from Prisma
+            const missingIds = playerIds.filter(id => !playerMap[id]);
+            if (missingIds.length) {
+                try {
+                    const prismaPlayers = await prisma.user.findMany({
+                        where: { id: { in: missingIds } },
+                        select: { id: true, name: true, photo: true, positions: true, ratings: true },
+                    });
+                    prismaPlayers.forEach(p => { playerMap[p.id] = p; });
+                } catch (_) {}
+            }
+        }
+
         const games = visibleGames.map(g => ({
             id: g.game_id, title: g.title, sport: g.sport, format: g.format || '',
             date: g.game_date, time: g.game_time, duration: g.duration || 90,
@@ -154,9 +179,13 @@ export async function GET(req) {
             status: g.status, visibility: g.visibility || 'public', approvalRequired: !!g.approval_required,
             price: g.price || 0, gender: g.gender || 'mixed', organizerId: g.organizer_id,
             organizer: orgMap[g.organizer_id] || { id: g.organizer_id, name: '', photo: null },
-            rsvps: (rsvpResult.data || []).filter(r => r.game_id === g.game_id).map(r => ({
-                playerId: r.player_id, status: r.status, position: r.position || '', player: null,
-            })),
+            rsvps: allRsvps.filter(r => r.game_id === g.game_id).map(r => {
+                const p = playerMap[r.player_id];
+                return {
+                    playerId: r.player_id, status: r.status, position: r.position || '',
+                    player: p ? { id: p.id, name: p.name, photo: p.photo, positions: safeParse(p.positions, {}), ratings: safeParse(p.ratings, {}) } : null,
+                };
+            }),
             createdAt: g.created_at,
         }));
 

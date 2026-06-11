@@ -70,49 +70,42 @@ export default function CreateGamePage({ onComplete }) {
         if (validate(step)) setStep(s => s + 1);
     };
 
-    const handleCreate = async () => {
-        const tempId = `g${Date.now()}`;
-        const newGame = {
-            ...game,
-            id: tempId,
-            organizer: state.currentUser?.id || 'current',
-            rsvps: [{
-                playerId: state.currentUser?.id || 'current',
-                status: 'yes',
-                position: state.currentUser?.positions?.[game.sport] || 'Unknown',
-            }],
-            status: 'open',
-        };
+    const [createError, setCreateError] = useState('');
 
-        // Optimized for persistence
+    const handleCreate = async () => {
+        setCreateError('');
         try {
+            const newGame = {
+                ...game,
+                id: `g${Date.now()}`,
+                organizer: state.currentUser?.id || 'current',
+                rsvps: [{
+                    playerId: state.currentUser?.id || 'current',
+                    status: 'yes',
+                    position: state.currentUser?.positions?.[game.sport] || 'Unknown',
+                }],
+                status: 'open',
+            };
+
             const res = await fetch('/api/games', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    game: {
-                        ...newGame,
-                        amenities: JSON.stringify(newGame.amenities)
-                    }, 
-                    userId: state.currentUser?.dbId || state.currentUser?.id
+                body: JSON.stringify({
+                    game: { ...newGame, amenities: JSON.stringify(newGame.amenities) },
+                    userId: state.currentUser?.dbId || state.currentUser?.id,
                 }),
             });
             const data = await res.json();
-            if (data.game) {
-                // If saved successfully, use the real DB record which has UUIDs
-                dispatch({ type: 'CREATE_GAME', payload: data.game });
-                setCreatedGame(data.game);
-            } else {
-                // Fallback to local if API failed but we want to show it (at least temporarily)
-                dispatch({ type: 'CREATE_GAME', payload: newGame });
-                setCreatedGame(newGame);
+            if (!res.ok || !data.game) {
+                setCreateError(data.error || 'Failed to create game. Please try again.');
+                return;
             }
+            dispatch({ type: 'CREATE_GAME', payload: data.game });
+            setCreatedGame(data.game);
             setIsSuccess(true);
         } catch (err) {
             console.error('Failed to save game to DB:', err);
-            dispatch({ type: 'CREATE_GAME', payload: newGame });
-            setCreatedGame(newGame);
-            setIsSuccess(true);
+            setCreateError('Network error. Check your connection and try again.');
         }
     };
 
@@ -560,9 +553,12 @@ export default function CreateGamePage({ onComplete }) {
                             Continue →
                         </button>
                     ) : (
-                        <button className={`btn btn-${game.sport || 'primary'}`} style={{ flex: 1 }} onClick={handleCreate}>
-                            Create Game 🚀
-                        </button>
+                        <>
+                            {createError && <p style={{ color: '#ef4444', fontSize: '0.8rem', marginBottom: 8, textAlign: 'center' }}>{createError}</p>}
+                            <button className={`btn btn-${game.sport || 'primary'}`} style={{ flex: 1 }} onClick={handleCreate}>
+                                Create Game 🚀
+                            </button>
+                        </>
                     )}
                 </div>
             )}
