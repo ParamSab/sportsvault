@@ -55,10 +55,8 @@
 	<string>SportsVault needs access to your photos to let you choose a profile picture.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>SportsVault can save game photos to your library.</string>
-	<!-- Push notifications -->
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>remote-notification</string>
-	</array>
+	<!-- App uses only standard HTTPS encryption — exempt from export compliance -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>

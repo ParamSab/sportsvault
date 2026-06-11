@@ -44,23 +44,33 @@ export default function TermsPage() {
                 You grant SportsVault a non-exclusive licence to display your profile photo and game information within the app. You retain ownership of your content.
             </Section>
 
-            <Section title="8. Termination">
+            <Section title="8. User-generated content & moderation">
+                There is zero tolerance for objectionable content or abusive behaviour on SportsVault. Comments ("thoughts"), ratings, and profiles are user-generated. You can:
+                <ul>
+                    <li><strong>Report</strong> any comment using the ⚑ Report button — we review all reports and remove violating content within 24 hours.</li>
+                    <li><strong>Remove</strong> any comment left on your own profile at any time.</li>
+                    <li><strong>Block</strong> any user from their profile — blocked users' content is hidden from you and they cannot interact with you.</li>
+                </ul>
+                Users who post objectionable content or harass others will have their content removed and may be permanently banned.
+            </Section>
+
+            <Section title="9. Termination">
                 We may suspend or delete accounts that violate these terms. You may delete your account at any time from the Profile screen.
             </Section>
 
-            <Section title="9. Disclaimers">
+            <Section title="10. Disclaimers">
                 SportsVault is provided "as is". We do not guarantee uptime, the accuracy of player information, or the safety of any game organised through the platform.
             </Section>
 
-            <Section title="10. Limitation of liability">
+            <Section title="11. Limitation of liability">
                 To the maximum extent permitted by law, SportsVault is not liable for any indirect, incidental, or consequential damages arising from your use of the app.
             </Section>
 
-            <Section title="11. Governing law">
+            <Section title="12. Governing law">
                 These terms are governed by the laws of India.
             </Section>
 
-            <Section title="12. Contact">
+            <Section title="13. Contact">
                 Questions? Email <a href="mailto:support@sportsvault.app" style={{ color: '#6366f1' }}>support@sportsvault.app</a>
             </Section>
         </div>

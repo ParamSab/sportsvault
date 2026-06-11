@@ -22,6 +22,14 @@ jobs:
           cache: 'npm'
       - run: npm install --global vercel@latest
       - run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Sync database schema to Supabase
+        run: |
+          set -a; source .vercel/.env.production.local; set +a
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::warning::DATABASE_URL not found in Vercel env — skipping schema sync"
+          else
+            npx prisma@5 db push --skip-generate
+          fi
       - run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
       - name: Deploy
         id: deploy

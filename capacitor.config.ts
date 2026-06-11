@@ -45,9 +45,6 @@ const config: CapacitorConfig = {
       style: 'dark',
       backgroundColor: '#070b15',
     },
-    PushNotifications: {
-      presentationOptions: ['badge', 'sound', 'alert'],
-    },
   },
 };
 

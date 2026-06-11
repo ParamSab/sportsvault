@@ -23,6 +23,8 @@ export async function DELETE() {
                 prisma.friend.deleteMany({ where: { OR: [{ userId }, { friendUserId: userId }] } }),
                 prisma.friendInvite.deleteMany({ where: { OR: [{ senderId: userId }, { friendId: userId }] } }),
                 prisma.friendship.deleteMany({ where: { OR: [{ userId }, { friendId: userId }] } }),
+                prisma.block.deleteMany({ where: { OR: [{ blockerId: userId }, { blockedId: userId }] } }),
+                prisma.report.deleteMany({ where: { reporterId: userId } }),
                 prisma.user.delete({ where: { id: userId } }),
             ]);
             deleted = true;
