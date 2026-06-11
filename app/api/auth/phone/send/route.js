@@ -39,8 +39,14 @@ export async function POST(req) {
 
         // Twilio implementation
         if (!accountSid || !authToken || !serviceSid) {
-            console.log(`[AUTH DEV] Twilio not configured — use bypass code 990770 for ${normalized}`);
-            return Response.json({ success: true, devMode: true, devCode: '990770' });
+            // Dev-only fallback. In production a missing Twilio config is a hard error —
+            // never expose a bypass code.
+            if (process.env.NODE_ENV !== 'production' && process.env.ALLOW_DEV_OTP_BYPASS === 'true') {
+                const devCode = process.env.DEV_OTP_BYPASS_CODE;
+                console.log(`[AUTH DEV] Twilio not configured — use bypass code ${devCode} for ${normalized}`);
+                return Response.json({ success: true, devMode: true, devCode });
+            }
+            return Response.json({ error: 'SMS service not configured' }, { status: 500 });
         }
 
         const client = require('twilio')(accountSid, authToken);
