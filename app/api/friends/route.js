@@ -141,11 +141,22 @@ export async function POST(req) {
 
             if (!finalFriendId) return Response.json({ error: 'Friend ID or contact details required' }, { status: 400 });
 
-            const friendship = await prisma.friendship.upsert({
-                where: { userId_friendId: { userId, friendId: finalFriendId } },
-                update: { status: 'accepted' },
-                create: { userId, friendId: finalFriendId, status: 'accepted' }
-            });
+            let friendship;
+            try {
+                friendship = await prisma.friendship.upsert({
+                    where: { userId_friendId: { userId, friendId: finalFriendId } },
+                    update: { status: 'accepted' },
+                    create: { userId, friendId: finalFriendId, status: 'accepted' }
+                });
+            } catch (prismaFriendErr) {
+                console.error('[friends POST] Prisma friendship error, falling back to Supabase:', prismaFriendErr.message);
+                const supabase = getSupabase();
+                if (!supabase) return Response.json({ error: prismaFriendErr.message }, { status: 500 });
+                const { error: sbErr } = await supabase
+                    .from('friendships')
+                    .upsert({ user_id: userId, friend_id: finalFriendId, status: 'accepted' }, { onConflict: 'user_id,friend_id' });
+                if (sbErr) return Response.json({ error: sbErr.message }, { status: 500 });
+            }
 
             try {
                 await prisma.notification.create({

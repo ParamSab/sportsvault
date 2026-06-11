@@ -167,6 +167,31 @@ export async function POST(req) {
         session.user = serialized;
         delete session.pendingVerifiedAuth;
         await session.save();
+
+        // Sync to Prisma so search and friends features work (fire-and-forget)
+        prisma.user.upsert({
+            where: { id: userData.id },
+            create: {
+                id: userData.id,
+                name: userData.name || 'Player',
+                email: userData.email || null,
+                phone: userData.phone || null,
+                photo: userData.photo || null,
+                location: userData.location || null,
+                sports: typeof userData.sports === 'string' ? userData.sports : JSON.stringify(userData.sports || []),
+                positions: typeof userData.positions === 'string' ? userData.positions : JSON.stringify(userData.positions || {}),
+            },
+            update: {
+                name: userData.name || 'Player',
+                email: userData.email || null,
+                phone: userData.phone || null,
+                photo: userData.photo || null,
+                location: userData.location || null,
+                sports: typeof userData.sports === 'string' ? userData.sports : JSON.stringify(userData.sports || []),
+                positions: typeof userData.positions === 'string' ? userData.positions : JSON.stringify(userData.positions || {}),
+            },
+        }).catch(e => console.error('[users POST] Prisma sync error (non-fatal):', e.message));
+
         return Response.json({ user: serialized });
     } catch (err) {
         console.error('POST /api/users error:', err.message);
@@ -260,17 +285,37 @@ export async function GET(req) {
 
         if (!q || q.length < 2) return Response.json({ users: [] });
 
-        const users = await prisma.user.findMany({
-            where: {
-                OR: [
-                    { name: { contains: q, mode: 'insensitive' } },
-                    { email: { contains: q, mode: 'insensitive' } },
-                    { phone: { contains: q } },
-                ],
-            },
-            take: 10,
-            select: { id: true, name: true, email: true, phone: true, photo: true, location: true },
-        });
+        let users = [];
+        try {
+            users = await prisma.user.findMany({
+                where: {
+                    OR: [
+                        { name: { contains: q, mode: 'insensitive' } },
+                        { email: { contains: q, mode: 'insensitive' } },
+                        { phone: { contains: q } },
+                    ],
+                },
+                take: 10,
+                select: { id: true, name: true, email: true, phone: true, photo: true, location: true },
+            });
+        } catch (_) {}
+
+        // Also search Supabase users table (catches users created via the Supabase fallback path)
+        try {
+            const supabase = getSupabase();
+            if (supabase && users.length < 10) {
+                const { data: sbUsers } = await supabase
+                    .from('users')
+                    .select('id, name, email, phone, photo, location')
+                    .or(`name.ilike.%${q}%,phone.like.%${q}%`)
+                    .limit(10 - users.length);
+                if (sbUsers?.length) {
+                    const existingIds = new Set(users.map(u => u.id));
+                    users = [...users, ...sbUsers.filter(u => !existingIds.has(u.id))];
+                }
+            }
+        } catch (_) {}
+
         return Response.json({ users });
     } catch (err) {
         return Response.json({ users: [] });
