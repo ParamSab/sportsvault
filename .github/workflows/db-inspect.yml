@@ -1,0 +1,26 @@
+name: Inspect Production DB
+
+on:
+  workflow_dispatch:
+
+jobs:
+  inspect:
+    name: List tables and row counts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm install --global vercel@latest
+      - run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Inspect schema
+        run: |
+          set -a; source .vercel/.env.production.local; set +a
+          # Use the session pooler for direct SQL
+          DB="${DATABASE_URL/:6543\//:5432/}"
+          DB="${DB/?pgbouncer=true/}"
+          echo "=== Tables in public schema ==="
+          psql "$DB" -t -c "SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name;"
+          echo "=== Row counts ==="
+          psql "$DB" -t -c "
+            SELECT relname AS table, n_live_tup AS approx_rows
+            FROM pg_stat_user_tables
+            ORDER BY relname;"
