@@ -751,7 +751,7 @@ export default function AuthPage() {
                                     </div>
                                     <button
                                         onClick={() => {
-                                            const c = devCode || '990770';
+                                            const c = devCode;
                                             setOtp(c.split(''));
                                         }}
                                         style={{
@@ -763,7 +763,7 @@ export default function AuthPage() {
                                             cursor: 'pointer', textAlign: 'center',
                                         }}
                                     >
-                                        {devCode || '990770'}
+                                        {devCode}
                                     </button>
                                 </div>
                             )}
@@ -824,10 +824,10 @@ export default function AuthPage() {
                                         ⚡ Dev Mode — tap to auto-fill
                                     </div>
                                     <button
-                                        onClick={() => setOtp((devCode || '990770').split(''))}
+                                        onClick={() => setOtp((devCode).split(''))}
                                         style={{ display: 'block', width: '100%', fontSize: '2rem', fontWeight: 800, letterSpacing: '0.35em', color: '#fbbf24', background: 'rgba(251,191,36,0.1)', border: '2px dashed rgba(251,191,36,0.4)', borderRadius: 10, padding: '12px 0', cursor: 'pointer', textAlign: 'center' }}
                                     >
-                                        {devCode || '990770'}
+                                        {devCode}
                                     </button>
                                 </div>
                             )}

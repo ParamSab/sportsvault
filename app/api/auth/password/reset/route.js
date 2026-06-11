@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
 import { sessionOptions } from '@/lib/session';
+import { isDevOtpBypass } from '@/lib/auth';
 
 function normalizePhone(phone) {
     const cleaned = phone.trim();
@@ -43,9 +44,8 @@ export async function POST(req) {
         const normalized = normalizePhone(phone);
         if (!normalized) return Response.json({ error: 'Invalid phone number.' }, { status: 400 });
 
-        // Verify the SMS code (same logic as phone/verify, incl. dev bypass)
-        const MASTER_BYPASS = '990770';
-        if (code !== MASTER_BYPASS) {
+        // Verify the SMS code (same logic as phone/verify, incl. env-gated dev bypass)
+        if (!isDevOtpBypass(code)) {
             const accountSid = process.env.TWILIO_ACCOUNT_SID;
             const authToken = process.env.TWILIO_AUTH_TOKEN;
             const serviceSid = process.env.TWILIO_VERIFY_SERVICE_SID;

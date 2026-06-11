@@ -3,8 +3,7 @@ import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
 import { sessionOptions } from '@/lib/session';
 import { getSupabase } from '@/lib/supabase';
-
-const MASTER_BYPASS = '990770';
+import { isDevOtpBypass } from '@/lib/auth';
 
 export async function POST(req) {
     try {
@@ -22,7 +21,7 @@ export async function POST(req) {
         }
         const session = await getIronSession(cookieStore, opts);
 
-        if (code !== MASTER_BYPASS) {
+        if (!isDevOtpBypass(code)) {
             // 1. Check session-stored OTP (works without DB)
             const pending = session.pendingOtp;
             let verified = false;
