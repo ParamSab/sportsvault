@@ -243,8 +243,12 @@ export async function PATCH(req) {
             console.error('PATCH /api/users Prisma error:', prismaErr.message);
             // Supabase fallback
             const supabase = getSupabase();
-            if (supabase) {
-                await supabase.from('users').update(updateData).eq('id', userId);
+            if (!supabase) {
+                return Response.json({ error: 'Database unavailable' }, { status: 503 });
+            }
+            const { error: sbErr } = await supabase.from('users').update(updateData).eq('id', userId);
+            if (sbErr) {
+                return Response.json({ error: 'Database unavailable' }, { status: 503 });
             }
             return Response.json({ success: true });
         }

@@ -1,0 +1,48 @@
+name: Verify Production
+
+on:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    name: Smoke-test live site
+    runs-on: ubuntu-latest
+    steps:
+      - name: Homepage loads
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" -L https://sportsvault.co.in/)
+          echo "GET / -> $code"
+          [ "$code" = "200" ] || exit 1
+
+      - name: Privacy and Terms pages load
+        run: |
+          p=$(curl -s -o /dev/null -w "%{http_code}" -L https://sportsvault.co.in/privacy)
+          t=$(curl -s -o /dev/null -w "%{http_code}" -L https://sportsvault.co.in/terms)
+          echo "GET /privacy -> $p, GET /terms -> $t"
+          [ "$p" = "200" ] && [ "$t" = "200" ] || exit 1
+
+      - name: Session API responds (no DB needed)
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" -L https://sportsvault.co.in/api/auth/session)
+          echo "GET /api/auth/session -> $code"
+          [ "$code" = "200" ] || exit 1
+
+      - name: Database connectivity (init API hits Supabase Postgres)
+        run: |
+          body=$(curl -s -L -w "\nHTTP_CODE:%{http_code}" https://sportsvault.co.in/api/init)
+          code=$(echo "$body" | grep -o 'HTTP_CODE:[0-9]*' | cut -d: -f2)
+          echo "GET /api/init -> $code"
+          echo "$body" | head -c 500
+          # 200 = DB connected; 503 = DB unreachable / env vars missing
+          [ "$code" = "200" ] || { echo "::error::Database not reachable from production — check DATABASE_URL in Vercel env vars"; exit 1; }
+
+      - name: Delete-account API rejects unauthenticated (expects 401)
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE -L https://sportsvault.co.in/api/users/delete)
+          echo "DELETE /api/users/delete -> $code"
+          [ "$code" = "401" ] || exit 1
+
+      - name: List configured Vercel env var names (values hidden)
+        run: |
+          npm install --global vercel@latest >/dev/null 2>&1
+          vercel env ls production --token=${{ secrets.VERCEL_TOKEN }} 2>&1 | head -40

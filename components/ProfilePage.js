@@ -49,6 +49,9 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
     const [toast, setToast] = useState('');
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [deleteLoading, setDeleteLoading] = useState(false);
+    const [dbThoughts, setDbThoughts] = useState(null); // null = not loaded yet
+    const [isBlocked, setIsBlocked] = useState(false);
+    const [blockLoading, setBlockLoading] = useState(false);
 
     const player = isOwn
         ? (state.currentUser || getPlayer('p1'))
@@ -76,6 +79,22 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
     // Intentionally omit state.players — including it causes an infinite re-fetch loop.
     // playerId/isOwn are the only values that should trigger a re-fetch.
     }, [playerId, isOwn]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Load persisted thoughts + block status for this profile
+    useEffect(() => {
+        const uid = player?.dbId || player?.id;
+        if (!uid || String(uid).startsWith('p')) return; // skip mock players
+        fetch(`/api/thoughts?userId=${uid}`)
+            .then(r => r.json())
+            .then(data => { if (Array.isArray(data.thoughts)) setDbThoughts(data.thoughts); })
+            .catch(() => {});
+        if (!isOwn && state.isAuthenticated) {
+            fetch('/api/moderation')
+                .then(r => r.json())
+                .then(data => setIsBlocked((data.blocked || []).some(b => String(b) === String(uid))))
+                .catch(() => {});
+        }
+    }, [player?.dbId, player?.id, isOwn, state.isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Fetch game history — works for own profile AND other players
     useEffect(() => {
@@ -198,10 +217,78 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
         setTimeout(() => setToast(''), 3000);
     };
 
-    const handleAddThought = () => {
+    const handleAddThought = async () => {
         if (!thoughtText.trim()) return;
-        dispatch({ type: 'ADD_THOUGHT', payload: { playerId: player.id, thought: { from: state.currentUser?.id || 'current', text: thoughtText, date: new Date().toISOString().split('T')[0] } } });
+        const text = thoughtText.trim();
         setThoughtText('');
+        try {
+            const res = await fetch('/api/thoughts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ toId: player.dbId || player.id, text }),
+            });
+            const data = await res.json();
+            if (data.thought) {
+                setDbThoughts(prev => [data.thought, ...(prev || [])]);
+                setToast('Thought posted');
+            } else {
+                setToast(data.error || 'Could not post thought');
+            }
+        } catch (_) {
+            setToast('Could not post thought');
+        }
+        setTimeout(() => setToast(''), 3000);
+    };
+
+    const handleDeleteThought = async (thoughtId) => {
+        try {
+            const res = await fetch(`/api/thoughts?id=${thoughtId}`, { method: 'DELETE' });
+            if (res.ok) {
+                setDbThoughts(prev => (prev || []).filter(t => t.id !== thoughtId));
+                setToast('Thought removed');
+            } else {
+                setToast('Could not remove thought');
+            }
+        } catch (_) {
+            setToast('Could not remove thought');
+        }
+        setTimeout(() => setToast(''), 3000);
+    };
+
+    const handleReportThought = async (thoughtId) => {
+        try {
+            await fetch('/api/moderation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'report', targetType: 'thought', targetId: thoughtId }),
+            });
+            setToast('Reported — we review all reports within 24 hours');
+        } catch (_) {
+            setToast('Could not submit report');
+        }
+        setTimeout(() => setToast(''), 3000);
+    };
+
+    const handleToggleBlock = async () => {
+        setBlockLoading(true);
+        try {
+            const res = await fetch('/api/moderation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: isBlocked ? 'unblock' : 'block', targetUserId: player.dbId || player.id }),
+            });
+            if (res.ok) {
+                if (!isBlocked) dispatch({ type: 'REMOVE_FRIEND', payload: player.id });
+                setIsBlocked(!isBlocked);
+                setToast(isBlocked ? 'User unblocked' : 'User blocked — their content is now hidden');
+            } else {
+                setToast('Something went wrong');
+            }
+        } catch (_) {
+            setToast('Something went wrong');
+        }
+        setBlockLoading(false);
+        setTimeout(() => setToast(''), 3000);
     };
 
     return (
@@ -227,14 +314,24 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
                         {sports.map(s => <span key={s} className={`sport-badge ${s}`}>{SPORTS[s]?.emoji}</span>)}
                     </div>
                     {!isOwn && state.isAuthenticated && (
-                        <div style={{ marginBottom: 16 }}>
+                        <div style={{ marginBottom: 16, display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+                            {!isBlocked && (
+                                <button
+                                    className={`btn btn-sm ${isFriend ? 'btn-outline' : isPendingSent ? 'btn-ghost' : 'btn-primary'}`}
+                                    onClick={handleToggleFriend}
+                                    disabled={friendLoading}
+                                    style={{ minWidth: 130, opacity: isPendingSent ? 0.85 : 1 }}
+                                >
+                                    {friendLoading ? '…' : isFriend ? '✓ Friends' : isPendingSent ? '⏳ Request Sent' : '+ Add Friend'}
+                                </button>
+                            )}
                             <button
-                                className={`btn btn-sm ${isFriend ? 'btn-outline' : isPendingSent ? 'btn-ghost' : 'btn-primary'}`}
-                                onClick={handleToggleFriend}
-                                disabled={friendLoading}
-                                style={{ minWidth: 130, opacity: isPendingSent ? 0.85 : 1 }}
+                                className="btn btn-sm btn-ghost"
+                                onClick={handleToggleBlock}
+                                disabled={blockLoading}
+                                style={{ color: isBlocked ? 'var(--text-secondary)' : 'var(--danger)', fontSize: '0.75rem' }}
                             >
-                                {friendLoading ? '…' : isFriend ? '✓ Friends' : isPendingSent ? '⏳ Request Sent' : '+ Add Friend'}
+                                {blockLoading ? '…' : isBlocked ? 'Unblock user' : '🚫 Block'}
                             </button>
                         </div>
                     )}
@@ -300,25 +397,40 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
 
             <div className="glass-card no-hover" style={{ marginBottom: 16 }}>
                 <h3 style={{ fontSize: '1rem', marginBottom: 12 }}>💬 Written Thoughts</h3>
-                {thoughts.length === 0 ? <p className="text-sm text-muted">No thoughts yet.</p> : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                        {thoughts.map((t, i) => {
-                            const from = getPlayer(t.from) || state.currentUser;
-                            return (
-                                <div key={i} style={{ background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', padding: 12 }}>
-                                    <p className="text-sm" style={{ marginBottom: 8 }}>"{t.text}"</p>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>— {t.fromName || from?.name || 'Unknown'}</span>
-                                        <span className="text-xs text-muted">{t.date}</span>
+                {(() => {
+                    const displayThoughts = dbThoughts !== null ? dbThoughts : thoughts;
+                    const myId = String(state.currentUser?.dbId || state.currentUser?.id || '');
+                    if (displayThoughts.length === 0) return <p className="text-sm text-muted">No thoughts yet.</p>;
+                    return (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                            {displayThoughts.map((t, i) => {
+                                const from = getPlayer(t.from) || state.currentUser;
+                                const canDelete = t.id && state.isAuthenticated && (isOwn || String(t.from) === myId);
+                                const canReport = t.id && state.isAuthenticated && String(t.from) !== myId;
+                                return (
+                                    <div key={t.id || i} style={{ background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', padding: 12 }}>
+                                        <p className="text-sm" style={{ marginBottom: 8 }}>"{t.text}"</p>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>— {t.fromName || from?.name || 'Unknown'}</span>
+                                            <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                <span className="text-xs text-muted">{t.date}</span>
+                                                {canReport && (
+                                                    <button onClick={() => handleReportThought(t.id)} title="Report this comment" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.7rem', color: 'var(--text-muted)', padding: 0 }}>⚑ Report</button>
+                                                )}
+                                                {canDelete && (
+                                                    <button onClick={() => handleDeleteThought(t.id)} title="Remove this comment" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.7rem', color: 'var(--danger)', padding: 0 }}>✕ Remove</button>
+                                                )}
+                                            </span>
+                                        </div>
                                     </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
-                {!isOwn && state.isAuthenticated && (
+                                );
+                            })}
+                        </div>
+                    );
+                })()}
+                {!isOwn && state.isAuthenticated && !isBlocked && (
                     <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-                        <input type="text" placeholder="Leave a thought..." value={thoughtText} onChange={e => setThoughtText(e.target.value)} style={{ flex: 1, fontSize: '0.8125rem', padding: '10px 14px' }} />
+                        <input type="text" placeholder="Leave a thought..." value={thoughtText} onChange={e => setThoughtText(e.target.value)} maxLength={500} style={{ flex: 1, fontSize: '0.8125rem', padding: '10px 14px' }} />
                         <button className={`btn btn-sm btn-${currentSport}`} onClick={handleAddThought} disabled={!thoughtText.trim()}>Send</button>
                     </div>
                 )}

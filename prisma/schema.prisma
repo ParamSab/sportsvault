@@ -123,6 +123,30 @@ model Thought {
   @@index([fromId]) // thoughtsSent lookup
 }
 
+// UGC moderation (App Store guideline 1.2): users can block abusive users
+model Block {
+  id        String   @id @default(uuid())
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+
+  @@unique([blockerId, blockedId])
+  @@index([blockerId])
+}
+
+// UGC moderation: reports of objectionable content, reviewed by the operator
+model Report {
+  id         String   @id @default(uuid())
+  reporterId String
+  targetType String // 'thought' | 'user'
+  targetId   String
+  reason     String?
+  status     String   @default("open") // open | resolved
+  createdAt  DateTime @default(now())
+
+  @@index([status])
+}
+
 model Game {
   id               String  @id @default(uuid())
   title            String
