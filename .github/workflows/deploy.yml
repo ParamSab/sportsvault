@@ -22,20 +22,23 @@ jobs:
           cache: 'npm'
       - run: npm install --global vercel@latest
       - run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
-      - name: Sync database schema to Supabase
+      - name: Apply database migrations
         timeout-minutes: 5
         run: |
           set -a; source .vercel/.env.production.local; set +a
           if [ -z "$DATABASE_URL" ]; then
-            echo "::warning::DATABASE_URL not found in Vercel env — skipping schema sync"
+            echo "::warning::DATABASE_URL not found in Vercel env — skipping migrations"
             exit 0
           fi
-          # prisma db push hangs through PgBouncer transaction pooling (port 6543).
-          # Switch to Supabase's session pooler on port 5432 for schema changes.
-          export DATABASE_URL="${DATABASE_URL/:6543\//:5432/}"
-          export DATABASE_URL="${DATABASE_URL/?pgbouncer=true/}"
-          npx --yes prisma@5 db push --skip-generate \
-            || echo "::warning::Schema sync failed — apply prisma/schema.prisma manually"
+          # Targeted idempotent SQL via the session pooler (port 5432).
+          # `prisma db push` is forbidden on this DB: it would drop the live
+          # snake_case Supabase-fallback tables (users, saved_games, game_rsvps).
+          DB="${DATABASE_URL/:6543\//:5432/}"
+          DB="${DB/?pgbouncer=true/}"
+          for f in prisma/manual-migrations/*.sql; do
+            echo "Applying $f"
+            psql "$DB" -v ON_ERROR_STOP=1 -f "$f"
+          done
       - run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
       - name: Deploy
         id: deploy
