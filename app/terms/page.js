@@ -71,7 +71,7 @@ export default function TermsPage() {
             </Section>
 
             <Section title="13. Contact">
-                Questions? Email <a href="mailto:support@sportsvault.app" style={{ color: '#6366f1' }}>support@sportsvault.app</a>
+                Questions? Email <a href="mailto:support@sportsvault.app" style={{ color: '#c6f432' }}>support@sportsvault.app</a>
             </Section>
         </div>
     );

@@ -201,7 +201,7 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
         <div className="animate-fade-in">
             {/* Location prompt */}
             {state.isAuthenticated && !hasLocation && !locationDismissed && state.isLoaded && (
-                <div style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(168,85,247,0.1))', border: '1px solid rgba(99,102,241,0.35)', borderRadius: 'var(--radius-lg)', padding: '16px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                <div style={{ background: 'linear-gradient(135deg, rgba(198,244,50,0.15), rgba(216,250,90,0.1))', border: '1px solid rgba(198,244,50,0.35)', borderRadius: 'var(--radius-lg)', padding: '16px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
                     <div style={{ fontSize: '1.5rem' }}>📍</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 2 }}>See games near you</div>
@@ -299,7 +299,7 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
                             key={opt.label}
                             className={`chip ${radiusKm === opt.value ? 'active' : ''}`}
                             onClick={() => setRadiusKm(opt.value)}
-                            style={radiusKm === opt.value ? { background: 'rgba(99,102,241,0.2)', borderColor: '#6366f1', color: '#818cf8', fontWeight: 700 } : {}}
+                            style={radiusKm === opt.value ? { background: 'rgba(198,244,50,0.2)', borderColor: '#c6f432', color: '#d8fa5a', fontWeight: 700 } : {}}
                         >
                             {opt.label}
                         </button>
@@ -315,7 +315,7 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
             {state.isAuthenticated && friendIdSet.size > 0 && (
                 <div style={{ marginBottom: 12 }}>
                     <button className={`chip ${showFriendsOnly ? 'active' : ''}`} onClick={() => setShowFriendsOnly(v => !v)}
-                        style={{ background: showFriendsOnly ? 'rgba(99,102,241,0.2)' : undefined, borderColor: showFriendsOnly ? '#6366f1' : undefined, color: showFriendsOnly ? '#818cf8' : undefined, fontWeight: showFriendsOnly ? 700 : undefined }}>
+                        style={{ background: showFriendsOnly ? 'rgba(198,244,50,0.2)' : undefined, borderColor: showFriendsOnly ? '#c6f432' : undefined, color: showFriendsOnly ? '#d8fa5a' : undefined, fontWeight: showFriendsOnly ? 700 : undefined }}>
                         👥 Friends' Games {showFriendsOnly ? '✓' : ''}
                     </button>
                 </div>
@@ -340,7 +340,7 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
             {viewMode === 'map' && (
                 <div style={{ height: 350, borderRadius: 'var(--radius-lg)', overflow: 'hidden', border: '1px solid var(--border-color)', marginBottom: 16, position: 'relative', background: 'var(--bg-card)' }}>
                     <iframe src={`https://maps.google.com/maps?q=${userLat},${userLng}&z=12&output=embed`} width="100%" height="100%" style={{ border: 0, filter: 'grayscale(0.2) invert(0.9) hue-rotate(180deg) brightness(0.8)' }} allowFullScreen loading="lazy" />
-                    <div style={{ position: 'absolute', bottom: 12, left: 12, right: 12, background: 'rgba(10,14,26,0.85)', borderRadius: 'var(--radius-md)', padding: '12px', fontSize: '0.8rem', color: 'var(--text-secondary)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.1)', zIndex: 10 }}>
+                    <div style={{ position: 'absolute', bottom: 12, left: 12, right: 12, background: 'rgba(12,13,15,0.85)', borderRadius: 'var(--radius-md)', padding: '12px', fontSize: '0.8rem', color: 'var(--text-secondary)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.1)', zIndex: 10 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span>📍 Showing {upcomingGames.length} games near {state.currentUser?.location || 'Mumbai'}</span>
                             <button className="btn btn-xs btn-ghost" onClick={requestGpsLocation} disabled={locationLoading}>
@@ -377,8 +377,8 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
                 )}
                 {upcomingGames.map(game => {
                     const spots = spotsLeft(game);
-                    const sportColor = SPORTS[game.sport]?.color || '#6366f1';
-                    const sportGradient = SPORTS[game.sport]?.gradient || 'linear-gradient(135deg, #6366f1, #4f46e5)';
+                    const sportColor = SPORTS[game.sport]?.color || '#c6f432';
+                    const sportGradient = SPORTS[game.sport]?.gradient || 'linear-gradient(135deg, #c6f432, #a4d62a)';
                     const organizer = getPlayer(game.organizerId || game.organizer?.id) || game.organizer;
                     const distKm = calcDistKm(userLat, userLng, game.lat, game.lng);
                     const distance = formatDist(distKm);

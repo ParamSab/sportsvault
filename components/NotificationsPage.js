@@ -223,7 +223,7 @@ export default function NotificationsPage({ onViewGame }) {
                                                 onClick={() => handleClick(notif)}
                                                 style={{
                                                     display: 'flex', alignItems: 'flex-start', gap: 12,
-                                                    background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)',
+                                                    background: 'rgba(198,244,50,0.08)', border: '1px solid rgba(198,244,50,0.2)',
                                                     borderRadius: 12, padding: '12px 14px',
                                                     cursor: 'pointer', textAlign: 'left', width: '100%',
                                                 }}

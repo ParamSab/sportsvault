@@ -58,7 +58,7 @@ export default function SportsCVPage({ playerId, onBack }) {
 
             {/* CV Header */}
             <div className="cv-header" style={{
-                background: 'linear-gradient(135deg, #0f1629, #1a1f35, #252b45)',
+                background: 'linear-gradient(135deg, #101114, #16181c, #1d2024)',
                 border: '1px solid var(--border-color)',
             }}>
                 <div className="avatar avatar-xl" style={{

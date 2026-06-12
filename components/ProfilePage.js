@@ -9,12 +9,12 @@ function GameRow({ g, onClick }) {
     const resultColor = m?.result === 'win' ? '#22c55e' : m?.result === 'loss' ? '#ef4444' : '#94a3b8';
     const resultLabel = m?.result === 'win' ? 'W' : m?.result === 'loss' ? 'L' : m?.result === 'draw' ? 'D' : null;
     return (
-        <div onClick={onClick} style={{ cursor: onClick ? 'pointer' : 'default', background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', padding: '12px 14px', borderLeft: `3px solid ${sport?.color || '#6366f1'}` }}>
+        <div onClick={onClick} style={{ cursor: onClick ? 'pointer' : 'default', background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', padding: '12px 14px', borderLeft: `3px solid ${sport?.color || '#c6f432'}` }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 600, fontSize: '0.875rem', marginBottom: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
                         {sport?.emoji} {g.title}
-                        {g.role === 'organizer' && <span style={{ fontSize: '0.6rem', padding: '1px 5px', borderRadius: 99, background: 'rgba(99,102,241,0.2)', color: '#818cf8', fontWeight: 700 }}>ORG</span>}
+                        {g.role === 'organizer' && <span style={{ fontSize: '0.6rem', padding: '1px 5px', borderRadius: 99, background: 'rgba(198,244,50,0.2)', color: '#d8fa5a', fontWeight: 700 }}>ORG</span>}
                     </div>
                     <div className="text-xs text-muted">{g.game_date} · {g.location || 'Location TBD'}</div>
                     {m?.iScored && <div style={{ fontSize: '0.7rem', color: '#f59e0b', fontWeight: 700, marginTop: 2 }}>⚽ Scored</div>}
@@ -301,7 +301,7 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
             {!isOwn && <button className="btn btn-ghost" onClick={onBack} style={{ marginBottom: 12, padding: '8px 0' }}>← Back</button>}
 
             <div className="glass-card no-hover" style={{ textAlign: 'center', marginBottom: 16, position: 'relative', overflow: 'hidden' }}>
-                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 80, background: sports[0] ? SPORTS[sports[0]]?.gradient : 'linear-gradient(135deg, #6366f1, #8b5cf6)', opacity: 0.3 }} />
+                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 80, background: sports[0] ? SPORTS[sports[0]]?.gradient : 'linear-gradient(135deg, #a4d62a, #c6f432)', opacity: 0.3 }} />
                 <div style={{ position: 'relative', paddingTop: 24 }}>
                     <div className="avatar avatar-xl" style={{ margin: '0 auto 12px', borderColor: trust.color, background: player.photo ? `url(${player.photo}) center/cover` : `linear-gradient(135deg, ${trust.color}30, var(--bg-card))`, fontSize: player.photo ? '0' : '1.75rem' }}>
                         {player.photo ? '' : getInitials(player.name || 'U')}

@@ -279,7 +279,7 @@ export default function FriendsPage({ onViewProfile }) {
                     <span className="text-xs text-muted" style={{ flexShrink: 0 }}>Priority:</span>
                     {[1, 2, 3].map(tier => {
                         const active = currentTier === tier;
-                        const tierColors = ['#6366f1', '#a855f7', '#ec4899'];
+                        const tierColors = ['#c6f432', '#f97316', '#ec4899'];
                         return (
                             <button
                                 key={tier}
@@ -519,7 +519,7 @@ export default function FriendsPage({ onViewProfile }) {
                             {[1, 2, 3].map(tier => groupedFriends[tier].length > 0 && (
                                 <div key={tier}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: ['#6366f1', '#a855f7', '#ec4899'][tier - 1] }} />
+                                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: ['#c6f432', '#f97316', '#ec4899'][tier - 1] }} />
                                         <span className="text-xs font-semibold text-muted" style={{ letterSpacing: '0.06em' }}>
                                             PRIORITY {tier} · {groupedFriends[tier].length}
                                         </span>

@@ -47,15 +47,15 @@ export default function PaymentPage({ game, myRsvp, currentUserId, onClose, onMa
 
                 {/* Amount */}
                 <div style={{
-                    background: 'linear-gradient(135deg, rgba(99,102,241,0.12), rgba(168,85,247,0.08))',
-                    border: '1px solid rgba(99,102,241,0.25)',
+                    background: 'linear-gradient(135deg, rgba(198,244,50,0.12), rgba(216,250,90,0.08))',
+                    border: '1px solid rgba(198,244,50,0.25)',
                     borderRadius: 16,
                     padding: '20px 24px',
                     textAlign: 'center',
                     marginBottom: 20,
                 }}>
                     <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Amount Due</div>
-                    <div style={{ fontSize: '3rem', fontWeight: 900, color: '#6366f1', lineHeight: 1 }}>₹{fee}</div>
+                    <div style={{ fontSize: '3rem', fontWeight: 900, color: '#c6f432', lineHeight: 1 }}>₹{fee}</div>
                     <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 8 }}>to {organizerName}</div>
                 </div>
 

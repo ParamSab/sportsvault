@@ -594,7 +594,7 @@ export default function AuthPage() {
                     <div className="conduct-rule"><span className="conduct-icon">⚠️</span><span>Cancel at least 12h before to avoid a reliability hit.</span></div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <input type="checkbox" id="conductAgree" style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#6366f1' }} />
+                    <input type="checkbox" id="conductAgree" style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#c6f432' }} />
                     <label htmlFor="conductAgree" style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', cursor: 'pointer', lineHeight: 1.5 }}>
                         I agree to the community rules and will be a good sport. 🏅
                     </label>
@@ -605,13 +605,13 @@ export default function AuthPage() {
     ];
 
     return (
-        <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', padding: '20px 20px 32px', background: 'radial-gradient(ellipse at top, #1a1f35 0%, #0a0e1a 60%)', overflowY: 'auto' }}>
+        <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', padding: '20px 20px 32px', background: 'radial-gradient(ellipse at top, #1a1d14 0%, #0c0d0f 60%)', overflowY: 'auto' }}>
             <div style={{ maxWidth: 420, width: '100%', margin: '0 auto', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: '100%' }}>
                 <div style={{ textAlign: 'center', marginBottom: step === 'onboarding' ? 20 : 28 }}>
                     <div style={{ fontSize: '2.5rem', marginBottom: 8, animation: 'float 3s ease-in-out infinite' }}>
                         {step === 'onboarding' ? '🏆' : '⚡'}
                     </div>
-                    <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: step === 'onboarding' ? '1.375rem' : 'clamp(1.75rem, 5vw, 2.25rem)', fontWeight: 900, background: 'linear-gradient(135deg, #6366f1, #a855f7, #ec4899)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', marginBottom: 6 }}>
+                    <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: step === 'onboarding' ? '1.375rem' : 'clamp(1.75rem, 5vw, 2.25rem)', fontWeight: 900, background: 'linear-gradient(135deg, #a4d62a, #c6f432, #e3ff7a)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', marginBottom: 6 }}>
                         SportsVault
                     </h1>
                     {step === 'login' && <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Find players. Join games. Build your rep.</p>}
@@ -868,7 +868,7 @@ export default function AuthPage() {
                         <div className="glass-card no-hover" style={{ padding: '20px 18px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                                 <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.05em' }}>STEP {onboardStep + 1} OF {onboardingSteps.length}</div>
-                                <div style={{ display: 'flex', gap: 4 }}>{onboardingSteps.map((_, i) => <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: i === onboardStep ? 'var(--primary-color)' : i < onboardStep ? 'rgba(99,102,241,0.3)' : 'var(--border-color)', transition: 'all 0.3s' }} />)}</div>
+                                <div style={{ display: 'flex', gap: 4 }}>{onboardingSteps.map((_, i) => <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: i === onboardStep ? 'var(--primary-color)' : i < onboardStep ? 'rgba(198,244,50,0.3)' : 'var(--border-color)', transition: 'all 0.3s' }} />)}</div>
                             </div>
                             {onboardingSteps[onboardStep]}
                             {stepError && <div style={{ color: '#ef4444', fontSize: '0.8125rem', marginTop: 12, padding: '10px 12px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: 8, border: '1px solid rgba(239, 68, 68, 0.2)' }}>⚠️ {stepError}</div>}

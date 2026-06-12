@@ -142,7 +142,7 @@ export default function RatePage({ gameId, onBack }) {
         setCurrentIdx(effectiveIdx + 1);
     };
 
-    const sportColor = SPORTS[sport]?.color || '#6366f1';
+    const sportColor = SPORTS[sport]?.color || '#c6f432';
     const rated = playersToRate.length - remaining.length;
 
     return (

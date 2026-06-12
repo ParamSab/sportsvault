@@ -118,12 +118,12 @@ export default function InvitePage() {
                                     style={{
                                         display: 'flex', alignItems: 'center', gap: 12,
                                         padding: '10px 14px', borderRadius: 'var(--radius-md)',
-                                        background: selected ? 'rgba(99,102,241,0.15)' : 'var(--bg-input)',
-                                        border: `1px solid ${selected ? '#6366f1' : 'var(--border-color)'}`,
+                                        background: selected ? 'rgba(198,244,50,0.15)' : 'var(--bg-input)',
+                                        border: `1px solid ${selected ? '#c6f432' : 'var(--border-color)'}`,
                                         cursor: 'pointer', transition: 'all 0.15s',
                                     }}
                                 >
-                                    <div className="avatar avatar-sm" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff', fontWeight: 700 }}>
+                                    <div className="avatar avatar-sm" style={{ background: 'linear-gradient(135deg, #a4d62a, #c6f432)', color: '#11140a', fontWeight: 800 }}>
                                         {friend.photo ? '' : (friend.name?.[0] || '?')}
                                     </div>
                                     <div style={{ flex: 1 }}>
@@ -132,10 +132,10 @@ export default function InvitePage() {
                                     </div>
                                     <div style={{
                                         width: 20, height: 20, borderRadius: 6,
-                                        border: `2px solid ${selected ? '#6366f1' : 'rgba(255,255,255,0.2)'}`,
-                                        background: selected ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : 'transparent',
+                                        border: `2px solid ${selected ? '#c6f432' : 'rgba(255,255,255,0.2)'}`,
+                                        background: selected ? 'linear-gradient(135deg, #a4d62a, #c6f432)' : 'transparent',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        fontSize: '0.7rem', color: '#fff', fontWeight: 900,
+                                        fontSize: '0.7rem', color: '#11140a', fontWeight: 900,
                                     }}>
                                         {selected && '✓'}
                                     </div>
