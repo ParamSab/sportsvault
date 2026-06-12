@@ -211,10 +211,13 @@ export async function PATCH(req) {
         if (!userId) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
         const body = await req.json();
-        const { positions, sports } = body;
+        const { positions, sports, location, lat, lng } = body;
         const updateData = {};
         if (positions !== undefined) updateData.positions = JSON.stringify(positions);
         if (sports !== undefined) updateData.sports = JSON.stringify(sports);
+        if (location !== undefined) updateData.location = location;
+        if (lat !== undefined) updateData.lat = typeof lat === 'number' ? lat : parseFloat(lat);
+        if (lng !== undefined) updateData.lng = typeof lng === 'number' ? lng : parseFloat(lng);
 
         if (Object.keys(updateData).length === 0) {
             return Response.json({ error: 'Nothing to update' }, { status: 400 });
@@ -222,11 +225,13 @@ export async function PATCH(req) {
 
         try {
             const user = await prisma.user.update({ where: { id: userId }, data: updateData });
-            // Also update the session so it stays in sync
             const updatedSessionUser = {
                 ...session.user,
                 ...(positions !== undefined && { positions }),
                 ...(sports !== undefined && { sports }),
+                ...(location !== undefined && { location }),
+                ...(lat !== undefined && { lat: updateData.lat }),
+                ...(lng !== undefined && { lng: updateData.lng }),
             };
             session.user = updatedSessionUser;
             await session.save();
@@ -241,7 +246,6 @@ export async function PATCH(req) {
             });
         } catch (prismaErr) {
             console.error('PATCH /api/users Prisma error:', prismaErr.message);
-            // Supabase fallback
             const supabase = getSupabase();
             if (!supabase) {
                 return Response.json({ error: 'Database unavailable' }, { status: 503 });
@@ -250,6 +254,15 @@ export async function PATCH(req) {
             if (sbErr) {
                 return Response.json({ error: 'Database unavailable' }, { status: 503 });
             }
+            // Update session even on Supabase path
+            const updatedSessionUser = {
+                ...session.user,
+                ...(location !== undefined && { location }),
+                ...(lat !== undefined && { lat: updateData.lat }),
+                ...(lng !== undefined && { lng: updateData.lng }),
+            };
+            session.user = updatedSessionUser;
+            await session.save();
             return Response.json({ success: true });
         }
     } catch (err) {
