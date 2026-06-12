@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { getSupabase } from '@/lib/supabase';
 import bcrypt from 'bcryptjs';
 import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
@@ -15,14 +16,27 @@ export async function POST(req) {
             return Response.json({ error: 'Email and password required' }, { status: 400 });
         }
 
+        const normalizedEmail = email.toLowerCase().trim();
+
         let user = null;
         try {
-            user = await prisma.user.findUnique({
-                where: { email },
-            });
+            user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
         } catch (prismaErr) {
-            console.error('Password login Prisma error, trying local fallback:', prismaErr.message);
-            user = await findLocalUserByEmail(email);
+            console.error('Password login Prisma error:', prismaErr.message);
+        }
+
+        if (!user) {
+            try {
+                const supabase = getSupabase();
+                if (supabase) {
+                    const { data } = await supabase.from('users').select('*').eq('email', normalizedEmail).maybeSingle();
+                    if (data) user = data;
+                }
+            } catch (_) {}
+        }
+
+        if (!user) {
+            user = await findLocalUserByEmail(normalizedEmail).catch(() => null);
         }
 
         if (!user || !user.password) {
