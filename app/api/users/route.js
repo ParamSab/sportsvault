@@ -273,6 +273,14 @@ export async function PATCH(req) {
 
 export async function GET(req) {
     try {
+        // Authentication required — prevents unauthenticated enumeration of user contacts
+        const cookieStore = await cookies();
+        const session = await getIronSession(cookieStore, sessionOptions);
+        const sessionUserId = session.user?.dbId || session.user?.id;
+        if (!sessionUserId) {
+            return Response.json({ error: 'Authentication required.' }, { status: 401 });
+        }
+
         const { searchParams } = new URL(req.url);
         const q = searchParams.get('q');
         const id = searchParams.get('id');
@@ -283,13 +291,28 @@ export async function GET(req) {
                 user = await prisma.user.findUnique({ where: { id } });
             } catch (_) {}
 
-            if (user) return Response.json({ user: serializeUser(user) });
+            if (user) {
+                const serialized = serializeUser(user);
+                // Contact fields only visible to the profile owner
+                if (id !== sessionUserId) {
+                    delete serialized.email;
+                    delete serialized.phone;
+                }
+                return Response.json({ user: serialized });
+            }
 
             try {
                 const supabase = getSupabase();
                 if (supabase) {
                     const { data } = await supabase.from('users').select('*').eq('id', id).maybeSingle();
-                    if (data) return Response.json({ user: serializeUser(data) });
+                    if (data) {
+                        const serialized = serializeUser(data);
+                        if (id !== sessionUserId) {
+                            delete serialized.email;
+                            delete serialized.phone;
+                        }
+                        return Response.json({ user: serialized });
+                    }
                 }
             } catch (_) {}
 
@@ -298,29 +321,30 @@ export async function GET(req) {
 
         if (!q || q.length < 2) return Response.json({ users: [] });
 
+        // Search results never include contact fields (name/phone search for friend discovery,
+        // but callers already know the phone they searched — no new info leaked)
         let users = [];
         try {
             users = await prisma.user.findMany({
                 where: {
                     OR: [
                         { name: { contains: q, mode: 'insensitive' } },
-                        { email: { contains: q, mode: 'insensitive' } },
                         { phone: { contains: q } },
                     ],
                 },
                 take: 10,
-                select: { id: true, name: true, email: true, phone: true, photo: true, location: true },
+                select: { id: true, name: true, photo: true, location: true, sports: true },
             });
         } catch (_) {}
 
-        // Also search Supabase users table (catches users created via the Supabase fallback path)
+        // Supabase fallback for users not yet synced to Prisma
         try {
             const supabase = getSupabase();
             if (supabase && users.length < 10) {
                 const { data: sbUsers } = await supabase
                     .from('users')
-                    .select('id, name, email, phone, photo, location')
-                    .or(`name.ilike.%${q}%,phone.like.%${q}%`)
+                    .select('id, name, photo, location, sports')
+                    .ilike('name', `%${q}%`)
                     .limit(10 - users.length);
                 if (sbUsers?.length) {
                     const existingIds = new Set(users.map(u => u.id));

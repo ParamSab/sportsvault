@@ -119,7 +119,7 @@ export async function GET(req) {
 
         return Response.json({ games: serialized });
     } catch (prismaErr) {
-        console.error('GET /api/games Prisma error — falling back to Supabase:', prismaErr.message);
+        console.error('[READ_FALLBACK] GET /api/games — Prisma unavailable, falling back to Supabase read. Check Prisma connection if frequent.', prismaErr.message);
     }
 
     // --- Supabase fallback ---
@@ -323,7 +323,7 @@ export async function POST(req) {
 
         return Response.json({ game: serialized });
     } catch (prismaErr) {
-        console.error('POST /api/games Prisma error — falling back to Supabase:', prismaErr.message);
+        console.error('[WRITE_FALLBACK] POST /api/games — Prisma unavailable, falling back to Supabase write. This should be rare; check Prisma connection if you see this often.', prismaErr.message);
     }
 
     // --- Supabase fallback ---

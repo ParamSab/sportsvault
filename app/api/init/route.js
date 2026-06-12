@@ -114,7 +114,7 @@ export async function GET(req) {
             tiers: friendTiers,
         });
     } catch (prismaErr) {
-        console.error('[init] Prisma error, falling back to Supabase:', prismaErr.message);
+        console.error('[READ_FALLBACK] GET /api/init — Prisma unavailable, falling back to Supabase read. Check Prisma connection if frequent.', prismaErr.message);
     }
 
     // --- Supabase fallback ---
