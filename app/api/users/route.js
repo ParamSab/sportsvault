@@ -321,14 +321,13 @@ export async function GET(req) {
 
         if (!q || q.length < 2) return Response.json({ users: [] });
 
-        // Search results never include contact fields (name/phone search for friend discovery,
-        // but callers already know the phone they searched — no new info leaked)
         let users = [];
         try {
             users = await prisma.user.findMany({
                 where: {
                     OR: [
                         { name: { contains: q, mode: 'insensitive' } },
+                        { email: { contains: q, mode: 'insensitive' } },
                         { phone: { contains: q } },
                     ],
                 },
@@ -337,14 +336,14 @@ export async function GET(req) {
             });
         } catch (_) {}
 
-        // Supabase fallback for users not yet synced to Prisma
+        // Also search Supabase users table (catches users created via the Supabase fallback path)
         try {
             const supabase = getSupabase();
             if (supabase && users.length < 10) {
                 const { data: sbUsers } = await supabase
                     .from('users')
                     .select('id, name, photo, location, sports')
-                    .ilike('name', `%${q}%`)
+                    .or(`name.ilike.%${q}%,phone.like.%${q}%`)
                     .limit(10 - users.length);
                 if (sbUsers?.length) {
                     const existingIds = new Set(users.map(u => u.id));
