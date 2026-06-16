@@ -53,7 +53,7 @@ export async function POST(req) {
                 <div style="font-family: sans-serif; text-align: center; padding: 40px; background: #f8fafc; border-radius: 12px; max-width: 480px; margin: 0 auto;">
                     <h2 style="color: #0f172a; margin-bottom: 8px;">SportsVault Login</h2>
                     <p style="color: #475569; margin-bottom: 24px;">Your verification code:</p>
-                    <div style="font-size: 36px; font-weight: 800; letter-spacing: 10px; color: #6366f1; background: #fff; padding: 20px 32px; border-radius: 10px; border: 1px solid #e2e8f0; display: inline-block;">
+                    <div style="font-size: 36px; font-weight: 800; letter-spacing: 10px; color: #c6f432; background: #fff; padding: 20px 32px; border-radius: 10px; border: 1px solid #e2e8f0; display: inline-block;">
                         ${code}
                     </div>
                     <p style="color: #94a3b8; margin-top: 24px; font-size: 14px;">Expires in 10 minutes. Do not share this code.</p>

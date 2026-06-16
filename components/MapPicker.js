@@ -90,9 +90,9 @@ export default function MapPicker({ lat = 19.076, lng = 72.877, onLocationChange
                     onClick={handleGPS}
                     style={{
                         position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
-                        background: 'rgba(99,102,241,0.2)', border: '1px solid rgba(99,102,241,0.4)',
+                        background: 'rgba(198,244,50,0.2)', border: '1px solid rgba(198,244,50,0.4)',
                         borderRadius: 6, padding: '5px 10px', fontSize: '0.75rem', fontWeight: 600,
-                        color: '#818cf8', cursor: 'pointer', whiteSpace: 'nowrap',
+                        color: '#d8fa5a', cursor: 'pointer', whiteSpace: 'nowrap',
                     }}>
                     📍 GPS
                 </button>

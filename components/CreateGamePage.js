@@ -370,7 +370,7 @@ export default function CreateGamePage({ onComplete }) {
                                 }}
                                 className="chip"
                                 style={{
-                                    background: game.amenities.includes(amn) ? `${SPORTS[game.sport]?.color || '#6366f1'}25` : undefined,
+                                    background: game.amenities.includes(amn) ? `${SPORTS[game.sport]?.color || '#c6f432'}25` : undefined,
                                     borderColor: game.amenities.includes(amn) ? SPORTS[game.sport]?.color : undefined,
                                     color: game.amenities.includes(amn) ? SPORTS[game.sport]?.color : undefined,
                                 }}>
@@ -393,8 +393,8 @@ export default function CreateGamePage({ onComplete }) {
                         style={{
                             display: 'flex', alignItems: 'center', gap: 16,
                             padding: '20px 24px', borderRadius: 16, textAlign: 'left',
-                            background: game.visibility === opt.value ? `${SPORTS[game.sport]?.color || '#6366f1'}18` : 'var(--bg-card)',
-                            border: `2px solid ${game.visibility === opt.value ? (SPORTS[game.sport]?.color || '#6366f1') : 'var(--border-color)'}`,
+                            background: game.visibility === opt.value ? `${SPORTS[game.sport]?.color || '#c6f432'}18` : 'var(--bg-card)',
+                            border: `2px solid ${game.visibility === opt.value ? (SPORTS[game.sport]?.color || '#c6f432') : 'var(--border-color)'}`,
                             cursor: 'pointer', transition: 'all 0.25s ease',
                         }}>
                         <span style={{ fontSize: '2rem' }}>{opt.emoji}</span>
@@ -403,7 +403,7 @@ export default function CreateGamePage({ onComplete }) {
                             <div className="text-muted text-xs">{opt.desc}</div>
                         </div>
                         {game.visibility === opt.value && (
-                            <span style={{ marginLeft: 'auto', color: SPORTS[game.sport]?.color || '#6366f1', fontSize: '1.25rem' }}>✓</span>
+                            <span style={{ marginLeft: 'auto', color: SPORTS[game.sport]?.color || '#c6f432', fontSize: '1.25rem' }}>✓</span>
                         )}
                     </button>
                 ))}

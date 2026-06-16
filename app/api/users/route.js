@@ -211,10 +211,13 @@ export async function PATCH(req) {
         if (!userId) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
         const body = await req.json();
-        const { positions, sports } = body;
+        const { positions, sports, location, lat, lng } = body;
         const updateData = {};
         if (positions !== undefined) updateData.positions = JSON.stringify(positions);
         if (sports !== undefined) updateData.sports = JSON.stringify(sports);
+        if (location !== undefined) updateData.location = location;
+        if (lat !== undefined) updateData.lat = typeof lat === 'number' ? lat : parseFloat(lat);
+        if (lng !== undefined) updateData.lng = typeof lng === 'number' ? lng : parseFloat(lng);
 
         if (Object.keys(updateData).length === 0) {
             return Response.json({ error: 'Nothing to update' }, { status: 400 });
@@ -222,11 +225,13 @@ export async function PATCH(req) {
 
         try {
             const user = await prisma.user.update({ where: { id: userId }, data: updateData });
-            // Also update the session so it stays in sync
             const updatedSessionUser = {
                 ...session.user,
                 ...(positions !== undefined && { positions }),
                 ...(sports !== undefined && { sports }),
+                ...(location !== undefined && { location }),
+                ...(lat !== undefined && { lat: updateData.lat }),
+                ...(lng !== undefined && { lng: updateData.lng }),
             };
             session.user = updatedSessionUser;
             await session.save();
@@ -241,7 +246,6 @@ export async function PATCH(req) {
             });
         } catch (prismaErr) {
             console.error('PATCH /api/users Prisma error:', prismaErr.message);
-            // Supabase fallback
             const supabase = getSupabase();
             if (!supabase) {
                 return Response.json({ error: 'Database unavailable' }, { status: 503 });
@@ -250,6 +254,15 @@ export async function PATCH(req) {
             if (sbErr) {
                 return Response.json({ error: 'Database unavailable' }, { status: 503 });
             }
+            // Update session even on Supabase path
+            const updatedSessionUser = {
+                ...session.user,
+                ...(location !== undefined && { location }),
+                ...(lat !== undefined && { lat: updateData.lat }),
+                ...(lng !== undefined && { lng: updateData.lng }),
+            };
+            session.user = updatedSessionUser;
+            await session.save();
             return Response.json({ success: true });
         }
     } catch (err) {
@@ -260,6 +273,14 @@ export async function PATCH(req) {
 
 export async function GET(req) {
     try {
+        // Authentication required — prevents unauthenticated enumeration of user contacts
+        const cookieStore = await cookies();
+        const session = await getIronSession(cookieStore, sessionOptions);
+        const sessionUserId = session.user?.dbId || session.user?.id;
+        if (!sessionUserId) {
+            return Response.json({ error: 'Authentication required.' }, { status: 401 });
+        }
+
         const { searchParams } = new URL(req.url);
         const q = searchParams.get('q');
         const id = searchParams.get('id');
@@ -270,13 +291,28 @@ export async function GET(req) {
                 user = await prisma.user.findUnique({ where: { id } });
             } catch (_) {}
 
-            if (user) return Response.json({ user: serializeUser(user) });
+            if (user) {
+                const serialized = serializeUser(user);
+                // Contact fields only visible to the profile owner
+                if (id !== sessionUserId) {
+                    delete serialized.email;
+                    delete serialized.phone;
+                }
+                return Response.json({ user: serialized });
+            }
 
             try {
                 const supabase = getSupabase();
                 if (supabase) {
                     const { data } = await supabase.from('users').select('*').eq('id', id).maybeSingle();
-                    if (data) return Response.json({ user: serializeUser(data) });
+                    if (data) {
+                        const serialized = serializeUser(data);
+                        if (id !== sessionUserId) {
+                            delete serialized.email;
+                            delete serialized.phone;
+                        }
+                        return Response.json({ user: serialized });
+                    }
                 }
             } catch (_) {}
 
@@ -296,7 +332,7 @@ export async function GET(req) {
                     ],
                 },
                 take: 10,
-                select: { id: true, name: true, email: true, phone: true, photo: true, location: true },
+                select: { id: true, name: true, photo: true, location: true, sports: true },
             });
         } catch (_) {}
 
@@ -306,7 +342,7 @@ export async function GET(req) {
             if (supabase && users.length < 10) {
                 const { data: sbUsers } = await supabase
                     .from('users')
-                    .select('id, name, email, phone, photo, location')
+                    .select('id, name, photo, location, sports')
                     .or(`name.ilike.%${q}%,phone.like.%${q}%`)
                     .limit(10 - users.length);
                 if (sbUsers?.length) {

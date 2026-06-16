@@ -47,8 +47,10 @@
 	<!-- Privacy descriptions (required by App Store) -->
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>SportsVault uses your location to show nearby games and help you find venues close to you.</string>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>SportsVault uses your location to surface games near you in real time.</string>
+	<key>WKAppBoundDomains</key>
+	<array>
+		<string>sportsvault.co.in</string>
+	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>SportsVault uses your camera so you can upload a profile photo.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

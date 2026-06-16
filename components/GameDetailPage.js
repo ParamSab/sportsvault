@@ -9,7 +9,7 @@ import PaymentPage from './PaymentPage';
 const PRIVACY_LABELS = {
     public: { emoji: '🌍', label: 'Public', color: '#22c55e' },
     friends: { emoji: '👥', label: 'Friends Only', color: '#3b82f6' },
-    private: { emoji: '🔒', label: 'Private', color: '#a855f7' },
+    private: { emoji: '🔒', label: 'Private', color: '#c6f432' },
 };
 
 function ConfirmationCelebration({ sport }) {
@@ -152,7 +152,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
         return <div className="glass-card no-hover text-center" style={{ padding: 48 }}><h3>Game not found</h3><button className="btn btn-outline mt-md" onClick={onBack}>← Back</button></div>;
     }
 
-    const sport = SPORTS[game.sport] || { name: 'Unknown', emoji: '🏅', color: '#6366f1', gradient: 'linear-gradient(135deg, #6366f1, #4f46e5)' };
+    const sport = SPORTS[game.sport] || { name: 'Unknown', emoji: '🏅', color: '#c6f432', gradient: 'linear-gradient(135deg, #c6f432, #a4d62a)' };
     const confirmedRsvps = (game.rsvps || []).filter(r => r.status === 'yes' || r.status === 'checked_in');
     const backupRsvps = (game.rsvps || []).filter(r => r.status === 'backup');
     const maybeRsvps = (game.rsvps || []).filter(r => r.status === 'maybe');
@@ -537,7 +537,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                     ) : (
                         <button
                             className="btn btn-lg btn-primary btn-block animate-fade-in"
-                            style={{ marginBottom: 8, background: 'linear-gradient(135deg, #6366f1, #a855f7)', border: 'none' }}
+                            style={{ marginBottom: 8, background: 'linear-gradient(135deg, #a4d62a, #c6f432)', border: 'none' }}
                             onClick={() => setShowJoinConfirm(true)}
                         >
                             ✋ Request to Join
@@ -673,7 +673,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                         players={confirmedPlayers}
                         sport={game.sport}
                         maxPlayers={game.maxPlayers}
-                        color={sport?.color || '#6366f1'}
+                        color={sport?.color || '#c6f432'}
                         onViewProfile={onViewProfile}
                     />
                 )}
@@ -929,7 +929,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
             {/* ── Score Entry / Result ── */}
             {confirmedRsvps.length >= 2 && (() => {
                 const savedScore = (() => { try { return game.score ? JSON.parse(game.score) : null; } catch { return null; } })();
-                const sportColor = sport?.color || '#6366f1';
+                const sportColor = sport?.color || '#c6f432';
 
                 if (savedScore) {
                     // Score already saved — show result banner
@@ -1110,7 +1110,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
 
                         <button
                             className="btn btn-primary btn-block"
-                            style={{ background: `linear-gradient(135deg, ${sportColor}, ${sport?.gradient ? sportColor : '#a855f7'})`, border: 'none', borderRadius: 12, fontWeight: 700 }}
+                            style={{ background: `linear-gradient(135deg, ${sportColor}, ${sport?.gradient ? sportColor : '#c6f432'})`, border: 'none', borderRadius: 12, fontWeight: 700 }}
                             disabled={scoreInput.team1 === '' || scoreInput.team2 === '' || scoreSaving}
                             onClick={async () => {
                                 setScoreSaving(true);
@@ -1211,8 +1211,8 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                                             <button onClick={handleCopyMessage}
                                                 style={{
                                                     width: '100%', padding: '10px', borderRadius: 8, border: 'none',
-                                                    background: msgCopied ? 'rgba(34,197,94,0.2)' : 'rgba(99,102,241,0.2)',
-                                                    color: msgCopied ? '#22c55e' : '#818cf8',
+                                                    background: msgCopied ? 'rgba(34,197,94,0.2)' : 'rgba(198,244,50,0.2)',
+                                                    color: msgCopied ? '#22c55e' : '#d8fa5a',
                                                     fontWeight: 700, fontSize: '0.875rem', cursor: 'pointer', transition: 'all 0.3s',
                                                 }}>
                                                 {msgCopied ? '✓ Copied! Now paste in any chat' : '📋 Copy Message'}

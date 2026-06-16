@@ -111,14 +111,15 @@ export default function AppShell() {
         <div style={{ minHeight: '100dvh', background: 'var(--bg-primary)' }}>
             {/* Header */}
             <header className="app-header">
-                <div onClick={() => navigate('discover')} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div onClick={() => navigate('discover')} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 9 }}>
                     <div style={{
                         width: 32, height: 32,
-                        background: 'linear-gradient(135deg, #6366f1, #a855f7)',
-                        borderRadius: 8,
+                        background: 'var(--accent)',
+                        borderRadius: 7,
+                        transform: 'skewX(-8deg)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         fontSize: '1rem',
-                        boxShadow: '0 0 12px rgba(99,102,241,0.4)',
+                        boxShadow: '0 0 14px rgba(198,244,50,0.35)',
                         flexShrink: 0,
                     }}>
                         ⚡
@@ -126,12 +127,14 @@ export default function AppShell() {
                     <span style={{
                         fontFamily: 'var(--font-heading)',
                         fontWeight: 800,
-                        fontSize: '1.2rem',
-                        background: 'linear-gradient(135deg, #6366f1, #a855f7, #ec4899)',
-                        WebkitBackgroundClip: 'text',
-                        WebkitTextFillColor: 'transparent',
+                        fontStyle: 'italic',
+                        fontSize: '1.45rem',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.01em',
+                        lineHeight: 1,
+                        color: 'var(--text-accent)',
                     }}>
-                        SportsVault
+                        Sports<span style={{ color: 'var(--accent)' }}>Vault</span>
                     </span>
                 </div>
 
@@ -149,10 +152,10 @@ export default function AppShell() {
                             className="avatar avatar-sm"
                             onClick={() => navigate('profile')}
                             style={{
-                                cursor: 'pointer', border: '2px solid #6366f1',
-                                background: state.currentUser?.photo ? `url(${state.currentUser.photo}) center/cover` : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                                cursor: 'pointer', border: '2px solid #c6f432',
+                                background: state.currentUser?.photo ? `url(${state.currentUser.photo}) center/cover` : 'var(--accent)',
                                 fontSize: state.currentUser?.photo ? '0' : '0.75rem',
-                                color: '#fff', fontWeight: 700,
+                                color: 'var(--accent-ink)', fontWeight: 800,
                             }}
                         >
                             {state.currentUser?.photo ? '' : (state.currentUser?.name?.[0] || '?')}

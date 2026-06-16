@@ -25,7 +25,7 @@ export default function OfflinePage() {
                     marginTop: 8,
                     padding: '12px 28px',
                     borderRadius: 9999,
-                    background: 'linear-gradient(135deg, #4338ca, #6366f1)',
+                    background: 'linear-gradient(135deg, #8fc01f, #c6f432)',
                     color: '#fff',
                     fontWeight: 700,
                     fontSize: '0.9375rem',

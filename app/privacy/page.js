@@ -36,7 +36,7 @@ export default function PrivacyPage() {
 
             <Section title="4. Third-party services">
                 <ul>
-                    <li><strong>Twilio Verify</strong> — processes your phone number to deliver OTP codes. See <a href="https://www.twilio.com/legal/privacy" style={{ color: '#6366f1' }} target="_blank" rel="noopener noreferrer">Twilio's Privacy Policy</a>.</li>
+                    <li><strong>Twilio Verify</strong> — processes your phone number to deliver OTP codes. See <a href="https://www.twilio.com/legal/privacy" style={{ color: '#c6f432' }} target="_blank" rel="noopener noreferrer">Twilio's Privacy Policy</a>.</li>
                     <li><strong>Supabase / PostgreSQL</strong> — stores your account and game data in a secure cloud database.</li>
                     <li><strong>Nominatim / OpenStreetMap</strong> — reverse-geocodes GPS coordinates to a human-readable locality name. No account data is sent.</li>
                 </ul>
@@ -63,7 +63,7 @@ export default function PrivacyPage() {
             </Section>
 
             <Section title="10. Contact">
-                Questions? Email us at <a href="mailto:support@sportsvault.app" style={{ color: '#6366f1' }}>support@sportsvault.app</a>
+                Questions? Email us at <a href="mailto:support@sportsvault.app" style={{ color: '#c6f432' }}>support@sportsvault.app</a>
             </Section>
         </div>
     );

@@ -1,10 +1,9 @@
 'use client';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { SPORTS, getPlayer, getSportEmoji, spotsLeft, formatDate, getInitials, PLAYERS } from '@/lib/mockData';
 import dynamic from 'next/dynamic';
 
-// Mock distance calc from user lat/lng
 function calcDistKm(userLat, userLng, gameLat, gameLng) {
     if (!userLat || !userLng || !gameLat || !gameLng) return null;
     const R = 6371;
@@ -12,8 +11,34 @@ function calcDistKm(userLat, userLng, gameLat, gameLng) {
     const dLng = ((gameLng - userLng) * Math.PI) / 180;
     const a = Math.sin(dLat / 2) ** 2 + Math.cos((userLat * Math.PI) / 180) * Math.cos((gameLat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
     const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return dist < 1 ? `${Math.round(dist * 1000)} m` : `${dist.toFixed(1)} km`;
+    return dist;
 }
+
+function formatDist(km) {
+    if (km === null) return null;
+    return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`;
+}
+
+const RADIUS_OPTIONS = [
+    { label: '2 km', value: 2 },
+    { label: '5 km', value: 5 },
+    { label: '10 km', value: 10 },
+    { label: 'Any', value: null },
+];
+
+async function reverseGeocode(lat, lng) {
+    try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`, {
+            headers: { 'Accept-Language': 'en' },
+        });
+        const data = await res.json();
+        const addr = data.address || {};
+        return addr.suburb || addr.neighbourhood || addr.city_district || addr.city || addr.town || addr.village || 'Your Location';
+    } catch {
+        return 'Your Location';
+    }
+}
+
 export default function DiscoverPage({ onViewGame, onViewProfile }) {
     const { state, dispatch } = useStore();
     const [sportFilter, setSportFilter] = useState('all');
@@ -23,6 +48,60 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
     const [showFriendsOnly, setShowFriendsOnly] = useState(false);
     const [friendActionLoading, setFriendActionLoading] = useState(null);
     const [welcomeDismissed, setWelcomeDismissed] = useState(false);
+    const [radiusKm, setRadiusKm] = useState(null);
+    const [locationLoading, setLocationLoading] = useState(false);
+    const [locationError, setLocationError] = useState('');
+    const [locationDismissed, setLocationDismissed] = useState(false);
+
+    const hasLocation = !!(state.currentUser?.lat && state.currentUser?.lng);
+
+    const saveLocation = useCallback(async (lat, lng, locationName) => {
+        dispatch({ type: 'UPDATE_PROFILE', payload: { lat, lng, location: locationName } });
+        try {
+            await fetch('/api/users', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ lat, lng, location: locationName }),
+            });
+        } catch (_) {}
+    }, [dispatch]);
+
+    const requestGpsLocation = useCallback(async () => {
+        if (!navigator.geolocation) {
+            setLocationError('Location not supported by your browser.');
+            return;
+        }
+        setLocationLoading(true);
+        setLocationError('');
+        navigator.geolocation.getCurrentPosition(
+            async (pos) => {
+                const { latitude, longitude } = pos.coords;
+                const name = await reverseGeocode(latitude, longitude);
+                await saveLocation(latitude, longitude, name);
+                setRadiusKm(10);
+                setLocationLoading(false);
+            },
+            (err) => {
+                setLocationError(err.code === 1 ? 'Location permission denied. You can set it manually in your profile.' : 'Could not get location. Try again.');
+                setLocationLoading(false);
+            },
+            { timeout: 10000, maximumAge: 300000 }
+        );
+    }, [saveLocation]);
+
+    // Auto-request location once if user is logged in and has no coords yet
+    useEffect(() => {
+        if (state.isAuthenticated && !hasLocation && !locationDismissed && state.isLoaded) {
+            requestGpsLocation();
+        }
+    // Only run once after initial load
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [state.isLoaded, state.isAuthenticated]);
+
+    // When user gains a location, default to 10km radius
+    useEffect(() => {
+        if (hasLocation && radiusKm === null) setRadiusKm(10);
+    }, [hasLocation]);
 
     const Map = useMemo(() => dynamic(() => import('./MapPicker').then(mod => {
         return function SimpleMap({ games, onViewGame, center }) {
@@ -35,6 +114,9 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
 
     const upcomingGames = useMemo(() => {
         const currentUserId = String(state.currentUser?.dbId || state.currentUser?.id || 'current');
+        const uLat = state.currentUser?.lat;
+        const uLng = state.currentUser?.lng;
+
         return (state.games || [])
             .filter(g => g.status === 'open')
             .filter(g => {
@@ -52,8 +134,22 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
                 if (!showFriendsOnly) return true;
                 return (g.rsvps || []).some(r => r.status === 'yes' && friendIdSet.has(String(r.playerId)));
             })
-            .sort((a, b) => new Date(a.date) - new Date(b.date));
-    }, [state.games, sportFilter, skillFilter, dateFilter, state.friends, state.currentUser, showFriendsOnly, friendIdSet]);
+            .filter(g => {
+                if (!radiusKm || !uLat || !uLng || !g.lat || !g.lng) return true;
+                const d = calcDistKm(uLat, uLng, g.lat, g.lng);
+                return d === null || d <= radiusKm;
+            })
+            .sort((a, b) => {
+                if (uLat && uLng) {
+                    const dA = calcDistKm(uLat, uLng, a.lat, a.lng);
+                    const dB = calcDistKm(uLat, uLng, b.lat, b.lng);
+                    if (dA !== null && dB !== null) return dA - dB;
+                    if (dA !== null) return -1;
+                    if (dB !== null) return 1;
+                }
+                return new Date(a.date) - new Date(b.date);
+            });
+    }, [state.games, sportFilter, skillFilter, dateFilter, state.friends, state.currentUser, showFriendsOnly, friendIdSet, radiusKm]);
 
     const currentUserId = state.currentUser?.dbId || state.currentUser?.id;
     const isNewUser = state.isAuthenticated && (state.currentUser?.gamesPlayed === 0 || !state.currentUser?.gamesPlayed);
@@ -103,6 +199,25 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
 
     return (
         <div className="animate-fade-in">
+            {/* Location prompt */}
+            {state.isAuthenticated && !hasLocation && !locationDismissed && state.isLoaded && (
+                <div style={{ background: 'linear-gradient(135deg, rgba(198,244,50,0.15), rgba(216,250,90,0.1))', border: '1px solid rgba(198,244,50,0.35)', borderRadius: 'var(--radius-lg)', padding: '16px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                    <div style={{ fontSize: '1.5rem' }}>📍</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 2 }}>See games near you</div>
+                        <div className="text-xs text-muted">{locationError || 'Share your location to find games sorted by distance.'}</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                        <button className="btn btn-sm btn-primary" disabled={locationLoading} onClick={requestGpsLocation} style={{ fontSize: '0.8rem', padding: '7px 14px' }}>
+                            {locationLoading ? '…' : 'Use My Location'}
+                        </button>
+                        <button className="btn btn-sm btn-ghost" onClick={() => setLocationDismissed(true)} style={{ fontSize: '0.8rem' }}>
+                            Not now
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Welcome banner for new users */}
             {isNewUser && !welcomeDismissed && (
                 <div className="welcome-banner">
@@ -153,13 +268,13 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
                     </div>
                 </div>
                 <div className="stat-divider" />
-                <div className="stat-item">
-                    <span style={{ fontSize: '1.1rem' }}>📍</span>
+                <button className="stat-item" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} onClick={requestGpsLocation} disabled={locationLoading} title="Update your location">
+                    <span style={{ fontSize: '1.1rem' }}>{locationLoading ? '⏳' : '📍'}</span>
                     <div>
-                        <div className="stat-value" style={{ fontSize: '0.875rem' }}>{state.currentUser?.location || 'Mumbai'}</div>
+                        <div className="stat-value" style={{ fontSize: '0.875rem', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{state.currentUser?.location || 'Set location'}</div>
                         <div className="stat-label">Your area</div>
                     </div>
-                </div>
+                </button>
             </div>
 
             <div style={{ marginBottom: 20 }}>
@@ -175,11 +290,32 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
                 ))}
             </div>
 
+            {/* Radius filter chips — only show when user has a location */}
+            {hasLocation && (
+                <div className="filter-bar" style={{ marginBottom: 12 }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4, marginRight: 4, whiteSpace: 'nowrap' }}>📍 Within:</span>
+                    {RADIUS_OPTIONS.map(opt => (
+                        <button
+                            key={opt.label}
+                            className={`chip ${radiusKm === opt.value ? 'active' : ''}`}
+                            onClick={() => setRadiusKm(opt.value)}
+                            style={radiusKm === opt.value ? { background: 'rgba(198,244,50,0.2)', borderColor: '#c6f432', color: '#d8fa5a', fontWeight: 700 } : {}}
+                        >
+                            {opt.label}
+                        </button>
+                    ))}
+                    {locationLoading && <span className="text-xs text-muted" style={{ marginLeft: 4 }}>Updating…</span>}
+                    <button className="chip" onClick={requestGpsLocation} disabled={locationLoading} title="Refresh location" style={{ padding: '6px 10px' }}>
+                        🎯
+                    </button>
+                </div>
+            )}
+
             {/* Friends filter toggle */}
             {state.isAuthenticated && friendIdSet.size > 0 && (
                 <div style={{ marginBottom: 12 }}>
                     <button className={`chip ${showFriendsOnly ? 'active' : ''}`} onClick={() => setShowFriendsOnly(v => !v)}
-                        style={{ background: showFriendsOnly ? 'rgba(99,102,241,0.2)' : undefined, borderColor: showFriendsOnly ? '#6366f1' : undefined, color: showFriendsOnly ? '#818cf8' : undefined, fontWeight: showFriendsOnly ? 700 : undefined }}>
+                        style={{ background: showFriendsOnly ? 'rgba(198,244,50,0.2)' : undefined, borderColor: showFriendsOnly ? '#c6f432' : undefined, color: showFriendsOnly ? '#d8fa5a' : undefined, fontWeight: showFriendsOnly ? 700 : undefined }}>
                         👥 Friends' Games {showFriendsOnly ? '✓' : ''}
                     </button>
                 </div>
@@ -204,10 +340,12 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
             {viewMode === 'map' && (
                 <div style={{ height: 350, borderRadius: 'var(--radius-lg)', overflow: 'hidden', border: '1px solid var(--border-color)', marginBottom: 16, position: 'relative', background: 'var(--bg-card)' }}>
                     <iframe src={`https://maps.google.com/maps?q=${userLat},${userLng}&z=12&output=embed`} width="100%" height="100%" style={{ border: 0, filter: 'grayscale(0.2) invert(0.9) hue-rotate(180deg) brightness(0.8)' }} allowFullScreen loading="lazy" />
-                    <div style={{ position: 'absolute', bottom: 12, left: 12, right: 12, background: 'rgba(10,14,26,0.85)', borderRadius: 'var(--radius-md)', padding: '12px', fontSize: '0.8rem', color: 'var(--text-secondary)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.1)', zIndex: 10 }}>
+                    <div style={{ position: 'absolute', bottom: 12, left: 12, right: 12, background: 'rgba(12,13,15,0.85)', borderRadius: 'var(--radius-md)', padding: '12px', fontSize: '0.8rem', color: 'var(--text-secondary)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.1)', zIndex: 10 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span>📍 Showing {upcomingGames.length} games near {state.currentUser?.location || 'Mumbai'}</span>
-                            <button className="btn btn-xs btn-ghost" onClick={() => { if (navigator.geolocation) navigator.geolocation.getCurrentPosition(pos => dispatch({ type: 'UPDATE_PROFILE', payload: { lat: pos.coords.latitude, lng: pos.coords.longitude } })); }}>Recenter 🎯</button>
+                            <button className="btn btn-xs btn-ghost" onClick={requestGpsLocation} disabled={locationLoading}>
+                        {locationLoading ? '…' : 'Recenter 🎯'}
+                    </button>
                         </div>
                     </div>
                 </div>
@@ -239,10 +377,11 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
                 )}
                 {upcomingGames.map(game => {
                     const spots = spotsLeft(game);
-                    const sportColor = SPORTS[game.sport]?.color || '#6366f1';
-                    const sportGradient = SPORTS[game.sport]?.gradient || 'linear-gradient(135deg, #6366f1, #4f46e5)';
+                    const sportColor = SPORTS[game.sport]?.color || '#c6f432';
+                    const sportGradient = SPORTS[game.sport]?.gradient || 'linear-gradient(135deg, #c6f432, #a4d62a)';
                     const organizer = getPlayer(game.organizerId || game.organizer?.id) || game.organizer;
-                    const distance = calcDistKm(userLat, userLng, game.lat, game.lng);
+                    const distKm = calcDistKm(userLat, userLng, game.lat, game.lng);
+                    const distance = formatDist(distKm);
                     const confirmedPlayers = (game.rsvps || []).filter(r => r.status === 'yes' || r.status === 'checked_in');
                     const isFilling = spots > 0 && spots <= 3;
                     const isFull = spots <= 0;

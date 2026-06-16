@@ -24,7 +24,7 @@ const config: CapacitorConfig = {
   ios: {
     contentInset: 'always',
     scrollEnabled: false,
-    backgroundColor: '#070b15',
+    backgroundColor: '#0c0d0f',
     // Restrict navigation to our own domain in production builds.
     limitsNavigationsToAppBoundDomains: isProduction,
     preferredContentMode: 'mobile',
@@ -34,16 +34,16 @@ const config: CapacitorConfig = {
     SplashScreen: {
       launchShowDuration: 1200,
       launchAutoHide: true,
-      backgroundColor: '#070b15',
+      backgroundColor: '#0c0d0f',
       iosSpinnerStyle: 'small',
-      spinnerColor: '#6366f1',
+      spinnerColor: '#c6f432',
       showSpinner: true,
       splashFullScreen: true,
       splashImmersive: true,
     },
     StatusBar: {
       style: 'dark',
-      backgroundColor: '#070b15',
+      backgroundColor: '#0c0d0f',
     },
   },
 };
