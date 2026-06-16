@@ -90,34 +90,41 @@ export async function GET(req) {
     // Supabase fallback
     try {
         const supabase = getSupabase();
-        if (!supabase) return Response.json({ saved: [], history: [] });
+        if (!supabase) return Response.json({ error: 'Database unavailable' }, { status: 503 });
 
         // Fetch organized games
-        const { data: organizedData } = await supabase
-            .from('saved_games')
+        const { data: organizedData, error: organizedError } = await supabase
+            .from('Game')
             .select('*')
-            .eq('organizer_id', userId)
-            .order('game_date', { ascending: false })
+            .eq('organizerId', userId)
+            .order('date', { ascending: false })
             .limit(100);
 
         // Fetch games where player RSVPed
-        const { data: rsvpData } = await supabase
-            .from('game_rsvps')
-            .select('game_id, status, position')
-            .eq('player_id', userId)
+        const { data: rsvpData, error: rsvpError } = await supabase
+            .from('Rsvp')
+            .select('gameId, status, position')
+            .eq('playerId', userId)
             .in('status', ['yes', 'checked_in']);
 
+        // If the fallback queries errored (real DB outage), surface a 503 rather than
+        // masking the outage as empty history.
+        if (organizedError || rsvpError) {
+            console.error('GET /api/games/history Supabase query error:', (organizedError || rsvpError).message);
+            return Response.json({ error: 'Database unavailable' }, { status: 503 });
+        }
+
         const participatedIds = (rsvpData || [])
-            .map(r => r.game_id)
-            .filter(id => !(organizedData || []).some(g => g.game_id === id));
+            .map(r => r.gameId)
+            .filter(id => !(organizedData || []).some(g => g.id === id));
 
         let participatedGames = [];
         if (participatedIds.length > 0) {
             const { data } = await supabase
-                .from('saved_games')
+                .from('Game')
                 .select('*')
-                .in('game_id', participatedIds)
-                .order('game_date', { ascending: false });
+                .in('id', participatedIds)
+                .order('date', { ascending: false });
             participatedGames = data || [];
         }
 
@@ -126,7 +133,7 @@ export async function GET(req) {
             ...participatedGames.map(g => ({
                 ...g,
                 role: 'player',
-                my_rsvp_status: (rsvpData || []).find(r => r.game_id === g.game_id)?.status || null,
+                my_rsvp_status: (rsvpData || []).find(r => r.gameId === g.id)?.status || null,
             })),
         ];
 
@@ -134,22 +141,22 @@ export async function GET(req) {
             const score = parseScore(g.score);
             const matchData = score ? getMyResult(score, [userId]) : null;
             return {
-                game_id: g.game_id,
+                game_id: g.id,
                 title: g.title,
                 sport: g.sport,
                 format: g.format || '',
-                game_date: g.game_date,
-                game_time: g.game_time,
+                game_date: g.date,
+                game_time: g.time,
                 location: g.location || '',
                 status: g.status,
-                max_players: g.max_players || 10,
-                skill_level: g.skill_level || '',
-                organizer_id: g.organizer_id,
+                max_players: g.maxPlayers || 10,
+                skill_level: g.skillLevel || '',
+                organizer_id: g.organizerId,
                 score: g.score || null,
                 role: g.role,
                 my_rsvp_status: g.my_rsvp_status || null,
                 match: matchData,
-                created_at: g.created_at,
+                created_at: g.createdAt,
             };
         });
 
@@ -158,6 +165,6 @@ export async function GET(req) {
         return Response.json({ saved, history });
     } catch (err) {
         console.error('GET /api/games/history Supabase error:', err.message);
-        return Response.json({ saved: [], history: [] });
+        return Response.json({ error: 'Database unavailable' }, { status: 503 });
     }
 }

@@ -1,4 +1,5 @@
 'use client';
+import { useEffect, useState } from 'react';
 import { useStore } from '@/lib/store';
 import { SPORTS, getPlayer, getInitials, getTrustTier, getPlayerGames, formatDate, TRUST_TIERS } from '@/lib/mockData';
 
@@ -6,10 +7,39 @@ export default function SportsCVPage({ playerId, onBack }) {
     const { state } = useStore();
 
     const player = getPlayer(playerId) || state.players.find(p => p.id === playerId) || state.currentUser;
+    const [dbGames, setDbGames] = useState([]);
+    const playerDbId = player?.dbId || player?.id;
+
+    useEffect(() => {
+        if (!playerDbId || String(playerDbId).startsWith('p')) {
+            setDbGames([]);
+            return;
+        }
+        let cancelled = false;
+        fetch(`/api/games/history?userId=${playerDbId}`)
+            .then(r => r.json())
+            .then(data => {
+                if (cancelled) return;
+                const rows = [...(data.saved || []), ...(data.history || [])].map(g => ({
+                    id: g.game_id,
+                    title: g.title,
+                    sport: g.sport,
+                    format: g.format || '',
+                    date: g.game_date,
+                    status: g.status === 'open' ? 'open' : 'completed',
+                    rsvps: [{ playerId: playerDbId, status: g.my_rsvp_status || 'yes', position: g.position || player?.positions?.[g.sport] || '' }],
+                }));
+                setDbGames(rows);
+            })
+            .catch(() => setDbGames([]));
+        return () => { cancelled = true; };
+    }, [playerDbId]);
+
     if (!player) return <div className="glass-card no-hover text-center" style={{ padding: 48 }}><h3>Player not found</h3></div>;
 
     const trust = getTrustTier(player.trustScore || 0);
-    const playerGames = getPlayerGames(player.id);
+    const storeGames = (state.games || []).filter(g => (g.rsvps || []).some(r => String(r.playerId) === String(playerDbId)));
+    const playerGames = dbGames.length > 0 ? dbGames : (storeGames.length > 0 ? storeGames : getPlayerGames(player.id));
     const pastGames = playerGames.filter(g => g.status === 'completed');
     const upcomingGames = playerGames.filter(g => g.status === 'open');
 

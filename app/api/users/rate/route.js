@@ -111,17 +111,17 @@ export async function POST(req) {
             const supabase = getSupabase();
             if (!supabase) return Response.json({ error: 'Database unavailable' }, { status: 503 });
 
-            const { data: user } = await supabase.from('users').select('ratings, trust_score').eq('id', playerId).single();
+            const { data: user } = await supabase.from('User').select('ratings, trustScore').eq('id', playerId).single();
             if (!user) return Response.json({ error: 'User not found' }, { status: 404 });
 
             // Authorize: both rater and rated player must have RSVP'd to this game.
             if (gameId) {
                 const { data: rsvps } = await supabase
-                    .from('game_rsvps')
-                    .select('player_id')
-                    .eq('game_id', gameId)
-                    .in('player_id', [fromId, playerId]);
-                const rsvpIds = (rsvps || []).map(r => String(r.player_id));
+                    .from('Rsvp')
+                    .select('playerId')
+                    .eq('gameId', gameId)
+                    .in('playerId', [fromId, playerId]);
+                const rsvpIds = (rsvps || []).map(r => String(r.playerId));
                 if (!rsvpIds.includes(String(fromId))) return Response.json({ error: 'You were not part of this game.' }, { status: 403 });
                 if (!rsvpIds.includes(String(playerId))) return Response.json({ error: 'That player was not part of this game.' }, { status: 403 });
             }
@@ -129,9 +129,9 @@ export async function POST(req) {
             const result = computeUpdatedRatings(user.ratings, sport, rating, attrs, fromId, gameId);
             if (result.alreadyRated) return Response.json({ success: false, alreadyRated: true });
 
-            await supabase.from('users').update({
+            await supabase.from('User').update({
                 ratings: JSON.stringify(result.ratings),
-                trust_score: Math.max(0, Math.min(100, (user.trust_score || 0) + trustBonus)),
+                trustScore: Math.max(0, Math.min(100, (user.trustScore || 0) + trustBonus)),
             }).eq('id', playerId);
 
             return Response.json({ success: true, ratings: result.sportRatings });

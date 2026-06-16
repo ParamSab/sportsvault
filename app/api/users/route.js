@@ -63,12 +63,12 @@ export async function POST(req) {
 
         const lookupCol = email ? 'email' : 'phone';
         const lookupVal = email || phone;
-        const { data: existing } = await supabase.from('users').select('*').eq(lookupCol, lookupVal).maybeSingle();
+        const { data: existing } = await supabase.from('User').select('*').eq(lookupCol, lookupVal).maybeSingle();
 
         let userData;
         if (existing) {
             const { data: updated } = await supabase
-                .from('users')
+                .from('User')
                 .update({
                     name,
                     photo: photo || null,
@@ -83,7 +83,7 @@ export async function POST(req) {
             userData = updated || existing;
         } else {
             const { data: created, error } = await supabase
-                .from('users')
+                .from('User')
                 .insert({ name, email: email || null, phone: phone || null, photo: photo || null, location: location || null, sports: JSON.stringify(sports || []), positions: JSON.stringify(positions || {}), ...(hashedPassword && { password: hashedPassword }) })
                 .select()
                 .single();
@@ -98,7 +98,7 @@ export async function POST(req) {
         });
     } catch (supaErr) {
         console.error('POST /api/users Supabase fallback error:', supaErr.message);
-        return Response.json({ error: supaErr.message }, { status: 500 });
+        return Response.json({ error: 'Database unavailable' }, { status: 503 });
     }
 }
 
@@ -147,7 +147,7 @@ export async function PATCH(req) {
             // Supabase fallback
             const supabase = getSupabase();
             if (supabase) {
-                await supabase.from('users').update(updateData).eq('id', userId);
+                await supabase.from('User').update(updateData).eq('id', userId);
             }
             return Response.json({ success: true });
         }
@@ -185,7 +185,7 @@ export async function GET(req) {
             try {
                 const supabase = getSupabase();
                 if (supabase) {
-                    const { data } = await supabase.from('users').select('*').eq('id', id).maybeSingle();
+                    const { data } = await supabase.from('User').select('*').eq('id', id).maybeSingle();
                     if (data) {
                         const { password: _pw, ...safeUser } = data;
                         return Response.json({

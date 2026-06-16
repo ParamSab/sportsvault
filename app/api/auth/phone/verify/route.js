@@ -26,7 +26,7 @@ async function findUserByPhone(normalized) {
     try {
         const supabase = getSupabase();
         if (supabase) {
-            const { data } = await supabase.from('users').select('*').eq('phone', normalized).maybeSingle();
+            const { data } = await supabase.from('User').select('*').eq('phone', normalized).maybeSingle();
             if (data) return data;
         }
     } catch (_) { /* ignore */ }
@@ -74,10 +74,6 @@ export async function POST(req) {
         const session = await getIronSession(cookieStore, opts);
 
         if (user) {
-            if (!user.password) {
-                return Response.json({ exists: false, phone: normalized, existingProfile: user });
-            }
-
             const userData = {
                 ...user,
                 sports: Array.isArray(user.sports) ? user.sports : (typeof user.sports === 'string' ? JSON.parse(user.sports || '[]') : []),

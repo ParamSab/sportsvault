@@ -40,22 +40,44 @@ export async function GET(req, props) {
             // Try Supabase fallback
             const supabase = getSupabase();
             if (supabase) {
-                const { data: g } = await supabase.from('saved_games').select('*').eq('game_id', gameId).single();
+                const { data: g } = await supabase.from('Game').select('*').eq('id', gameId).single();
                 if (g) {
-                    const { data: rsvps } = await supabase.from('game_rsvps').select('*').eq('game_id', gameId);
-                    const { data: org } = await supabase.from('users').select('id, name, photo').eq('id', g.organizer_id).single();
+                    const { data: rsvps } = await supabase.from('Rsvp').select('*').eq('gameId', gameId);
+                    const playerIds = [...new Set((rsvps || []).map(r => r.playerId))];
+                    const [{ data: org }, { data: players }] = await Promise.all([
+                        supabase.from('User').select('id, name, photo').eq('id', g.organizerId).single(),
+                        playerIds.length
+                            ? supabase.from('User').select('id, name, phone, photo, positions, ratings').in('id', playerIds)
+                            : Promise.resolve({ data: [] }),
+                    ]);
+                    const playerMap = {};
+                    (players || []).forEach(p => { playerMap[p.id] = p; });
                     
                     const supaGame = {
-                        id: g.game_id, title: g.title, sport: g.sport, format: g.format || '',
-                        date: g.game_date, time: g.game_time, duration: g.duration || 90,
+                        id: g.id, title: g.title, sport: g.sport, format: g.format || '',
+                        date: g.date, time: g.time, duration: g.duration || 90,
                         location: g.location || '', address: g.address || '', lat: g.lat, lng: g.lng,
-                        maxPlayers: g.max_players || 10, skillLevel: g.skill_level || 'All Levels',
-                        status: g.status, visibility: g.visibility || 'public', approvalRequired: !!g.approval_required,
-                        price: g.price || 0, gender: g.gender || 'mixed', amenities: '[]',
-                        organizerId: g.organizer_id,
-                        organizer: org || { id: g.organizer_id, name: '', photo: null },
-                        rsvps: (rsvps || []).map(r => ({ playerId: r.player_id, status: r.status, position: r.position || '', player: null })),
-                        createdAt: g.created_at,
+                        maxPlayers: g.maxPlayers || 10, skillLevel: g.skillLevel || 'All Levels',
+                        status: g.status, visibility: g.visibility || 'public', approvalRequired: !!g.approvalRequired,
+                        price: g.price || 0, gender: g.gender || 'mixed', amenities: g.amenities || '[]',
+                        score: g.score || null,
+                        organizerId: g.organizerId,
+                        organizer: org || { id: g.organizerId, name: '', photo: null },
+                        rsvps: (rsvps || []).map(r => {
+                            const player = playerMap[r.playerId];
+                            return {
+                                playerId: r.playerId,
+                                status: r.status,
+                                position: r.position || '',
+                                paymentStatus: r.paymentStatus || 'not_required',
+                                player: player ? {
+                                    ...player,
+                                    positions: typeof player.positions === 'string' ? JSON.parse(player.positions || '{}') : (player.positions || {}),
+                                    ratings: typeof player.ratings === 'string' ? JSON.parse(player.ratings || '{}') : (player.ratings || {}),
+                                } : null,
+                            };
+                        }),
+                        createdAt: g.createdAt,
                     };
                     return Response.json({ game: supaGame });
                 }
@@ -124,22 +146,22 @@ export async function DELETE(req, props) {
             if (supabase) {
                 // Verify ownership first
                 const { data: gData } = await supabase
-                    .from('saved_games')
-                    .select('organizer_id')
-                    .eq('game_id', gameId)
+                    .from('Game')
+                    .select('organizerId')
+                    .eq('id', gameId)
                     .single();
                 
                 if (!gData) {
                     return Response.json({ error: 'Game not found' }, { status: 404 });
                 }
                 
-                if (gData.organizer_id !== userId) {
+                if (gData.organizerId !== userId) {
                     return Response.json({ error: 'Unauthorized to delete this game' }, { status: 403 });
                 }
 
                 // Delete RSVPs and Game (Supabase handles cascading if foreign keys are set, but let's be safe)
-                await supabase.from('game_rsvps').delete().eq('game_id', gameId);
-                const { error } = await supabase.from('saved_games').delete().eq('game_id', gameId);
+                await supabase.from('Rsvp').delete().eq('gameId', gameId);
+                const { error } = await supabase.from('Game').delete().eq('id', gameId);
                 
                 if (error) {
                     return Response.json({ error: error.message }, { status: 500 });
@@ -154,8 +176,8 @@ export async function DELETE(req, props) {
         try {
             const supabase = getSupabase();
             if (supabase) {
-                await supabase.from('game_rsvps').delete().eq('game_id', gameId);
-                await supabase.from('saved_games').delete().eq('game_id', gameId);
+                await supabase.from('Rsvp').delete().eq('gameId', gameId);
+                await supabase.from('Game').delete().eq('id', gameId);
             }
         } catch (_) {}
 

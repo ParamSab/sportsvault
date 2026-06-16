@@ -75,30 +75,55 @@ export async function GET() {
         }
 
         // --- Supabase fallback ---
+        let sbOutage = false;
         try {
             const supabase = getSupabase();
             if (supabase) {
-                const { data: rows } = await supabase
-                    .from('friendships')
-                    .select('user_id, friend_id')
-                    .or(`user_id.eq.${userId},friend_id.eq.${userId}`);
+                const { data: rows, error: rowsError } = await supabase
+                    .from('Friendship')
+                    .select('userId, friendId, status')
+                    .or(`userId.eq.${userId},friendId.eq.${userId}`);
+
+                if (rowsError) throw rowsError;
+
                 if (rows?.length) {
-                    const friendIds = rows.map(r => String(r.user_id) === String(userId) ? r.friend_id : r.user_id);
-                    const [{ data: users }, { data: tierRows }] = await Promise.all([
-                        supabase.from('users').select('*').in('id', friendIds),
-                        supabase.from('friend_tiers').select('friend_id, sport, tier').eq('user_id', userId),
+                    const friendIds = [...new Set(rows.map(r => String(r.userId) === String(userId) ? r.friendId : r.userId).filter(Boolean))];
+                    const [{ data: users, error: usersError }, { data: tierRows, error: tiersError }] = await Promise.all([
+                        supabase.from('User').select('*').in('id', friendIds),
+                        supabase.from('FriendTier').select('friendId, sport, tier').eq('userId', userId),
                     ]);
-                    const tiers = (tierRows || []).map(t => ({ friendId: t.friend_id, sport: t.sport, tier: t.tier }));
+
+                    if (usersError) throw usersError;
+                    if (tiersError) throw tiersError;
+
+                    const usersById = new Map((users || []).map(u => [String(u.id), u]));
+                    const formatFriend = (row) => {
+                        const friendId = String(row.userId) === String(userId) ? row.friendId : row.userId;
+                        const raw = usersById.get(String(friendId));
+                        if (!raw) return null;
+                        return {
+                            ...parseUser(raw),
+                            friendshipStatus: row.status,
+                            isSender: String(row.userId) === String(userId),
+                        };
+                    };
+                    const tiers = (tierRows || []).map(t => ({ friendId: t.friendId, sport: t.sport, tier: t.tier }));
+
                     return Response.json({
-                        friends: (users || []).map(u => parseUser(u)),
-                        pendingRequests: [],
+                        friends: rows.filter(r => r.status === 'accepted').map(formatFriend).filter(Boolean),
+                        pendingRequests: rows.filter(r => r.status === 'pending').map(formatFriend).filter(Boolean),
                         tiers,
                     });
                 }
             }
         } catch (sbErr) {
             console.error('[friends GET] Supabase fallback error:', sbErr.message);
+            sbOutage = true;
         }
+
+        // If the fallback queries errored (real DB outage), surface a 503 rather than
+        // masking the outage as "no friends".
+        if (sbOutage) return Response.json({ error: 'Database unavailable' }, { status: 503 });
 
         return Response.json({ friends: [], pendingRequests: [], tiers: [] });
     } catch (err) {
@@ -131,7 +156,7 @@ export async function POST(req) {
                     const supabase = getSupabase();
                     if (supabase) {
                         const { data } = await supabase
-                            .from('users')
+                            .from('User')
                             .upsert({ phone, name, email: `offline_${Date.now()}@sportsvault.app`, privacy: 'private' }, { onConflict: 'phone' })
                             .select('id').single();
                         finalFriendId = data?.id;
@@ -141,11 +166,27 @@ export async function POST(req) {
 
             if (!finalFriendId) return Response.json({ error: 'Friend ID or contact details required' }, { status: 400 });
 
-            const friendship = await prisma.friendship.upsert({
-                where: { userId_friendId: { userId, friendId: finalFriendId } },
-                update: { status: 'accepted' },
-                create: { userId, friendId: finalFriendId, status: 'accepted' }
-            });
+            let friendship;
+            try {
+                friendship = await prisma.friendship.upsert({
+                    where: { userId_friendId: { userId, friendId: finalFriendId } },
+                    update: { status: 'accepted' },
+                    create: { userId, friendId: finalFriendId, status: 'accepted' }
+                });
+            } catch (prismaErr) {
+                console.error('[friends POST] Prisma friendship error, falling back to Supabase:', prismaErr.message);
+                const supabase = getSupabase();
+                if (!supabase) throw prismaErr;
+
+                const { data, error } = await supabase
+                    .from('Friendship')
+                    .upsert({ userId, friendId: finalFriendId, status: 'accepted' }, { onConflict: 'userId,friendId' })
+                    .select('*')
+                    .single();
+
+                if (error) throw error;
+                friendship = data;
+            }
 
             try {
                 await prisma.notification.create({
@@ -155,20 +196,44 @@ export async function POST(req) {
                         message: `${session.user?.name || 'Someone'} added you as a friend on SportsVault!`
                     }
                 });
-            } catch (_) { /* notification optional */ }
+            } catch (_) {
+                try {
+                    const supabase = getSupabase();
+                    if (supabase) {
+                        await supabase.from('Notification').insert({
+                            userId: finalFriendId,
+                            title: 'New Friend',
+                            message: `${session.user?.name || 'Someone'} added you as a friend on SportsVault!`
+                        });
+                    }
+                } catch { /* notification optional */ }
+            }
 
             return Response.json({ success: true, friendship, friendId: finalFriendId });
         }
 
         if (action === 'remove') {
-            await prisma.friendship.deleteMany({
-                where: {
-                    OR: [
-                        { userId, friendId },
-                        { userId: friendId, friendId: userId }
-                    ]
-                }
-            });
+            try {
+                await prisma.friendship.deleteMany({
+                    where: {
+                        OR: [
+                            { userId, friendId },
+                            { userId: friendId, friendId: userId }
+                        ]
+                    }
+                });
+            } catch (prismaErr) {
+                console.error('[friends DELETE] Prisma error, falling back to Supabase:', prismaErr.message);
+                const supabase = getSupabase();
+                if (!supabase) throw prismaErr;
+
+                const { error } = await supabase
+                    .from('Friendship')
+                    .delete()
+                    .or(`and(userId.eq.${userId},friendId.eq.${friendId}),and(userId.eq.${friendId},friendId.eq.${userId})`);
+
+                if (error) throw error;
+            }
             return Response.json({ success: true });
         }
 

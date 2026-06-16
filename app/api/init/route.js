@@ -126,49 +126,58 @@ export async function GET(req) {
         windowStart.setDate(windowStart.getDate() - 7);
 
         const sbQueries = [
-            supabase.from('saved_games').select('*').gte('game_date', windowStart.toISOString().split('T')[0]).order('game_date', { ascending: true }).limit(100),
-            userId ? supabase.from('notifications').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(50) : Promise.resolve({ data: [] }),
-            userId ? supabase.from('friendships').select('user_id, friend_id, status').or(`user_id.eq.${userId},friend_id.eq.${userId}`) : Promise.resolve({ data: [] }),
-            userId ? supabase.from('friend_tiers').select('*').eq('user_id', userId) : Promise.resolve({ data: [] }),
+            supabase.from('Game').select('*').gte('date', windowStart.toISOString().split('T')[0]).order('date', { ascending: true }).limit(100),
+            userId ? supabase.from('Notification').select('*').eq('userId', userId).order('createdAt', { ascending: false }).limit(50) : Promise.resolve({ data: [] }),
+            userId ? supabase.from('Friendship').select('userId, friendId, status').or(`userId.eq.${userId},friendId.eq.${userId}`) : Promise.resolve({ data: [] }),
+            userId ? supabase.from('FriendTier').select('*').eq('userId', userId) : Promise.resolve({ data: [] }),
         ];
 
         const [gResult, nResult, fResult, tResult] = await Promise.all(sbQueries);
 
+        // If the core queries errored (real DB outage, not genuinely-empty results),
+        // surface a 503 rather than masking the outage as empty data.
+        if (gResult.error || nResult.error || fResult.error || tResult.error) {
+            console.error('[init] Supabase fallback query error:', (gResult.error || nResult.error || fResult.error || tResult.error).message);
+            return Response.json({ error: 'Database unavailable' }, { status: 503 });
+        }
+
         // Games
         const visibleGames = (gResult.data || []).filter(g =>
-            g.visibility === 'public' || g.organizer_id === userId ||
-            (g.visibility === 'friends' && friendIds.includes(g.organizer_id))
+            g.visibility === 'public' ||
+            g.organizerId === userId ||
+            (g.visibility === 'friends' && friendIds.includes(g.organizerId))
         );
-        const gameIds = visibleGames.map(g => g.game_id);
+        const gameIds = visibleGames.map(g => g.id);
         const [rsvpResult, orgResult] = await Promise.all([
-            gameIds.length ? supabase.from('game_rsvps').select('*').in('game_id', gameIds) : Promise.resolve({ data: [] }),
-            visibleGames.length ? supabase.from('users').select('id, name, photo').in('id', [...new Set(visibleGames.map(g => g.organizer_id))]) : Promise.resolve({ data: [] }),
+            gameIds.length ? supabase.from('Rsvp').select('*').in('gameId', gameIds) : Promise.resolve({ data: [] }),
+            visibleGames.length ? supabase.from('User').select('id, name, photo').in('id', [...new Set(visibleGames.map(g => g.organizerId))]) : Promise.resolve({ data: [] }),
         ]);
         const orgMap = {};
         (orgResult.data || []).forEach(u => { orgMap[u.id] = u; });
         const games = visibleGames.map(g => ({
-            id: g.game_id, title: g.title, sport: g.sport, format: g.format || '',
-            date: g.game_date, time: g.game_time, duration: g.duration || 90,
+            id: g.id, title: g.title, sport: g.sport, format: g.format || '',
+            date: g.date, time: g.time, duration: g.duration || 90,
             location: g.location || '', address: g.address || '', lat: g.lat, lng: g.lng,
-            maxPlayers: g.max_players || 10, skillLevel: g.skill_level || 'All Levels',
-            status: g.status, visibility: g.visibility || 'public', approvalRequired: !!g.approval_required,
-            price: g.price || 0, gender: g.gender || 'mixed', organizerId: g.organizer_id,
-            organizer: orgMap[g.organizer_id] || { id: g.organizer_id, name: '', photo: null },
-            rsvps: (rsvpResult.data || []).filter(r => r.game_id === g.game_id).map(r => ({
-                playerId: r.player_id, status: r.status, position: r.position || '', player: null,
+            maxPlayers: g.maxPlayers || 10, skillLevel: g.skillLevel || 'All Levels',
+            status: g.status, visibility: g.visibility || 'public', approvalRequired: !!g.approvalRequired,
+            price: g.price || 0, gender: g.gender || 'mixed', organizerId: g.organizerId,
+            score: g.score || null,
+            organizer: orgMap[g.organizerId] || { id: g.organizerId, name: '', photo: null },
+            rsvps: (rsvpResult.data || []).filter(r => r.gameId === g.id).map(r => ({
+                playerId: r.playerId, status: r.status, position: r.position || '', paymentStatus: r.paymentStatus || 'not_required', player: null,
             })),
-            createdAt: g.created_at,
+            createdAt: g.createdAt,
         }));
 
         // Friends
         const rows = fResult.data || [];
-        const friendUserIds = rows.map(r => String(r.user_id) === String(userId) ? r.friend_id : r.user_id);
+        const friendUserIds = rows.map(r => String(r.userId) === String(userId) ? r.friendId : r.userId);
         let friendUsers = [];
         if (friendUserIds.length) {
-            const { data: fu } = await supabase.from('users').select('id, name, phone, photo, location, sports, positions, ratings, trust_score, privacy, games_played').in('id', friendUserIds);
-            friendUsers = (fu || []).map(u => parseUser({ ...u, trustScore: u.trust_score, gamesPlayed: u.games_played }));
+            const { data: fu } = await supabase.from('User').select('id, name, phone, photo, location, sports, positions, ratings, trustScore, privacy, gamesPlayed').in('id', friendUserIds);
+            friendUsers = (fu || []).map(u => parseUser(u));
         }
-        const tiers = (tResult.data || []).map(t => ({ friendId: t.friend_id, sport: t.sport, tier: t.tier }));
+        const tiers = (tResult.data || []).map(t => ({ friendId: t.friendId, sport: t.sport, tier: t.tier }));
 
         return Response.json({
             games,
@@ -179,6 +188,6 @@ export async function GET(req) {
         });
     } catch (sbErr) {
         console.error('[init] Supabase error:', sbErr.message);
-        return Response.json({ error: sbErr.message }, { status: 500 });
+        return Response.json({ error: 'Database unavailable' }, { status: 503 });
     }
 }

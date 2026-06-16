@@ -111,7 +111,9 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
     let rawPositions = {};
     try { rawPositions = typeof player.positions === 'string' ? JSON.parse(player.positions || '{}') : (player.positions || {}); } catch { rawPositions = {}; }
     const playerPosition = rawPositions[currentSport] || 'Not set';
-    const hasRating = rating && rating.count >= 3;
+    const MIN_RATING_VOTES = 10;
+    const ratingCount = rating?.count || 0;
+    const hasRating = rating && ratingCount >= MIN_RATING_VOTES;
     const thoughts = Array.isArray(player.thoughts) ? player.thoughts : [];
     const playerGames = (state.games || []).filter(g => (g.rsvps || []).some(r => String(r.playerId) === String(player.id)));
     const pastGames = playerGames.filter(g => g.status === 'completed');
@@ -281,7 +283,7 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
                     <div style={{ textAlign: 'center', padding: 24, background: 'var(--bg-input)', borderRadius: 'var(--radius-md)' }}>
                         <div style={{ fontSize: '1.5rem', marginBottom: 8 }}>🔒</div>
                         <div style={{ fontWeight: 600, marginBottom: 4 }}>Rating Pending</div>
-                        <div className="text-xs text-muted">{rating?.count || 0}/3 ratings received. Need {Math.max(0, 3 - (rating?.count || 0))} more to unlock.</div>
+                        <div className="text-xs text-muted">{ratingCount}/{MIN_RATING_VOTES} ratings received. Need {Math.max(0, MIN_RATING_VOTES - ratingCount)} more to unlock.</div>
                     </div>
                 )}
             </div>

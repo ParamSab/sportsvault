@@ -68,13 +68,13 @@ export async function POST(req) {
             try {
                 const supabase = getSupabase();
                 if (supabase) {
-                    const { data } = await supabase.from('users').select('*').eq('email', normalizedEmail).maybeSingle();
+                    const { data } = await supabase.from('User').select('*').eq('email', normalizedEmail).maybeSingle();
                     if (data) user = data;
                 }
             } catch (_) { /* ignore */ }
         }
 
-        if (user && user.password) {
+        if (user) {
             const userData = {
                 ...user,
                 sports: Array.isArray(user.sports) ? user.sports : (typeof user.sports === 'string' ? JSON.parse(user.sports || '[]') : []),
@@ -85,7 +85,7 @@ export async function POST(req) {
             delete userData.password;
             session.user = userData;
             await session.save();
-            return Response.json({ user: userData, exists: true });
+            return Response.json({ user: userData, exists: true, needsPasswordSetup: !user.password });
         }
 
         await session.save();

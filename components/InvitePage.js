@@ -15,14 +15,20 @@ export default function InvitePage() {
     useEffect(() => { fetchFriends(); }, []);
 
     const fetchFriends = async () => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 8000);
+
         try {
-            const res = await fetch('/api/friends/list');
+            const res = await fetch('/api/friends/list', { signal: controller.signal });
             const data = await res.json();
             if (data.error) throw new Error(data.error);
             setFriends(data.friends || []);
         } catch (err) {
-            setError('Failed to load friends. Make sure you are logged in.');
+            setError(err.name === 'AbortError'
+                ? 'Friends are taking too long to load. You can skip this step for now.'
+                : 'Failed to load friends. Make sure you are logged in.');
         } finally {
+            clearTimeout(timer);
             setLoading(false);
         }
     };

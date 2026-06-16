@@ -62,6 +62,10 @@ export default function AuthPage() {
     };
 
     const handleSendOTP = async () => {
+        setAuthError('');
+        setOtp(['', '', '', '', '', '']);
+        setIsDevMode(false);
+        setDevCode('');
         setIsSending(true);
         try {
             if (authMode === 'email') {
@@ -157,6 +161,9 @@ export default function AuthPage() {
                     if (data.needsPasswordSetup) {
                         // Pre-fill email for setup if we know it
                         if (authMode === 'email') setSetupEmail(email);
+                        else setSetupEmail(data.user.email || '');
+                        if (data.phone) setVerifiedPhone(data.phone);
+                        if (data.email) setVerifiedEmail(data.email);
                         setStep('setup-credentials');
                     } else {
                         router.push('/invite');
@@ -187,7 +194,7 @@ export default function AuthPage() {
         setIsSending(true);
         try {
             const user = state.currentUser;
-            await fetch('/api/users', {
+            const res = await fetch('/api/users', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -201,9 +208,20 @@ export default function AuthPage() {
                     password: setupPassword,
                 }),
             });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to save credentials');
+            if (data.user) {
+                const sessionUser = { ...data.user, dbId: data.user.id, id: data.user.id };
+                dispatch({ type: 'LOGIN', payload: sessionUser });
+                await fetch('/api/auth/session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user: sessionUser, rememberMe }),
+                });
+            }
             router.push('/invite');
         } catch (err) {
-            setCredError('Failed to save. Please try again.');
+            setCredError(err.message || 'Failed to save. Please try again.');
         } finally {
             setIsSending(false);
         }

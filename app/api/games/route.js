@@ -6,34 +6,41 @@ import { sessionOptions } from '@/lib/session';
 
 function supabaseRowToGame(g) {
     return {
-        id: g.game_id,
+        id: g.game_id || g.id,
         title: g.title,
         sport: g.sport,
         format: g.format || '',
-        date: g.game_date,
-        time: g.game_time,
+        date: g.game_date || g.date,
+        time: g.game_time || g.time,
         duration: g.duration || 90,
         location: g.location || '',
         address: g.address || '',
         lat: g.lat,
         lng: g.lng,
-        maxPlayers: g.max_players || 10,
-        skillLevel: g.skill_level || 'All Levels',
+        maxPlayers: g.max_players || g.maxPlayers || 10,
+        skillLevel: g.skill_level || g.skillLevel || 'All Levels',
         status: g.status,
         visibility: g.visibility || 'public',
-        approvalRequired: !!g.approval_required,
-        bookingImage: null,
-        pitchType: g.pitch_type || null,
+        approvalRequired: !!(g.approval_required ?? g.approvalRequired),
+        bookingImage: g.bookingImage || null,
+        pitchType: g.pitch_type || g.pitchType || null,
         surface: g.surface || null,
-        footwear: '',
+        footwear: g.footwear || '',
         price: g.price || 0,
         gender: g.gender || 'mixed',
-        amenities: '[]',
-        organizerId: g.organizer_id,
-        organizer: { id: g.organizer_id, name: '', photo: null },
+        amenities: g.amenities || '[]',
+        organizerId: g.organizer_id || g.organizerId,
+        organizer: { id: g.organizer_id || g.organizerId, name: '', photo: null },
         rsvps: [],
-        createdAt: g.created_at,
+        score: g.score || null,
+        createdAt: g.created_at || g.createdAt,
     };
+}
+
+function safeParse(val, fallback) {
+    if (val == null) return fallback;
+    if (typeof val !== 'string') return val ?? fallback;
+    try { return JSON.parse(val) ?? fallback; } catch { return fallback; }
 }
 
 export const dynamic = 'force-dynamic';
@@ -125,39 +132,64 @@ export async function GET(req) {
     try {
         const supabase = getSupabase();
         if (supabase) {
+            const windowStart = new Date();
+            windowStart.setDate(windowStart.getDate() - 7);
+            const windowStr = windowStart.toISOString().split('T')[0];
+
             const { data, error } = await supabase
-                .from('saved_games')
+                .from('Game')
                 .select('*')
-                .order('created_at', { ascending: false });
+                .gte('date', windowStr)
+                .order('date', { ascending: true })
+                .limit(100);
 
             if (!error && data) {
                 const visible = data.filter(g =>
                     g.visibility === 'public' ||
-                    g.organizer_id === userId ||
-                    (g.visibility === 'friends' && friendIds.includes(g.organizer_id))
+                    g.organizerId === userId ||
+                    (g.visibility === 'friends' && friendIds.includes(g.organizerId))
                 );
 
-                const gameIds = visible.map(g => g.game_id);
+                const gameIds = visible.map(g => g.id);
 
                 // Fetch RSVPs for these games
                 const { data: rsvps } = gameIds.length
-                    ? await supabase.from('game_rsvps').select('*').in('game_id', gameIds)
+                    ? await supabase.from('Rsvp').select('*').in('gameId', gameIds)
                     : { data: [] };
 
                 // Fetch organizer names from users table
-                const organizerIds = [...new Set(visible.map(g => g.organizer_id))];
+                const organizerIds = [...new Set(visible.map(g => g.organizerId))];
+                const playerIds = [...new Set((rsvps || []).map(r => r.playerId))];
                 const { data: organizers } = organizerIds.length
-                    ? await supabase.from('users').select('id, name, photo').in('id', organizerIds)
+                    ? await supabase.from('User').select('id, name, photo').in('id', organizerIds)
+                    : { data: [] };
+                const { data: players } = playerIds.length
+                    ? await supabase.from('User').select('id, name, photo, positions, ratings').in('id', playerIds)
                     : { data: [] };
                 const organizerMap = {};
                 (organizers || []).forEach(u => { organizerMap[u.id] = u; });
+                const playerMap = {};
+                (players || []).forEach(u => { playerMap[u.id] = u; });
 
                 const games = visible.map(g => ({
                     ...supabaseRowToGame(g),
-                    organizer: organizerMap[g.organizer_id] || { id: g.organizer_id, name: '', photo: null },
+                    organizer: organizerMap[g.organizerId] || { id: g.organizerId, name: '', photo: null },
                     rsvps: (rsvps || [])
-                        .filter(r => r.game_id === g.game_id)
-                        .map(r => ({ playerId: r.player_id, status: r.status, position: r.position || '', player: null })),
+                        .filter(r => r.gameId === g.id)
+                        .map(r => {
+                            const player = playerMap[r.playerId];
+                            return {
+                                playerId: r.playerId,
+                                status: r.status,
+                                position: r.position || '',
+                                paymentStatus: r.paymentStatus || 'not_required',
+                                player: player ? {
+                                    ...player,
+                                    positions: safeParse(player.positions, {}),
+                                    ratings: safeParse(player.ratings, {}),
+                                } : null,
+                            };
+                        }),
                 }));
 
                 return Response.json({ games });
@@ -239,37 +271,6 @@ export async function POST(req) {
             },
         });
 
-        // Also save to Supabase as backup (fire-and-forget)
-        const supabase = getSupabase();
-        if (supabase) {
-            supabase.from('saved_games').upsert({
-                game_id:      newGame.id,
-                organizer_id: userId,
-                title:        newGame.title,
-                sport:        newGame.sport,
-                format:       newGame.format,
-                game_date:    newGame.date,
-                game_time:    newGame.time,
-                duration:     newGame.duration,
-                location:     newGame.location,
-                address:      newGame.address || '',
-                lat:          newGame.lat,
-                lng:          newGame.lng,
-                max_players:  newGame.maxPlayers,
-                skill_level:  newGame.skillLevel,
-                status:       'open',
-                visibility:   newGame.visibility,
-                price:        newGame.price || 0,
-                gender:       newGame.gender || 'mixed',
-                pitch_type:   newGame.pitchType || null,
-                surface:      newGame.surface || null,
-                reminder_hours: newGame.reminderHours,
-                reminders_sent: false,
-            }, { onConflict: 'game_id' }).then(({ error }) => {
-                if (error) console.error('Supabase backup save error:', error.message);
-            });
-        }
-
         const serialized = {
             ...newGame,
             rsvps: newGame.rsvps.map(r => ({
@@ -297,54 +298,7 @@ export async function POST(req) {
         }
 
         const gameId = crypto.randomUUID();
-        const { error } = await supabase.from('saved_games').insert({
-            game_id:      gameId,
-            organizer_id: userId,
-            title:        game.title,
-            sport:        game.sport,
-            format:       game.format || '',
-            game_date:    game.date,
-            game_time:    game.time,
-            duration:     game.duration || 90,
-            location:     game.location || '',
-            address:      game.address || '',
-            lat:          game.lat || null,
-            lng:          game.lng || null,
-            max_players:  game.maxPlayers || 10,
-            skill_level:  game.skillLevel || 'All Levels',
-            status:            'open',
-            visibility:        game.visibility || 'public',
-            approval_required: !!game.approvalRequired,
-            price:             game.price ? parseFloat(game.price.toString()) : 0,
-            gender:       game.gender || 'mixed',
-            pitch_type:   game.pitchType || null,
-            surface:      game.surface || null,
-            reminder_hours: game.reminderHours !== undefined ? parseInt(game.reminderHours) : 2,
-            reminders_sent: false,
-        });
-
-        if (error) {
-            console.error('Supabase fallback POST error:', error.message);
-            return Response.json({ error: error.message }, { status: 500 });
-        }
-
-        // Also create the organizer's RSVP in game_rsvps
-        try {
-            await supabase.from('game_rsvps').insert({
-                game_id:   gameId,
-                player_id: userId,
-                status:    'yes',
-                position:  game.organizerPosition || '',
-            });
-        } catch (rsvpErr) {
-            console.error('Organizer RSVP Supabase error:', rsvpErr?.message);
-        }
-
-        const organizerName = session.user?.name || '';
-        const organizerPhoto = session.user?.photo || null;
-
-        // Return a game object shaped like what the frontend expects
-        const savedGame = {
+        const { data: savedGameRow, error } = await supabase.from('Game').insert({
             id: gameId,
             title: game.title,
             sport: game.sport,
@@ -361,24 +315,51 @@ export async function POST(req) {
             status: 'open',
             visibility: game.visibility || 'public',
             approvalRequired: !!game.approvalRequired,
-            bookingImage: null,
-            pitchType: game.pitchType || null,
-            surface: game.surface || null,
-            footwear: '',
+            reminderHours: game.reminderHours !== undefined ? parseInt(game.reminderHours) : 2,
+            remindersSent: false,
+            bookingImage: game.bookingImage || null,
+            pitchType: game.pitchType || '5-a-side',
+            surface: game.surface || '3G Astro',
+            footwear: game.footwear || '',
             price: game.price ? parseFloat(game.price.toString()) : 0,
             gender: game.gender || 'mixed',
             amenities: typeof game.amenities === 'string' ? game.amenities : JSON.stringify(game.amenities || []),
-            reminderHours: game.reminderHours !== undefined ? parseInt(game.reminderHours) : 2,
-            remindersSent: false,
+            organizerId: userId,
+            upiId: game.upiId || null,
+        }).select().single();
+
+        if (error) {
+            console.error('Supabase fallback POST error:', error.message);
+            return Response.json({ error: error.message }, { status: 500 });
+        }
+
+        const { error: rsvpError } = await supabase.from('Rsvp').insert({
+            gameId,
+            playerId: userId,
+            status: 'yes',
+            position: game.organizerPosition || '',
+            paymentStatus: 'not_required',
+        });
+        if (rsvpError) {
+            await supabase.from('Game').delete().eq('id', gameId);
+            return Response.json({ error: rsvpError.message }, { status: 500 });
+        }
+
+        const organizerName = session.user?.name || '';
+        const organizerPhoto = session.user?.photo || null;
+
+        // Return a game object shaped like what the frontend expects
+        const savedGame = {
+            ...supabaseRowToGame(savedGameRow),
+            status: 'open',
             organizerId: userId,
             organizer: { id: userId, name: organizerName, photo: organizerPhoto },
             rsvps: [{ playerId: userId, status: 'yes', position: game.organizerPosition || '', player: { id: userId, name: organizerName, photo: organizerPhoto, positions: {}, ratings: {} } }],
-            createdAt: new Date().toISOString(),
         };
 
         return Response.json({ game: savedGame });
     } catch (supaErr) {
         console.error('Supabase fallback POST exception:', supaErr.message);
-        return Response.json({ error: supaErr.message }, { status: 500 });
+        return Response.json({ error: 'Database unavailable' }, { status: 503 });
     }
 }

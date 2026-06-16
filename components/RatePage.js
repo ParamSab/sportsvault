@@ -95,8 +95,6 @@ export default function RatePage({ gameId, onBack }) {
         const attrValues = Object.values(currentRatings);
         const avg = attrValues.reduce((s, v) => s + v, 0) / attrValues.length;
 
-        dispatch({ type: 'SUBMIT_RATING', payload: { playerId: player.id, sport, rating: avg } });
-
         try {
             const res = await fetch('/api/users/rate', {
                 method: 'POST',
@@ -118,8 +116,12 @@ export default function RatePage({ gameId, onBack }) {
                 setCurrentIdx(effectiveIdx + 1);
                 return;
             }
+            if (!res.ok) throw new Error(data.error || 'Rating failed');
+            dispatch({ type: 'SUBMIT_RATING', payload: { playerId: player.id, sport, rating: avg } });
         } catch (err) {
             console.error('Rating sync error:', err);
+            setSubmitting(false);
+            return;
         }
 
         if (thought.trim()) {
