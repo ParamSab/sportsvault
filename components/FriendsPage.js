@@ -238,7 +238,7 @@ export default function FriendsPage({ onViewProfile }) {
         const sports = safeArray(friend.sports);
 
         return (
-            <div key={friend.id} className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
+            <div key={friend.id} className="sv-card" style={{ padding: 0, overflow: 'hidden' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 14px 10px' }}>
                     <div
                         className="avatar"
@@ -312,21 +312,19 @@ export default function FriendsPage({ onViewProfile }) {
             )}
 
             {/* Header */}
-            <div style={{ marginBottom: 20 }}>
-                <h1 style={{ fontSize: '1.75rem', fontWeight: 800, marginBottom: 4 }}>Squad</h1>
+            <div style={{ margin: '6px 0 18px' }}>
+                <h1 className="dg-title" style={{ fontSize: 'clamp(1.9rem, 7vw, 2.6rem)' }}>Squad</h1>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span className="text-muted text-sm">{friendPlayers.length} friends connected</span>
                     {pendingReceived.length > 0 && (
-                        <span style={{ background: 'rgba(239,68,68,0.15)', color: '#ef4444', borderRadius: 99, padding: '2px 10px', fontSize: '0.75rem', fontWeight: 700 }}>
-                            {pendingReceived.length} new request{pendingReceived.length !== 1 ? 's' : ''}
-                        </span>
+                        <span className="sv-pill red">{pendingReceived.length} new request{pendingReceived.length !== 1 ? 's' : ''}</span>
                     )}
                 </div>
             </div>
 
             {/* Tabs */}
-            <div className="tab-bar" style={{ marginBottom: 16 }}>
-                <button className={`tab-item ${activeView === 'friends' ? 'active' : ''}`} onClick={() => setActiveView('friends')}>
+            <div className="dg-segment" style={{ display: 'flex', marginBottom: 16 }}>
+                <button className={`dg-seg ${activeView === 'friends' ? 'on' : ''}`} style={{ flex: 1 }} onClick={() => setActiveView('friends')}>
                     👥 My Squad
                     {pendingReceived.length > 0 && (
                         <span style={{ marginLeft: 6, background: '#ef4444', color: '#fff', fontSize: '0.65rem', padding: '1px 5px', borderRadius: 99, fontWeight: 700 }}>
@@ -334,7 +332,7 @@ export default function FriendsPage({ onViewProfile }) {
                         </span>
                     )}
                 </button>
-                <button className={`tab-item ${activeView === 'discover' ? 'active' : ''}`} onClick={() => setActiveView('discover')}>
+                <button className={`dg-seg ${activeView === 'discover' ? 'on' : ''}`} style={{ flex: 1 }} onClick={() => setActiveView('discover')}>
                     🔍 Discover
                 </button>
             </div>
@@ -354,7 +352,7 @@ export default function FriendsPage({ onViewProfile }) {
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                                 {pendingReceived.map(player => (
-                                    <div key={player.id} className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14, borderLeft: '3px solid #ef4444' }}>
+                                    <div key={player.id} className="sv-card" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14, borderLeft: '3px solid #ef4444' }}>
                                         <div
                                             className="avatar"
                                             style={{ cursor: 'pointer', flexShrink: 0, background: player.photo ? `url(${player.photo}) center/cover` : undefined, fontSize: player.photo ? '0' : undefined }}
@@ -395,7 +393,7 @@ export default function FriendsPage({ onViewProfile }) {
                             <p className="text-xs font-semibold text-muted" style={{ marginBottom: 8, letterSpacing: '0.06em' }}>SENT REQUESTS · {pendingSent.length}</p>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                                 {pendingSent.map(player => (
-                                    <div key={player.id} className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14, opacity: 0.8 }}>
+                                    <div key={player.id} className="sv-card" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14, opacity: 0.8 }}>
                                         <div className="avatar" style={{ flexShrink: 0, background: player.photo ? `url(${player.photo}) center/cover` : undefined, fontSize: player.photo ? '0' : undefined }}>
                                             {player.photo ? '' : getInitials(player.name || '?')}
                                         </div>
@@ -416,7 +414,7 @@ export default function FriendsPage({ onViewProfile }) {
                     )}
 
                     {/* Add by phone */}
-                    <div className="glass-card no-hover" style={{ padding: '12px 14px' }}>
+                    <div className="sv-card" style={{ padding: '12px 14px' }}>
                         {!showPhoneAdd ? (
                             <button
                                 onClick={() => setShowPhoneAdd(true)}
@@ -480,18 +478,18 @@ export default function FriendsPage({ onViewProfile }) {
 
                     {/* Loading state */}
                     {!state.isLoaded && friendPlayers.length === 0 && pendingReceived.length === 0 && pendingSent.length === 0 && (
-                        <div className="glass-card no-hover text-center" style={{ padding: 40 }}>
+                        <div className="sv-empty">
                             <div className="spinner" style={{ margin: '0 auto 16px' }}></div>
-                            <h3 style={{ marginBottom: 8, fontSize: '1.125rem' }}>Loading friends…</h3>
+                            <h3>Loading friends…</h3>
                         </div>
                     )}
 
                     {/* Empty state */}
                     {state.isLoaded && friendPlayers.length === 0 && pendingReceived.length === 0 && pendingSent.length === 0 && (
-                        <div className="glass-card no-hover text-center" style={{ padding: 40 }}>
-                            <div style={{ fontSize: '3rem', marginBottom: 12 }}>👥</div>
-                            <h3 style={{ marginBottom: 8, fontSize: '1.125rem' }}>Your squad is empty</h3>
-                            <p className="text-muted text-sm" style={{ marginBottom: 20 }}>Add friends by phone or discover players on SportsVault.</p>
+                        <div className="sv-empty">
+                            <div className="ico">👥</div>
+                            <h3>Your squad is empty</h3>
+                            <p style={{ marginBottom: 20 }}>Add friends by phone or discover players on SportsVault.</p>
                             <button className="btn btn-primary btn-sm" onClick={() => setActiveView('discover')}>Find Players →</button>
                         </div>
                     )}
@@ -567,9 +565,9 @@ export default function FriendsPage({ onViewProfile }) {
                     )}
 
                     {suggestedPlayers.length === 0 && !isSearching ? (
-                        <div className="glass-card no-hover text-center" style={{ padding: 32 }}>
-                            <div style={{ fontSize: '2rem', marginBottom: 8 }}>🎉</div>
-                            <p className="text-muted text-sm">
+                        <div className="sv-empty">
+                            <div className="ico">🎉</div>
+                            <p>
                                 {searchQuery.trim().length >= 2 ? 'No players found for that search.' : "You've connected with everyone nearby!"}
                             </p>
                         </div>
@@ -581,7 +579,7 @@ export default function FriendsPage({ onViewProfile }) {
                             const isPendingSent = pendingSent.some(p => String(p.id) === String(player.id));
                             const sports = safeArray(player.sports);
                             return (
-                                <div key={player.id} className="glass-card" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14 }}>
+                                <div key={player.id} className="sv-card" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14 }}>
                                     <div
                                         className="avatar"
                                         style={{ borderColor: trust.color, cursor: 'pointer', flexShrink: 0, background: player.photo ? `url(${player.photo}) center/cover` : undefined, fontSize: player.photo ? '0' : undefined }}

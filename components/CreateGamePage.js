@@ -479,7 +479,7 @@ export default function CreateGamePage({ onComplete }) {
         // 6: Preview
         <div key="preview" className="animate-fade-in">
             <h2 style={{ marginBottom: 20 }}>Looks good? 🔥</h2>
-            <div className="glass-card no-hover" style={{ overflow: 'hidden', padding: 0 }}>
+            <div className="sv-card" style={{ overflow: 'hidden', padding: 0 }}>
                 <div style={{ height: 4, background: SPORTS[game.sport]?.gradient }} />
                 <div style={{ padding: 20 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
@@ -516,7 +516,7 @@ export default function CreateGamePage({ onComplete }) {
                 <h2 style={{ marginBottom: 12 }}>Game is Live!</h2>
                 <p className="text-muted text-sm" style={{ marginBottom: 32 }}>Your game has been created and is now discoverable on the map.</p>
                 
-                <div className="glass-card" style={{ padding: 20, marginBottom: 32, textAlign: 'left' }}>
+                <div className="sv-card" style={{ padding: 20, marginBottom: 32, textAlign: 'left' }}>
                     <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 8, color: SPORTS[createdGame.sport]?.color }}>{SPORTS[createdGame.sport]?.emoji} {createdGame.title}</div>
                     <div className="text-xs text-secondary">📍 {createdGame.location}</div>
                     <div className="text-xs text-secondary">📅 {createdGame.date} · {createdGame.time}</div>

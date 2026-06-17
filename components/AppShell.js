@@ -10,6 +10,7 @@ import GameDetailPage from './GameDetailPage';
 import RatePage from './RatePage';
 import SportsCVPage from './SportsCVPage';
 import AuthPage from './AuthPage';
+import LandingPage from './LandingPage';
 import { getInitials } from '@/lib/mockData';
 
 export default function AppShell() {
@@ -20,6 +21,7 @@ export default function AppShell() {
     const [viewingCV, setViewingCV] = useState(null);
     const [ratingGame, setRatingGame] = useState(null);
     const [showAuthGate, setShowAuthGate] = useState(false);
+    const [enteredApp, setEnteredApp] = useState(false);
 
     const isGuest = !state.isAuthenticated;
 
@@ -106,6 +108,18 @@ export default function AppShell() {
             default: return null;
         }
     };
+
+    // Guests land on the marketing landing page first. Skipped once they enter
+    // the app (Explore games), open a deep-linked game, or hit the auth gate.
+    const showLanding = isGuest && !enteredApp && !viewingGame && !showAuthGate;
+    if (showLanding) {
+        return (
+            <LandingPage
+                onExplore={() => { setEnteredApp(true); setActiveTab('discover'); }}
+                onJoin={() => { setEnteredApp(true); setActiveTab('profile'); }}
+            />
+        );
+    }
 
     return (
         <div style={{ minHeight: '100dvh', background: 'var(--bg-primary)' }}>

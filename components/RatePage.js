@@ -25,7 +25,8 @@ export default function RatePage({ gameId, onBack }) {
 
     const game = freshGame || state.games.find(g => String(g.id) === String(gameId));
     if (!game) return (
-        <div className="glass-card no-hover text-center" style={{ padding: 48 }}>
+        <div className="sv-empty">
+            <div className="ico">🔍</div>
             <h3>Game not found</h3>
             <button className="btn btn-outline mt-md" onClick={onBack}>← Back</button>
         </div>
@@ -59,20 +60,16 @@ export default function RatePage({ gameId, onBack }) {
 
     if (!player || effectiveIdx >= playersToRate.length) {
         return (
-            <div className="animate-fade-in text-center" style={{ padding: '48px 0' }}>
-                <div style={{ fontSize: '3rem', marginBottom: 16 }}>🎉</div>
-                <h2 style={{ marginBottom: 8 }}>All Done!</h2>
-                <p className="text-muted text-sm" style={{ marginBottom: 8 }}>
+            <div className="animate-fade-in sv-empty" style={{ marginTop: 24 }}>
+                <div className="ico">🎉</div>
+                <h3>All Done!</h3>
+                <p style={{ marginBottom: 8 }}>
                     You rated {submitted.length} player{submitted.length !== 1 ? 's' : ''}.
                 </p>
                 {skipped.size > 0 && (
-                    <p className="text-muted text-sm" style={{ marginBottom: 24 }}>
-                        {skipped.size} already rated from this game.
-                    </p>
+                    <p style={{ marginBottom: 8 }}>{skipped.size} already rated from this game.</p>
                 )}
-                <p className="text-muted text-sm" style={{ marginBottom: 24 }}>
-                    All skill ratings are anonymous.
-                </p>
+                <p style={{ marginBottom: 24 }}>All skill ratings are anonymous.</p>
                 <button className="btn btn-primary" onClick={onBack}>← Back</button>
             </div>
         );
@@ -149,17 +146,18 @@ export default function RatePage({ gameId, onBack }) {
 
     return (
         <div className="animate-fade-in">
-            <button className="btn btn-ghost" onClick={onBack} style={{ marginBottom: 12, padding: '8px 0' }}>
-                ← Back
+            <button className="sv-back" onClick={onBack}>
+                <svg viewBox="0 0 24 24"><path d="M19 12H5M11 18l-6-6 6-6" /></svg>
+                Back
             </button>
 
             {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 14 }}>
                 <div>
-                    <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Rate Players</h2>
+                    <h2 className="dg-title" style={{ fontSize: 'clamp(1.6rem, 6vw, 2.1rem)' }}>Rate Players</h2>
                     <div className="text-xs text-muted" style={{ marginTop: 2 }}>{game.title}</div>
                 </div>
-                <span className="text-sm text-muted">{rated + 1} of {playersToRate.length}</span>
+                <span className="sv-pill">{rated + 1} / {playersToRate.length}</span>
             </div>
 
             {/* Progress dots */}
@@ -178,7 +176,7 @@ export default function RatePage({ gameId, onBack }) {
             </div>
 
             {/* Player card */}
-            <div className="glass-card no-hover" style={{ textAlign: 'center', marginBottom: 16, padding: '20px 16px' }}>
+            <div className="sv-card" style={{ textAlign: 'center', marginBottom: 16, padding: '20px 16px' }}>
                 <div className="avatar avatar-lg" style={{
                     margin: '0 auto 12px',
                     borderColor: sportColor,
@@ -195,12 +193,11 @@ export default function RatePage({ gameId, onBack }) {
             </div>
 
             {/* Attribute star ratings */}
-            <div className="glass-card no-hover" style={{ marginBottom: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                    <h3 style={{ fontSize: '0.9375rem', margin: 0 }}>
-                        {SPORTS[sport]?.emoji} Skill Ratings
-                    </h3>
-                    <span className="text-xs text-muted">anonymous</span>
+            <div className="sv-card" style={{ marginBottom: 16 }}>
+                <div className="sv-card-head">
+                    <span className="ico">{SPORTS[sport]?.emoji}</span>
+                    <h3>Skill Ratings</h3>
+                    <span className="right text-xs text-muted">anonymous</span>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
                     {attrs.map(attr => (
@@ -239,10 +236,12 @@ export default function RatePage({ gameId, onBack }) {
             </div>
 
             {/* Written thought */}
-            <div className="glass-card no-hover" style={{ marginBottom: 16 }}>
-                <h3 style={{ fontSize: '0.9375rem', marginBottom: 8 }}>
-                    💬 Leave a Thought <span className="text-xs text-muted">(shows your name)</span>
-                </h3>
+            <div className="sv-card" style={{ marginBottom: 16 }}>
+                <div className="sv-card-head" style={{ marginBottom: 10 }}>
+                    <span className="ico">💬</span>
+                    <h3>Leave a Thought</h3>
+                    <span className="right text-xs text-muted">(shows your name)</span>
+                </div>
                 <textarea
                     value={thought}
                     onChange={e => setThought(e.target.value)}

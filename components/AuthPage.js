@@ -573,7 +573,7 @@ export default function AuthPage() {
 
                 {step === 'login' && (
                     <div className="animate-fade-in">
-                        <div className="glass-card no-hover" style={{ padding: '24px 20px' }}>
+                        <div className="sv-card" style={{ padding: '24px 20px' }}>
                             <h3 style={{ marginBottom: 4 }}>Welcome back</h3>
                             <p className="text-muted text-sm" style={{ marginBottom: 16 }}>Log in or sign up to get started.</p>
 
@@ -685,7 +685,7 @@ export default function AuthPage() {
 
                 {step === 'otp' && (
                     <div className="animate-fade-in">
-                        <div className="glass-card no-hover" style={{ padding: '24px 20px' }}>
+                        <div className="sv-card" style={{ padding: '24px 20px' }}>
                             <h3 style={{ marginBottom: 4 }}>
                                 {authMode === 'email' ? 'Check your inbox' : 'Check your messages'}
                             </h3>
@@ -743,7 +743,7 @@ export default function AuthPage() {
 
                 {step === 'onboarding' && (
                     <div className="animate-slide-up">
-                        <div className="glass-card no-hover" style={{ padding: '20px 18px' }}>
+                        <div className="sv-card" style={{ padding: '20px 18px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                                 <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.05em' }}>STEP {onboardStep + 1} OF {onboardingSteps.length}</div>
                                 <div style={{ display: 'flex', gap: 4 }}>{onboardingSteps.map((_, i) => <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: i === onboardStep ? 'var(--primary-color)' : i < onboardStep ? 'rgba(99,102,241,0.3)' : 'var(--border-color)', transition: 'all 0.3s' }} />)}</div>
@@ -760,7 +760,7 @@ export default function AuthPage() {
 
                 {step === 'setup-credentials' && (
                     <div className="animate-slide-up">
-                        <div className="glass-card no-hover" style={{ padding: '24px 20px' }}>
+                        <div className="sv-card" style={{ padding: '24px 20px' }}>
                             <h3 style={{ marginBottom: 4 }}>Set your email & password</h3>
                             <p className="text-muted text-sm" style={{ marginBottom: 24 }}>All your games and profile are linked to this.</p>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

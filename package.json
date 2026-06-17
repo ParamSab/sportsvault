@@ -9,7 +9,9 @@
     "postinstall": "prisma generate",
     "mobile:sync": "CAPACITOR_LIVE_URL=http://localhost:3005 npx cap sync ios",
     "mobile:open": "npx cap open ios",
-    "mobile:run": "CAPACITOR_LIVE_URL=http://localhost:3005 npx cap run ios"
+    "mobile:run": "CAPACITOR_LIVE_URL=http://localhost:3005 npx cap run ios",
+    "mobile:sync:prod": "CAPACITOR_LIVE_URL=https://sportsvault.vercel.app npx cap sync ios",
+    "mobile:run:prod": "CAPACITOR_LIVE_URL=https://sportsvault.vercel.app npx cap run ios"
   },
   "dependencies": {
     "@capacitor/app": "^8.1.0",

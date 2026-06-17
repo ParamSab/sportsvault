@@ -90,9 +90,9 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
     }, [player?.dbId, player?.id, isOwn]); // eslint-disable-line react-hooks/exhaustive-deps
 
     if (!player) {
-        if (isLoadingPlayer) return <div className="glass-card no-hover text-center" style={{ padding: 48 }}><h3>Loading profile…</h3></div>;
+        if (isLoadingPlayer) return <div className="sv-card text-center" style={{ padding: 48 }}><h3>Loading profile…</h3></div>;
         return (
-            <div className="glass-card no-hover text-center" style={{ padding: 48 }}>
+            <div className="sv-card text-center" style={{ padding: 48 }}>
                 <div style={{ fontSize: '2rem', marginBottom: 8 }}>👤</div>
                 <h3>Player not found</h3>
                 <button className="btn btn-ghost btn-sm" style={{ marginTop: 12 }} onClick={onBack}>← Back</button>
@@ -211,11 +211,16 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
                     {toast}
                 </div>
             )}
-            {!isOwn && <button className="btn btn-ghost" onClick={onBack} style={{ marginBottom: 12, padding: '8px 0' }}>← Back</button>}
+            {!isOwn && (
+                <button className="sv-back" onClick={onBack}>
+                    <svg viewBox="0 0 24 24"><path d="M19 12H5M11 18l-6-6 6-6" /></svg>
+                    Back
+                </button>
+            )}
 
-            <div className="glass-card no-hover" style={{ textAlign: 'center', marginBottom: 16, position: 'relative', overflow: 'hidden' }}>
-                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 80, background: sports[0] ? SPORTS[sports[0]]?.gradient : 'linear-gradient(135deg, #6366f1, #8b5cf6)', opacity: 0.3 }} />
-                <div style={{ position: 'relative', paddingTop: 24 }}>
+            <div className="sv-card" style={{ textAlign: 'center', marginBottom: 16, position: 'relative', overflow: 'hidden', padding: 0 }}>
+                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 92, background: sports[0] ? SPORTS[sports[0]]?.gradient : 'linear-gradient(135deg, #6366f1, #8b5cf6)', opacity: 0.32 }} />
+                <div style={{ position: 'relative', paddingTop: 26, paddingLeft: 18, paddingRight: 18, paddingBottom: 18 }}>
                     <div className="avatar avatar-xl" style={{ margin: '0 auto 12px', borderColor: trust.color, background: player.photo ? `url(${player.photo}) center/cover` : `linear-gradient(135deg, ${trust.color}30, var(--bg-card))`, fontSize: player.photo ? '0' : '1.75rem' }}>
                         {player.photo ? '' : getInitials(player.name || 'U')}
                     </div>
@@ -238,10 +243,10 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
                             </button>
                         </div>
                     )}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                        <div style={{ background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', padding: 12 }}><div style={{ fontWeight: 800, fontSize: '1.25rem' }}>{player.gamesPlayed ?? 0}</div><div className="text-xs text-muted">Games</div></div>
-                        <div style={{ background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', padding: 12 }}><div style={{ fontWeight: 800, fontSize: '1.25rem', color: 'var(--success)' }}>{player.wins ?? 0}</div><div className="text-xs text-muted">Wins</div></div>
-                        <div style={{ background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', padding: 12 }}><div style={{ fontWeight: 800, fontSize: '1.25rem', color: 'var(--danger)' }}>{player.losses ?? 0}</div><div className="text-xs text-muted">Losses</div></div>
+                    <div className="sv-tiles">
+                        <div className="sv-tile"><div className="num">{player.gamesPlayed ?? 0}</div><div className="lbl">Games</div></div>
+                        <div className="sv-tile"><div className="num" style={{ color: 'var(--success)' }}>{player.wins ?? 0}</div><div className="lbl">Wins</div></div>
+                        <div className="sv-tile"><div className="num" style={{ color: 'var(--danger)' }}>{player.losses ?? 0}</div><div className="lbl">Losses</div></div>
                     </div>
                 </div>
             </div>
@@ -252,10 +257,11 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
                 </div>
             )}
 
-            <div className="glass-card no-hover" style={{ marginBottom: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                    <h3 style={{ fontSize: '1rem' }}>{SPORTS[currentSport]?.emoji || '🏅'} {SPORTS[currentSport]?.name || currentSport} Rating</h3>
-                    <span className="text-xs text-muted">Position: <span style={{ color: SPORTS[currentSport]?.color || 'var(--primary-color)', fontWeight: 600 }}>{playerPosition}</span></span>
+            <div className="sv-card" style={{ marginBottom: 16 }}>
+                <div className="sv-card-head">
+                    <span className="ico">{SPORTS[currentSport]?.emoji || '🏅'}</span>
+                    <h3>{SPORTS[currentSport]?.name || currentSport} Rating</h3>
+                    <span className="right text-xs text-muted">Position: <span style={{ color: SPORTS[currentSport]?.color || 'var(--primary-color)', fontWeight: 600 }}>{playerPosition}</span></span>
                 </div>
                 {hasRating ? (
                     <>
@@ -288,8 +294,8 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
                 )}
             </div>
 
-            <div className="glass-card no-hover" style={{ marginBottom: 16 }}>
-                <h3 style={{ fontSize: '1rem', marginBottom: 12 }}>🛡️ Trust Score</h3>
+            <div className="sv-card" style={{ marginBottom: 16 }}>
+                <div className="sv-card-head"><span className="ico">🛡️</span><h3>Trust Score</h3></div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                     <div style={{ width: 64, height: 64, borderRadius: '50%', background: `conic-gradient(${trust.color} ${player.trustScore || 0}%, var(--bg-input) 0)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'var(--bg-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '1rem', color: trust.color }}>{player.trustScore || 0}</div>
@@ -298,8 +304,8 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
                 </div>
             </div>
 
-            <div className="glass-card no-hover" style={{ marginBottom: 16 }}>
-                <h3 style={{ fontSize: '1rem', marginBottom: 12 }}>💬 Written Thoughts</h3>
+            <div className="sv-card" style={{ marginBottom: 16 }}>
+                <div className="sv-card-head"><span className="ico">💬</span><h3>Written Thoughts</h3></div>
                 {thoughts.length === 0 ? <p className="text-sm text-muted">No thoughts yet.</p> : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                         {thoughts.map((t, i) => {
@@ -333,15 +339,15 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
             {(isOwn || !isOwn) && (
                 <>
                     {savedGames.length > 0 && (
-                        <div className="glass-card no-hover" style={{ marginBottom: 16 }}>
-                            <h3 style={{ fontSize: '1rem', marginBottom: 12 }}>📌 Active Games</h3>
+                        <div className="sv-card" style={{ marginBottom: 16 }}>
+                            <div className="sv-card-head"><span className="ico">📌</span><h3>Active Games</h3></div>
                             {historyLoading ? <p className="text-sm text-muted">Loading…</p> : (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{savedGames.map((g, i) => <GameRow key={g.game_id || i} g={g} onClick={() => onViewGame?.(g.game_id)} />)}</div>
                             )}
                         </div>
                     )}
-                    <div className="glass-card no-hover" style={{ marginBottom: 16 }}>
-                        <h3 style={{ fontSize: '1rem', marginBottom: 12 }}>🕒 Match History</h3>
+                    <div className="sv-card" style={{ marginBottom: 16 }}>
+                        <div className="sv-card-head"><span className="ico">🕒</span><h3>Match History</h3></div>
                         {historyLoading
                             ? <p className="text-sm text-muted">Loading…</p>
                             : gameHistory.length === 0

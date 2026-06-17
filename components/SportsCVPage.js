@@ -35,7 +35,7 @@ export default function SportsCVPage({ playerId, onBack }) {
         return () => { cancelled = true; };
     }, [playerDbId]);
 
-    if (!player) return <div className="glass-card no-hover text-center" style={{ padding: 48 }}><h3>Player not found</h3></div>;
+    if (!player) return <div className="sv-card text-center" style={{ padding: 48 }}><h3>Player not found</h3></div>;
 
     const trust = getTrustTier(player.trustScore || 0);
     const storeGames = (state.games || []).filter(g => (g.rsvps || []).some(r => String(r.playerId) === String(playerDbId)));
@@ -77,8 +77,9 @@ export default function SportsCVPage({ playerId, onBack }) {
     return (
         <div className="animate-fade-in">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <button className="btn btn-ghost" onClick={onBack} style={{ padding: '8px 0' }}>
-                    ← Back
+                <button className="sv-back" onClick={onBack} style={{ marginBottom: 0 }}>
+                    <svg viewBox="0 0 24 24"><path d="M19 12H5M11 18l-6-6 6-6" /></svg>
+                    Back
                 </button>
                 <div style={{ display: 'flex', gap: 8 }}>
                     <button className="btn btn-sm btn-outline" onClick={handleShare}>🔗 Share</button>
@@ -109,26 +110,26 @@ export default function SportsCVPage({ playerId, onBack }) {
             </div>
 
             {/* Stats Overview */}
-            <div className="cv-section glass-card no-hover">
-                <h3 style={{ marginBottom: 16 }}>📊 Career Statistics</h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+            <div className="cv-section sv-card">
+                <div className="sv-card-head"><span className="ico">📊</span><h3>Career Statistics</h3></div>
+                <div className="sv-tiles">
                     {[
                         { label: 'Games', value: player.gamesPlayed, color: 'var(--text-primary)' },
                         { label: 'Wins', value: player.wins, color: 'var(--success)' },
                         { label: 'Losses', value: player.losses, color: 'var(--danger)' },
                         { label: 'Win Rate', value: player.gamesPlayed ? `${Math.round((player.wins / player.gamesPlayed) * 100)}%` : '0%', color: 'var(--info)' },
                     ].map(stat => (
-                        <div key={stat.label} style={{ textAlign: 'center', padding: 12, background: 'var(--bg-input)', borderRadius: 'var(--radius-md)' }}>
-                            <div style={{ fontWeight: 800, fontSize: '1.25rem', color: stat.color }}>{stat.value}</div>
-                            <div className="text-xs text-muted">{stat.label}</div>
+                        <div key={stat.label} className="sv-tile">
+                            <div className="num" style={{ color: stat.color }}>{stat.value}</div>
+                            <div className="lbl">{stat.label}</div>
                         </div>
                     ))}
                 </div>
             </div>
 
             {/* Trust Score */}
-            <div className="cv-section glass-card no-hover">
-                <h3 style={{ marginBottom: 16 }}>🛡️ Trust & Reliability</h3>
+            <div className="cv-section sv-card">
+                <div className="sv-card-head"><span className="ico">🛡️</span><h3>Trust &amp; Reliability</h3></div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
                     <div style={{
                         width: 72, height: 72, borderRadius: '50%',
@@ -165,11 +166,14 @@ export default function SportsCVPage({ playerId, onBack }) {
                 const rating = player.ratings?.[sport];
                 const hasRating = rating && rating.count >= 10;
                 return (
-                    <div key={sport} className="cv-section glass-card no-hover">
-                        <h3 style={{ marginBottom: 16 }}>{SPORTS[sport]?.emoji} {SPORTS[sport]?.name}</h3>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <div key={sport} className="cv-section sv-card">
+                        <div className="sv-card-head">
+                            <span className="ico">{SPORTS[sport]?.emoji}</span>
+                            <h3>{SPORTS[sport]?.name}</h3>
+                            {hasRating && <span className="right sv-pill amber">⭐ {rating.overall}</span>}
+                        </div>
+                        <div style={{ marginBottom: 12 }}>
                             <span className="text-sm text-muted">Position: <span style={{ color: SPORTS[sport]?.color, fontWeight: 600 }}>{player.positions?.[sport] || 'Flex'}</span></span>
-                            {hasRating && <span style={{ color: 'var(--warning)', fontWeight: 700 }}>⭐ {rating.overall}</span>}
                         </div>
                         {hasRating && rating.attrs && Object.keys(rating.attrs).length > 0 ? (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -197,8 +201,8 @@ export default function SportsCVPage({ playerId, onBack }) {
 
             {/* Positions Played */}
             {Object.keys(positionsPlayed).length > 0 && (
-                <div className="cv-section glass-card no-hover">
-                    <h3 style={{ marginBottom: 16 }}>🏃 Positions Played</h3>
+                <div className="cv-section sv-card">
+                    <div className="sv-card-head"><span className="ico">🏃</span><h3>Positions Played</h3></div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                         {Object.entries(positionsPlayed).map(([key, count]) => {
                             const [sport, pos] = key.split('-');
@@ -219,8 +223,8 @@ export default function SportsCVPage({ playerId, onBack }) {
 
             {/* Milestones */}
             {milestones.length > 0 && (
-                <div className="cv-section glass-card no-hover">
-                    <h3 style={{ marginBottom: 16 }}>🏆 Milestones</h3>
+                <div className="cv-section sv-card">
+                    <div className="sv-card-head"><span className="ico">🏆</span><h3>Milestones</h3></div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         {milestones.map((m, i) => (
                             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0' }}>
@@ -237,8 +241,8 @@ export default function SportsCVPage({ playerId, onBack }) {
 
             {/* Written Feedback */}
             {(player.thoughts || []).length > 0 && (
-                <div className="cv-section glass-card no-hover">
-                    <h3 style={{ marginBottom: 16 }}>💬 Player Feedback</h3>
+                <div className="cv-section sv-card">
+                    <div className="sv-card-head"><span className="ico">💬</span><h3>Player Feedback</h3></div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                         {player.thoughts.map((t, i) => {
                             const from = getPlayer(t.from);
@@ -258,8 +262,8 @@ export default function SportsCVPage({ playerId, onBack }) {
 
             {/* Recent Game History */}
             {playerGames.length > 0 && (
-                <div className="cv-section glass-card no-hover" style={{ marginBottom: 24 }}>
-                    <h3 style={{ marginBottom: 16 }}>📅 Recent Games</h3>
+                <div className="cv-section sv-card" style={{ marginBottom: 24 }}>
+                    <div className="sv-card-head"><span className="ico">📅</span><h3>Recent Games</h3></div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {playerGames.slice(0, 6).map(g => (
                             <div key={g.id} style={{

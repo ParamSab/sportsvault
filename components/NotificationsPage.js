@@ -129,22 +129,11 @@ export default function NotificationsPage({ onViewGame }) {
         } catch (_) {}
     };
 
-    const tabStyle = (tab) => ({
-        flex: 1, padding: '10px 0', border: 'none', borderRadius: 10,
-        background: activeTab === tab ? 'var(--bg-card)' : 'transparent',
-        color: activeTab === tab ? 'var(--text-primary)' : 'var(--text-muted)',
-        fontWeight: activeTab === tab ? 700 : 500,
-        fontSize: '0.875rem',
-        cursor: 'pointer',
-        transition: 'all 0.2s',
-        position: 'relative',
-    });
-
     return (
         <div className="animate-fade-in">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', margin: '6px 0 16px' }}>
                 <div>
-                    <h1 style={{ fontSize: 'clamp(1.5rem, 4vw, 2rem)', marginBottom: 2 }}>Notifications</h1>
+                    <h1 className="dg-title" style={{ fontSize: 'clamp(1.75rem, 6vw, 2.4rem)' }}>Notifications</h1>
                     <p className="text-muted text-sm">{totalAlertsCount > 0 ? `${totalAlertsCount} need attention` : 'All caught up!'}</p>
                 </div>
                 {unread.length > 0 && (
@@ -155,11 +144,11 @@ export default function NotificationsPage({ onViewGame }) {
             </div>
 
             {/* Tabs */}
-            <div style={{ display: 'flex', gap: 4, background: 'var(--bg-input)', borderRadius: 12, padding: 4, marginBottom: 20 }}>
-                <button style={tabStyle('alerts')} onClick={() => setActiveTab('alerts')}>
+            <div className="dg-segment" style={{ display: 'flex', marginBottom: 20 }}>
+                <button className={`dg-seg ${activeTab === 'alerts' ? 'on' : ''}`} style={{ flex: 1 }} onClick={() => setActiveTab('alerts')}>
                     Alerts {totalAlertsCount > 0 && <span style={{ marginLeft: 6, background: 'var(--danger)', color: '#fff', borderRadius: 10, padding: '1px 6px', fontSize: '0.7rem' }}>{totalAlertsCount}</span>}
                 </button>
-                <button style={tabStyle('approvals')} onClick={() => setActiveTab('approvals')}>
+                <button className={`dg-seg ${activeTab === 'approvals' ? 'on' : ''}`} style={{ flex: 1 }} onClick={() => setActiveTab('approvals')}>
                     Approvals {pendingApprovals.length > 0 && <span style={{ marginLeft: 6, background: 'var(--warning)', color: '#fff', borderRadius: 10, padding: '1px 6px', fontSize: '0.7rem' }}>{pendingApprovals.length}</span>}
                 </button>
             </div>
@@ -174,7 +163,7 @@ export default function NotificationsPage({ onViewGame }) {
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                                 {pendingFriends.map(friend => (
-                                    <div key={friend.id} className="glass-card no-hover" style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                                    <div key={friend.id} className="sv-card" style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
                                         <div className="avatar" style={{ flexShrink: 0 }}>{getInitials(friend.name || '?')}</div>
                                         <div style={{ flex: 1, minWidth: 0 }}>
                                             <div style={{ fontWeight: 600, fontSize: '0.9375rem' }}>{friend.name || 'Unknown'}</div>
@@ -206,10 +195,10 @@ export default function NotificationsPage({ onViewGame }) {
 
                     {/* Notification alerts */}
                     {notifications.length === 0 && pendingFriends.length === 0 ? (
-                        <div className="glass-card no-hover text-center" style={{ padding: 48 }}>
-                            <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>🔔</div>
-                            <h3 style={{ marginBottom: 8 }}>All caught up!</h3>
-                            <p className="text-muted text-sm">No notifications right now.</p>
+                        <div className="sv-empty">
+                            <div className="ico">🔔</div>
+                            <h3>All caught up!</h3>
+                            <p>No notifications right now.</p>
                         </div>
                     ) : (
                         <>
@@ -275,10 +264,10 @@ export default function NotificationsPage({ onViewGame }) {
             {activeTab === 'approvals' && (
                 <div>
                     {pendingApprovals.length === 0 ? (
-                        <div className="glass-card no-hover text-center" style={{ padding: 48 }}>
-                            <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>✅</div>
-                            <h3 style={{ marginBottom: 8 }}>No pending approvals</h3>
-                            <p className="text-muted text-sm">All join requests have been handled.</p>
+                        <div className="sv-empty">
+                            <div className="ico">✅</div>
+                            <h3>No pending approvals</h3>
+                            <p>All join requests have been handled.</p>
                         </div>
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -288,7 +277,7 @@ export default function NotificationsPage({ onViewGame }) {
                                 const approveKey = `${game.id}-${playerId}-yes`;
                                 const declineKey = `${game.id}-${playerId}-no`;
                                 return (
-                                    <div key={`${game.id}-${playerId}`} className="glass-card no-hover" style={{ padding: '14px 16px' }}>
+                                    <div key={`${game.id}-${playerId}`} className="sv-card" style={{ padding: '14px 16px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
                                             <div className="avatar" style={{ flexShrink: 0 }}>{getInitials(displayName)}</div>
                                             <div style={{ flex: 1, minWidth: 0 }}>

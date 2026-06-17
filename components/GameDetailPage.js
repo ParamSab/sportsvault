@@ -96,13 +96,13 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     if (!game) {
         if (!state.isLoaded || (!notFound && state.isLoaded)) {
             return (
-                <div className="glass-card no-hover text-center" style={{ padding: 48 }}>
+                <div className="sv-card text-center" style={{ padding: 48 }}>
                     <div className="spinner" style={{ margin: '0 auto 16px' }}></div>
                     <h3>Loading game details...</h3>
                 </div>
             );
         }
-        return <div className="glass-card no-hover text-center" style={{ padding: 48 }}><h3>Game not found</h3><button className="btn btn-outline mt-md" onClick={onBack}>← Back</button></div>;
+        return <div className="sv-card text-center" style={{ padding: 48 }}><h3>Game not found</h3><button className="btn btn-outline mt-md" onClick={onBack}>← Back</button></div>;
     }
 
     const sport = SPORTS[game.sport] || { name: 'Unknown', emoji: '🏅', color: '#6366f1', gradient: 'linear-gradient(135deg, #6366f1, #4f46e5)' };
@@ -313,40 +313,28 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     return (
         <>
         <div className="animate-fade-in">
-            <button className="btn btn-ghost" onClick={onBack} style={{ marginBottom: 12, padding: '8px 0' }}>
-                ← Back to games
+            <button className="sv-back" onClick={onBack}>
+                <svg viewBox="0 0 24 24"><path d="M19 12H5M11 18l-6-6 6-6" /></svg>
+                Back to games
             </button>
 
             {/* Hero */}
-            <div className="glass-card no-hover" style={{ overflow: 'hidden', padding: 0, marginBottom: 16 }}>
-                <div style={{ height: 110, background: sport?.gradient, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <span style={{ fontSize: '3rem', opacity: 0.25, position: 'absolute' }}>{sport?.emoji}</span>
-                    <div style={{ position: 'relative', textAlign: 'center' }}>
-                        <span className={`sport-badge ${game.sport}`} style={{ background: 'rgba(0,0,0,0.3)', color: '#fff', marginBottom: 8, display: 'inline-flex' }}>
-                            {sport?.emoji} {game.format}
-                        </span>
-                    </div>
-                    {/* Privacy & Price badge */}
-                    <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', gap: 6 }}>
-                        <div style={{
-                            background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)',
-                            borderRadius: 99, padding: '4px 10px', fontSize: '0.7rem', fontWeight: 700,
-                            color: privacyInfo.color, border: `1px solid ${privacyInfo.color}40`,
-                        }}>
-                            {privacyInfo.emoji} {privacyInfo.label}
+            <div className="sv-hero">
+                <div className="sv-hero-cover" style={{ background: sport?.gradient }}>
+                    <span className="sv-hero-emoji">{sport?.emoji}</span>
+                    <div className="sv-hero-top">
+                        <span className="sv-pill solid">{sport?.emoji} {game.format}</span>
+                        <div className="sv-hero-tags">
+                            <span className="sv-pill solid" style={{ color: privacyInfo.color, borderColor: `${privacyInfo.color}55` }}>
+                                {privacyInfo.emoji} {privacyInfo.label}
+                            </span>
+                            {game.price > 0 && (
+                                <span className="sv-pill green" style={{ backdropFilter: 'blur(6px)' }}>₹{game.price}</span>
+                            )}
                         </div>
-                        {game.price > 0 && (
-                            <div style={{
-                                background: 'rgba(34,197,94,0.2)', backdropFilter: 'blur(8px)',
-                                borderRadius: 99, padding: '4px 10px', fontSize: '0.7rem', fontWeight: 700,
-                                color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)',
-                            }}>
-                                Rs.{game.price}
-                            </div>
-                        )}
                     </div>
                 </div>
-                <div style={{ padding: 20 }}>
+                <div className="sv-hero-body" style={{ paddingTop: 16 }}>
                     <h2 style={{ marginBottom: 16 }}>{game.title}</h2>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -424,7 +412,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
 
             {/* Position selector */}
             <div style={{ marginBottom: 16 }}>
-                <label className="text-xs text-muted" style={{ display: 'block', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Select your position</label>
+                <label className="sv-label">Select your position</label>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {(POSITIONS[game.sport] || []).map(pos => (
                         <button key={pos} onClick={() => setSelectedPosition(pos)} className="chip"
@@ -442,7 +430,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
 
             {/* RSVP / Join Section */}
             {isGuest ? (
-                <div className="glass-card no-hover text-center animate-fade-in" style={{ padding: 24, marginBottom: 16, border: '1px dashed var(--primary-color)' }}>
+                <div className="sv-card text-center animate-fade-in" style={{ padding: 24, marginBottom: 16, border: '1px dashed var(--primary-color)' }}>
                    <p className="text-sm text-muted" style={{ marginBottom: 16 }}>Want to join this game?</p>
                    <button className="btn btn-primary btn-block btn-lg" onClick={() => onViewProfile('login_prompt')}>
                        Log in to RSVP →
@@ -452,7 +440,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                 /* ── Approval-required flow ── */
                 <div style={{ marginBottom: 16 }}>
                     {myRsvp?.status === 'pending' ? (
-                        <div className="glass-card no-hover animate-fade-in" style={{ padding: 20, border: '1px solid rgba(234,179,8,0.4)', marginBottom: 8, textAlign: 'center' }}>
+                        <div className="sv-card animate-fade-in" style={{ padding: 20, border: '1px solid rgba(234,179,8,0.4)', marginBottom: 8, textAlign: 'center' }}>
                             <div style={{ fontSize: '1.75rem', marginBottom: 8 }}>⏳</div>
                             <div style={{ fontWeight: 700, fontSize: '1rem', marginBottom: 4 }}>Request Sent</div>
                             <div className="text-sm text-muted">Waiting for the organizer to approve your spot.</div>
@@ -467,7 +455,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                         </div>
                     ) : showJoinConfirm ? (
                         /* Confirmation card */
-                        <div className="glass-card no-hover animate-fade-in" style={{ padding: 20, border: '1px solid var(--primary-color)', marginBottom: 8 }}>
+                        <div className="sv-card animate-fade-in" style={{ padding: 20, border: '1px solid var(--primary-color)', marginBottom: 8 }}>
                             <div style={{ fontWeight: 700, fontSize: '1rem', marginBottom: 8 }}>✋ Confirm Join Request</div>
                             <div className="text-sm text-muted" style={{ marginBottom: 16, lineHeight: 1.6 }}>
                                 You're requesting to join <strong>{game.title}</strong>.<br />
@@ -541,7 +529,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
 
             {/* Host Approvals */}
             {isOrganizer && pendingRsvps.length > 0 && (
-                <div className="glass-card no-hover animate-fade-in" style={{ marginBottom: 16, border: '1px solid var(--warning)' }}>
+                <div className="sv-card animate-fade-in" style={{ marginBottom: 16, border: '1px solid var(--warning)' }}>
                     <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: 12, color: 'var(--warning)' }}>
                         ✋ Pending Approvals ({pendingRsvps.length})
                     </h3>
@@ -572,45 +560,19 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
             )}
 
             {/* Attendee Lists */}
-            <div className="glass-card no-hover" style={{ marginBottom: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                    <h3 style={{ fontSize: '1.125rem', fontWeight: 700 }}>Players ({confirmedRsvps.length}/{game.maxPlayers})</h3>
-                    <span style={{
-                        background: spots <= 2 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(34, 197, 94, 0.15)',
-                        color: spots <= 2 ? '#ef4444' : '#22c55e',
-                        padding: '6px 12px', borderRadius: 'var(--radius-full)', fontSize: '0.75rem', fontWeight: 800,
-                        border: `1px solid ${spots <= 2 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(34, 197, 94, 0.3)'}`
-                    }}>
+            <div className="sv-card" style={{ marginBottom: 16 }}>
+                <div className="sv-card-head">
+                    <span className="ico">🏟️</span>
+                    <h3>Players <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>({confirmedRsvps.length}/{game.maxPlayers})</span></h3>
+                    <span className={`sv-pill right ${spots <= 2 ? 'red' : 'green'}`}>
                         {spots} SPOT{spots !== 1 ? 'S' : ''} LEFT
                     </span>
                 </div>
 
                 {/* View toggle */}
-                <div style={{ display: 'flex', gap: 0, marginBottom: 16, background: 'var(--bg-input)', borderRadius: 10, padding: 3 }}>
-                    <button
-                        onClick={() => setPlayerView('pitch')}
-                        style={{
-                            flex: 1, padding: '7px 0', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700,
-                            background: playerView === 'pitch' ? 'var(--bg-card)' : 'transparent',
-                            color: playerView === 'pitch' ? 'var(--text-primary)' : 'var(--text-muted)',
-                            boxShadow: playerView === 'pitch' ? '0 1px 4px rgba(0,0,0,0.3)' : 'none',
-                            transition: 'all 0.15s',
-                        }}
-                    >
-                        🏟️ Pitch View
-                    </button>
-                    <button
-                        onClick={() => setPlayerView('list')}
-                        style={{
-                            flex: 1, padding: '7px 0', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700,
-                            background: playerView === 'list' ? 'var(--bg-card)' : 'transparent',
-                            color: playerView === 'list' ? 'var(--text-primary)' : 'var(--text-muted)',
-                            boxShadow: playerView === 'list' ? '0 1px 4px rgba(0,0,0,0.3)' : 'none',
-                            transition: 'all 0.15s',
-                        }}
-                    >
-                        📋 List
-                    </button>
+                <div className="dg-segment" style={{ display: 'flex', marginBottom: 16 }}>
+                    <button className={`dg-seg ${playerView === 'pitch' ? 'on' : ''}`} style={{ flex: 1 }} onClick={() => setPlayerView('pitch')}>🏟️ Pitch View</button>
+                    <button className={`dg-seg ${playerView === 'list' ? 'on' : ''}`} style={{ flex: 1 }} onClick={() => setPlayerView('list')}>📋 List</button>
                 </div>
 
                 {/* Pitch view */}
@@ -837,7 +799,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
 
             {/* Auto Team Balancer */}
             {teams && (
-                <div className="glass-card no-hover" style={{ marginBottom: 16 }}>
+                <div className="sv-card" style={{ marginBottom: 16 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                         <h3 style={{ fontSize: '1rem' }}>🤖 Auto-Balanced Teams</h3>
                         <button className="btn btn-sm btn-outline" onClick={() => setShowTeams(!showTeams)}>{showTeams ? 'Hide' : 'Show'}</button>
@@ -883,24 +845,21 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                     const t2 = savedScore.team2 ?? 0;
                     const draw = t1 === t2;
                     return (
-                        <div className="glass-card no-hover" style={{ marginBottom: 16 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-                                <span style={{ fontSize: '1.25rem' }}>🏆</span>
-                                <h3 style={{ fontSize: '1rem', margin: 0 }}>Final Score</h3>
+                        <div className="sv-card">
+                            <div className="sv-card-head">
+                                <span className="ico">🏆</span>
+                                <h3>Final Score</h3>
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0 }}>
-                                {/* Team 1 */}
-                                <div style={{ flex: 1, textAlign: 'center', padding: '16px 12px', borderRadius: '12px 0 0 12px', background: t1 > t2 ? 'rgba(34,197,94,0.12)' : t1 < t2 ? 'rgba(239,68,68,0.08)' : 'var(--bg-input)', border: `1px solid ${t1 > t2 ? 'rgba(34,197,94,0.3)' : t1 < t2 ? 'rgba(239,68,68,0.2)' : 'var(--border-color)'}` }}>
-                                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Team 1</div>
-                                    <div style={{ fontSize: '2.5rem', fontWeight: 900, color: t1 > t2 ? '#22c55e' : t1 < t2 ? '#ef4444' : 'var(--text-primary)', lineHeight: 1 }}>{t1}</div>
+                            <div className="sv-score">
+                                <div className={`sv-score-side ${t1 > t2 ? 'win' : t1 < t2 ? 'loss' : ''}`}>
+                                    <div className="lbl">Team 1</div>
+                                    <div className="val" style={{ color: t1 > t2 ? '#22c55e' : t1 < t2 ? '#ef4444' : 'var(--text-primary)' }}>{t1}</div>
                                     {t1 > t2 && <div style={{ fontSize: '0.7rem', color: '#22c55e', marginTop: 4, fontWeight: 700 }}>WIN</div>}
                                 </div>
-                                {/* Divider */}
-                                <div style={{ padding: '0 10px', fontWeight: 900, fontSize: '1.25rem', color: 'var(--text-secondary)', flexShrink: 0 }}>:</div>
-                                {/* Team 2 */}
-                                <div style={{ flex: 1, textAlign: 'center', padding: '16px 12px', borderRadius: '0 12px 12px 0', background: t2 > t1 ? 'rgba(34,197,94,0.12)' : t2 < t1 ? 'rgba(239,68,68,0.08)' : 'var(--bg-input)', border: `1px solid ${t2 > t1 ? 'rgba(34,197,94,0.3)' : t2 < t1 ? 'rgba(239,68,68,0.2)' : 'var(--border-color)'}` }}>
-                                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Team 2</div>
-                                    <div style={{ fontSize: '2.5rem', fontWeight: 900, color: t2 > t1 ? '#22c55e' : t2 < t1 ? '#ef4444' : 'var(--text-primary)', lineHeight: 1 }}>{t2}</div>
+                                <div className="sv-score-mid">:</div>
+                                <div className={`sv-score-side ${t2 > t1 ? 'win' : t2 < t1 ? 'loss' : ''}`}>
+                                    <div className="lbl">Team 2</div>
+                                    <div className="val" style={{ color: t2 > t1 ? '#22c55e' : t2 < t1 ? '#ef4444' : 'var(--text-primary)' }}>{t2}</div>
                                     {t2 > t1 && <div style={{ fontSize: '0.7rem', color: '#22c55e', marginTop: 4, fontWeight: 700 }}>WIN</div>}
                                 </div>
                             </div>
@@ -959,7 +918,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
 
                 // Score input form (organizer only)
                 return (
-                    <div className="glass-card no-hover" style={{ marginBottom: 16, border: `1px solid ${sportColor}40` }}>
+                    <div className="sv-card" style={{ marginBottom: 16, border: `1px solid ${sportColor}40` }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
                             <span style={{ fontSize: '1.25rem' }}>🏆</span>
                             <div>
@@ -1102,7 +1061,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
             {/* Actions: Text Blast + WhatsApp */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
                 {isOrganizer && (
-                    <div className="glass-card no-hover" style={{ padding: 20 }}>
+                    <div className="sv-card" style={{ padding: 20 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
                             <span style={{ fontSize: '1.25rem' }}>📱</span>
                             <div>
