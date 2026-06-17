@@ -44,6 +44,10 @@
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 	</array>
+	<!-- Portrait-only, full-screen app: opt out of iPad multitasking so we don't
+	     need to declare landscape orientations (fixes App Store error 90474). -->
+	<key>UIRequiresFullScreen</key>
+	<true/>
 	<!-- Privacy descriptions (required by App Store) -->
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>SportsVault uses your location to show nearby games and help you find venues close to you.</string>
