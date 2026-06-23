@@ -23,7 +23,7 @@ const config: CapacitorConfig = {
 
   ios: {
     contentInset: 'always',
-    scrollEnabled: false,
+    scrollEnabled: true,
     backgroundColor: '#0c0d0f',
     // Restrict navigation to our own domain in production builds.
     limitsNavigationsToAppBoundDomains: isProduction,
