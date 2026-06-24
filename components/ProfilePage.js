@@ -444,7 +444,7 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
 
             {isOwn && (
                 <div className="glass-card no-hover" style={{ marginBottom: 16, borderColor: 'rgba(239,68,68,0.2)' }}>
-                    <h3 style={{ fontSize: '0.9375rem', marginBottom: 4, color: 'var(--text-primary)' }}>Account</h3>
+                    <h3 style={{ fontSize: '0.9375rem', marginBottom: 4, color: 'var(--text-primary)' }}>Delete Account</h3>
                     <p className="text-sm text-muted" style={{ marginBottom: 14 }}>
                         Permanently delete your account and all data — games, history, ratings. This cannot be undone.
                     </p>

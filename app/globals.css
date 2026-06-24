@@ -135,6 +135,8 @@ body {
   line-height: 1.55;
   min-height: 100dvh;
   overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
