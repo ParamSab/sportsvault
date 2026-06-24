@@ -28,15 +28,18 @@ BEGIN
             "updatedAt" = NOW();
     EXCEPTION WHEN undefined_table THEN NULL; END;
 
-    -- snake_case (Supabase) table
+    -- snake_case (Supabase) table — best-effort fallback. Its `id` column is
+    -- uuid (unlike Prisma's text id), so cast. Swallow ANY error here: this
+    -- table is secondary; Prisma's "User" above is the auth source of truth,
+    -- and a schema mismatch in this optional insert must never abort the deploy.
     BEGIN
         INSERT INTO users (id, name, email, phone, password, photo, location, sports, positions)
-        VALUES (demo_id, demo_name, demo_email, NULL, demo_pass, NULL, demo_loc, demo_sports, demo_pos)
+        VALUES (demo_id::uuid, demo_name, demo_email, NULL, demo_pass, NULL, demo_loc, demo_sports, demo_pos)
         ON CONFLICT (id) DO UPDATE SET
             name     = demo_name,
             email    = demo_email,
             password = demo_pass,
             location = demo_loc,
             sports   = demo_sports;
-    EXCEPTION WHEN undefined_table THEN NULL; END;
+    EXCEPTION WHEN OTHERS THEN NULL; END;
 END $$;
