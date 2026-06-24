@@ -634,7 +634,18 @@ export default function AuthPage() {
                                         border: 'none', cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap',
                                     }}
                                 >
-                                    SMS Code
+                                    SMS
+                                </button>
+                                <button
+                                    onClick={() => switchMode('email')}
+                                    style={{
+                                        flex: 1, padding: '9px 4px', borderRadius: 8, fontSize: '0.8125rem', fontWeight: 600,
+                                        background: authMode === 'email' ? 'var(--primary-color)' : 'transparent',
+                                        color: authMode === 'email' ? '#fff' : 'var(--text-secondary)',
+                                        border: 'none', cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap',
+                                    }}
+                                >
+                                    Email
                                 </button>
                                 <button
                                     onClick={() => switchMode('password')}

@@ -39,9 +39,15 @@ export async function POST(req) {
         // Send via Resend
         const apiKey = process.env.RESEND_API_KEY;
         if (!apiKey) {
-            console.log(`[AUTH DEV] RESEND not configured — OTP for ${normalizedEmail}: ${code}`);
-            // Return the code in dev mode so the app can surface it on-screen
-            return Response.json({ success: true, devMode: true, devCode: code });
+            // SECURITY: never return the code in production — that would let anyone
+            // log into any email. Only surface it for local dev with the explicit
+            // bypass flag (mirrors the phone/send route).
+            if (process.env.NODE_ENV !== 'production' && process.env.ALLOW_DEV_OTP_BYPASS === 'true') {
+                console.log(`[AUTH DEV] RESEND not configured — OTP for ${normalizedEmail}: ${code}`);
+                return Response.json({ success: true, devMode: true, devCode: code });
+            }
+            console.error('[AUTH] RESEND_API_KEY not configured — cannot send email OTP');
+            return Response.json({ error: 'Email login is temporarily unavailable. Please use SMS instead.' }, { status: 503 });
         }
 
         const resend = new Resend(apiKey);
