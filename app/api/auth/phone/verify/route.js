@@ -25,7 +25,12 @@ async function findUserByPhone(normalized) {
 
 export async function POST(req) {
     try {
-        const { phone, code, rememberMe } = await req.json();
+        let phone, code, rememberMe;
+        try {
+            ({ phone, code, rememberMe } = await req.json());
+        } catch {
+            return Response.json({ error: 'Invalid request body' }, { status: 400 });
+        }
         if (!phone || !code) return Response.json({ error: 'Phone and code required' }, { status: 400 });
 
         const normalized = normalizePhone(phone);

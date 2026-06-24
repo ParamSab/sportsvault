@@ -48,13 +48,23 @@ export default function InvitePage() {
             const data = await res.json();
             if (data.error) throw new Error(data.error);
 
-            if (method === 'sms' && data.smsLinks?.length > 0) {
-                if (data.smsLinks.length === 1) {
-                    // Single friend — open WhatsApp directly
-                    window.open(data.smsLinks[0].whatsappLink, '_blank');
+            if (method === 'sms') {
+                const links = data.smsLinks || [];
+                if (links.length === 0) {
+                    // Every selected friend is missing a phone number — WhatsApp can't be used.
+                    setError('None of the selected friends have a phone number saved. Use "Send in-app" to invite them instead.');
                 } else {
-                    // Multiple friends — show clickable links
-                    setWhatsappLinks(data.smsLinks);
+                    if (links.length === 1) {
+                        // Single friend — open WhatsApp directly
+                        window.open(links[0].whatsappLink, '_blank');
+                    } else {
+                        // Multiple friends — show clickable links
+                        setWhatsappLinks(links);
+                    }
+                    const skipped = selectedFriends.length - links.length;
+                    if (skipped > 0) {
+                        setError(`${skipped} friend${skipped > 1 ? 's' : ''} skipped — no phone number saved. Use "Send in-app" to reach them.`);
+                    }
                 }
             } else if (method === 'app') {
                 setError('');

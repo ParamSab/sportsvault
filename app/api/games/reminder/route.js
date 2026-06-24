@@ -14,8 +14,13 @@ export async function POST(req) {
 
     // Allow non-session calls (e.g. from handleHostAction) if triggered server-side,
     // but still do a best-effort auth check
-    const { gameId, playerId, type } = await req.json();
-    
+    let gameId, playerId, type;
+    try {
+      ({ gameId, playerId, type } = await req.json());
+    } catch {
+      return Response.json({ error: 'Invalid request body' }, { status: 400 });
+    }
+
     if (!gameId || !playerId) {
       return Response.json({ error: 'gameId and playerId required' }, { status: 400 });
     }

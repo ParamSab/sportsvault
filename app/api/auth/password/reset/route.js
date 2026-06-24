@@ -33,7 +33,12 @@ async function findUserByPhone(normalized) {
 
 export async function POST(req) {
     try {
-        const { phone, code, newPassword, rememberMe } = await req.json();
+        let phone, code, newPassword, rememberMe;
+        try {
+            ({ phone, code, newPassword, rememberMe } = await req.json());
+        } catch {
+            return Response.json({ error: 'Invalid request body' }, { status: 400 });
+        }
         if (!phone || !code || !newPassword) {
             return Response.json({ error: 'Phone, code and new password are required.' }, { status: 400 });
         }

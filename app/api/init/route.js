@@ -69,8 +69,8 @@ export async function GET(req) {
                 ? prisma.friendship.findMany({
                     where: { OR: [{ userId }, { friendId: userId }] },
                     include: {
-                        user: { select: { id: true, name: true, phone: true, photo: true, location: true, sports: true, positions: true, ratings: true, trustScore: true, createdAt: true, privacy: true, gamesPlayed: true } },
-                        friend: { select: { id: true, name: true, phone: true, photo: true, location: true, sports: true, positions: true, ratings: true, trustScore: true, createdAt: true, privacy: true, gamesPlayed: true } },
+                        user: { select: { id: true, name: true, phone: true, photo: true, location: true, sports: true, positions: true, ratings: true, trustScore: true, createdAt: true, privacy: true, gamesPlayed: true, wins: true, losses: true } },
+                        friend: { select: { id: true, name: true, phone: true, photo: true, location: true, sports: true, positions: true, ratings: true, trustScore: true, createdAt: true, privacy: true, gamesPlayed: true, wins: true, losses: true } },
                     },
                     take: 500,
                 })

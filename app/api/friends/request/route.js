@@ -16,10 +16,19 @@ export async function POST(req) {
         const session = await getIronSession(cookieStore, sessionOptions);
         const currentUserId = session.user?.dbId || session.user?.id;
 
-        const { friendId, action } = await req.json(); // action: 'send', 'accept', 'reject', 'cancel'
+        if (!currentUserId) {
+            return Response.json({ error: 'Unauthorized' }, { status: 401 });
+        }
 
-        if (!currentUserId || !friendId) {
-            return Response.json({ error: 'Unauthorized or missing data' }, { status: 400 });
+        let friendId, action;
+        try {
+            ({ friendId, action } = await req.json()); // action: 'send', 'accept', 'reject', 'cancel'
+        } catch {
+            return Response.json({ error: 'Invalid request body' }, { status: 400 });
+        }
+
+        if (!friendId) {
+            return Response.json({ error: 'Missing friendId' }, { status: 400 });
         }
 
         if (action === 'send') {

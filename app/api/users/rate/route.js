@@ -44,7 +44,12 @@ function computeUpdatedRatings(existingRatings, sport, rating, attrs, fromId, ga
 
 export async function POST(req) {
     try {
-        const body = await req.json();
+        let body;
+        try {
+            body = await req.json();
+        } catch {
+            return Response.json({ error: 'Invalid request body' }, { status: 400 });
+        }
         const { playerId, sport, rating, attrs, thought, gameId } = body;
 
         if (!playerId || !sport || !rating) {

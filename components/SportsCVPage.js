@@ -83,10 +83,10 @@ export default function SportsCVPage({ playerId, onBack }) {
                 <h3 style={{ marginBottom: 16 }}>📊 Career Statistics</h3>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
                     {[
-                        { label: 'Games', value: player.gamesPlayed, color: 'var(--text-primary)' },
-                        { label: 'Wins', value: player.wins, color: 'var(--success)' },
-                        { label: 'Losses', value: player.losses, color: 'var(--danger)' },
-                        { label: 'Win Rate', value: player.gamesPlayed ? `${Math.round((player.wins / player.gamesPlayed) * 100)}%` : '0%', color: 'var(--info)' },
+                        { label: 'Games', value: player.gamesPlayed ?? 0, color: 'var(--text-primary)' },
+                        { label: 'Wins', value: player.wins ?? 0, color: 'var(--success)' },
+                        { label: 'Losses', value: player.losses ?? 0, color: 'var(--danger)' },
+                        { label: 'Win Rate', value: player.gamesPlayed ? `${Math.round(((player.wins ?? 0) / player.gamesPlayed) * 100)}%` : '0%', color: 'var(--info)' },
                     ].map(stat => (
                         <div key={stat.label} style={{ textAlign: 'center', padding: 12, background: 'var(--bg-input)', borderRadius: 'var(--radius-md)' }}>
                             <div style={{ fontWeight: 800, fontSize: '1.25rem', color: stat.color }}>{stat.value}</div>

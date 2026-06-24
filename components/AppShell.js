@@ -92,7 +92,7 @@ export default function AppShell() {
         }
 
         if (activeTab === 'profile' && isGuest) return <AuthPage />;
-        if (viewingGame) return <GameDetailPage gameId={viewingGame} onBack={() => setViewingGame(null)} onViewProfile={setViewingProfile} />;
+        if (viewingGame) return <GameDetailPage gameId={viewingGame} onBack={() => setViewingGame(null)} onViewProfile={(id) => id === 'login_prompt' ? navigate('profile') : setViewingProfile(id)} />;
         if (viewingProfile) return <ProfilePage playerId={viewingProfile} onBack={() => setViewingProfile(null)} onViewCV={setViewingCV} onViewGame={setViewingGame} />;
         if (viewingCV) return <SportsCVPage playerId={viewingCV} onBack={() => setViewingCV(null)} />;
         if (ratingGame) return <RatePage gameId={ratingGame} onBack={() => setRatingGame(null)} />;

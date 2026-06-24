@@ -213,7 +213,12 @@ export async function POST(req) {
     const cookieStore = await cookies();
     const session = await getIronSession(cookieStore, sessionOptions);
 
-    const body = await req.json();
+    let body;
+    try {
+        body = await req.json();
+    } catch {
+        return Response.json({ error: 'Invalid request body' }, { status: 400 });
+    }
     const { game } = body;
     let userId = body.userId || session.user?.dbId || session.user?.id;
 

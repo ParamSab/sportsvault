@@ -9,7 +9,12 @@ import { serializeUser } from '@/lib/auth';
 
 export async function POST(req) {
     try {
-        const body = await req.json();
+        let body;
+        try {
+            body = await req.json();
+        } catch {
+            return Response.json({ error: 'Invalid request body' }, { status: 400 });
+        }
         const { email, password, rememberMe } = body;
 
         if (!email || !password) {

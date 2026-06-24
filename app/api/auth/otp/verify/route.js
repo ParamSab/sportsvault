@@ -7,7 +7,12 @@ import { isDevOtpBypass } from '@/lib/auth';
 
 export async function POST(req) {
     try {
-        const { email, code, rememberMe } = await req.json();
+        let email, code, rememberMe;
+        try {
+            ({ email, code, rememberMe } = await req.json());
+        } catch {
+            return Response.json({ error: 'Invalid request body' }, { status: 400 });
+        }
         if (!email || typeof email !== 'string' || !code) {
             return Response.json({ error: 'Email and code are required.' }, { status: 400 });
         }

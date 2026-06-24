@@ -23,7 +23,10 @@ const config: CapacitorConfig = {
 
   ios: {
     contentInset: 'always',
-    scrollEnabled: false,
+    // Must stay true: the web app uses document-level scrolling. Disabling the
+    // WKWebView scroll view makes every page unscrollable on device
+    // (App Store rejection 2.1(a), submission 24b2c572 — "Unable to scroll down any pages").
+    scrollEnabled: true,
     backgroundColor: '#0c0d0f',
     // Restrict navigation to our own domain in production builds.
     limitsNavigationsToAppBoundDomains: isProduction,
