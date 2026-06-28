@@ -623,7 +623,11 @@ export default function AuthPage() {
                             <h3 style={{ marginBottom: 4 }}>Welcome back</h3>
                             <p className="text-muted text-sm" style={{ marginBottom: 16 }}>Log in or sign up to get started.</p>
 
-                            {/* Auth mode toggle */}
+                            {/* Auth mode toggle — SMS (Twilio) and email+password only.
+                                Email magic-code login is intentionally NOT offered: RESEND is not
+                                configured in production, so it always errors (App Store rejection
+                                2.1(a), submission 24b2c572 — "error when we tapped Login"). Re-add
+                                only after a verified Resend sending domain is set up in prod. */}
                             <div style={{ display: 'flex', gap: 6, marginBottom: 20, background: 'var(--bg-secondary)', borderRadius: 12, padding: 4 }}>
                                 <button
                                     onClick={() => switchMode('phone')}
@@ -634,18 +638,7 @@ export default function AuthPage() {
                                         border: 'none', cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap',
                                     }}
                                 >
-                                    SMS
-                                </button>
-                                <button
-                                    onClick={() => switchMode('email')}
-                                    style={{
-                                        flex: 1, padding: '9px 4px', borderRadius: 8, fontSize: '0.8125rem', fontWeight: 600,
-                                        background: authMode === 'email' ? 'var(--primary-color)' : 'transparent',
-                                        color: authMode === 'email' ? '#fff' : 'var(--text-secondary)',
-                                        border: 'none', cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap',
-                                    }}
-                                >
-                                    Email
+                                    SMS Code
                                 </button>
                                 <button
                                     onClick={() => switchMode('password')}
