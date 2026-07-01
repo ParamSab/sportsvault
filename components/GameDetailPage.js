@@ -3,6 +3,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { SPORTS, POSITIONS, getPlayer, getSportEmoji, spotsLeft, formatDate, getInitials, getTrustTier } from '@/lib/mockData';
 import { balanceTeams, generateWhatsAppMessage, getWhatsAppUrl } from '@/lib/teamBalancer';
+import { haptic, scheduleGameReminder, cancelGameReminder, nativeShare } from '@/lib/native';
 import PitchView from './PitchView';
 import PaymentPage from './PaymentPage';
 
@@ -191,8 +192,15 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
         dispatch({ type: 'RSVP', payload: { gameId, playerId: currentUserId, status: finalStatus, position: pos } });
         if (finalStatus === 'yes' && !wasConfirmed) {
             setConfirmationAnimation({ sport: game.sport, id: Date.now() });
+            // Native: tactile confirmation + schedule an on-device reminder for this game.
+            haptic('success');
+            scheduleGameReminder(game);
+        } else if (status === 'no') {
+            // Left the game — clear the on-device reminder.
+            haptic('light');
+            cancelGameReminder(gameId);
         }
-        
+
         // Persist to DB using session, then sync server state
         try {
             await fetch('/api/games/rsvp', {

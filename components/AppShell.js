@@ -11,6 +11,7 @@ import RatePage from './RatePage';
 import SportsCVPage from './SportsCVPage';
 import AuthPage from './AuthPage';
 import { getInitials } from '@/lib/mockData';
+import { haptic } from '@/lib/native';
 
 export default function AppShell() {
     const { state, dispatch } = useStore();
@@ -50,6 +51,7 @@ export default function AppShell() {
     }, [state.isLoaded, isGuest]);
 
     const navigate = (tab) => {
+        haptic('light'); // native tactile feedback on every tab switch
         if (isGuest && tab !== 'discover' && tab !== 'profile') {
             setShowAuthGate(true);
             return;

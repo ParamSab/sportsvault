@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useStore } from '@/lib/store';
 import { SPORTS, POSITIONS, FORMATS } from '@/lib/mockData';
+import { haptic, nativeShare, isNative } from '@/lib/native';
 
 // Dynamic import for Leaflet (SSR-safe)
 import dynamic from 'next/dynamic';
@@ -103,6 +104,7 @@ export default function CreateGamePage({ onComplete }) {
             dispatch({ type: 'CREATE_GAME', payload: data.game });
             setCreatedGame(data.game);
             setIsSuccess(true);
+            haptic('success'); // native tactile confirmation
         } catch (err) {
             console.error('Failed to save game to DB:', err);
             setCreateError('Network error. Check your connection and try again.');
@@ -516,7 +518,24 @@ export default function CreateGamePage({ onComplete }) {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <a 
+                    {isNative() && (
+                        <button
+                            className="btn btn-primary"
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}
+                            onClick={async () => {
+                                haptic('light');
+                                const shared = await nativeShare({
+                                    title: createdGame.title,
+                                    text: shareMsg,
+                                    url: `${window.location.origin}/?game=${createdGame.id}`,
+                                });
+                                if (!shared) window.open(`https://wa.me/?text=${encodeURIComponent(shareMsg)}`, '_blank');
+                            }}
+                        >
+                            <span>📤</span> Share Game…
+                        </button>
+                    )}
+                    <a
                         href={`https://wa.me/?text=${encodeURIComponent(shareMsg)}`}
                         target="_blank"
                         className="btn btn-primary"
