@@ -46,13 +46,15 @@ BEGIN
   ON CONFLICT ("userId", "friendId") DO NOTHING;
 
   -- ── Games (4 upcoming open, 2 past completed) ──
+  -- Dates are RELATIVE to CURRENT_DATE so the demo account always shows fresh
+  -- upcoming games and recent completed games, no matter when this seed runs.
   INSERT INTO "Game" (id, title, sport, format, date, time, duration, location, "maxPlayers", "skillLevel", status, visibility, price, "organizerId", gender, "reminderHours", "createdAt") VALUES
-    (g1, 'Sunday Football 7s — Juhu Turf', 'football', '7-a-side', '2026-07-05', '17:30', 90, 'Juhu Beach Turf', 14, 'All Levels', 'open', 'public', 200, f1, 'mixed', 2, NOW() - INTERVAL '5 days'),
-    (g2, 'Padel Doubles — Bandra Courts',  'padel',    'Doubles',  '2026-07-06', '19:00', 90, 'Bandra Padel Club', 4, 'Intermediate', 'open', 'public', 400, f2, 'mixed', 2, NOW() - INTERVAL '4 days'),
-    (g3, 'Box Cricket Night — Andheri',    'cricket',  'Box Cricket', '2026-07-08', '20:00', 120, 'Smaaash Andheri', 12, 'All Levels', 'open', 'public', 300, demo, 'mixed', 2, NOW() - INTERVAL '3 days'),
-    (g4, 'Friday Footy 5s — Powai',        'football', '5-a-side', '2026-07-10', '18:00', 60, 'Powai Sports Arena', 10, 'All Levels', 'open', 'public', 250, f3, 'mixed', 2, NOW() - INTERVAL '2 days'),
-    (g5, 'Weeknight Football — Andheri',   'football', '7-a-side', '2026-06-24', '18:00', 90, 'Andheri Sports Club', 14, 'All Levels', 'completed', 'public', 200, f1, 'mixed', 2, NOW() - INTERVAL '8 days'),
-    (g6, 'Padel Social — Powai',           'padel',    'Doubles',  '2026-06-21', '10:00', 90, 'Powai Padel Arena', 4, 'All Levels', 'completed', 'public', 350, demo, 'mixed', 2, NOW() - INTERVAL '12 days')
+    (g1, 'Sunday Football 7s — Juhu Turf', 'football', '7-a-side', to_char(CURRENT_DATE + 4,  'YYYY-MM-DD'), '17:30', 90, 'Juhu Beach Turf', 14, 'All Levels', 'open', 'public', 200, f1, 'mixed', 2, NOW() - INTERVAL '5 days'),
+    (g2, 'Padel Doubles — Bandra Courts',  'padel',    'Doubles',  to_char(CURRENT_DATE + 5,  'YYYY-MM-DD'), '19:00', 90, 'Bandra Padel Club', 4, 'Intermediate', 'open', 'public', 400, f2, 'mixed', 2, NOW() - INTERVAL '4 days'),
+    (g3, 'Box Cricket Night — Andheri',    'cricket',  'Box Cricket', to_char(CURRENT_DATE + 7,  'YYYY-MM-DD'), '20:00', 120, 'Smaaash Andheri', 12, 'All Levels', 'open', 'public', 300, demo, 'mixed', 2, NOW() - INTERVAL '3 days'),
+    (g4, 'Friday Footy 5s — Powai',        'football', '5-a-side', to_char(CURRENT_DATE + 9,  'YYYY-MM-DD'), '18:00', 60, 'Powai Sports Arena', 10, 'All Levels', 'open', 'public', 250, f3, 'mixed', 2, NOW() - INTERVAL '2 days'),
+    (g5, 'Weeknight Football — Andheri',   'football', '7-a-side', to_char(CURRENT_DATE - 6,  'YYYY-MM-DD'), '18:00', 90, 'Andheri Sports Club', 14, 'All Levels', 'completed', 'public', 200, f1, 'mixed', 2, NOW() - INTERVAL '8 days'),
+    (g6, 'Padel Social — Powai',           'padel',    'Doubles',  to_char(CURRENT_DATE - 9,  'YYYY-MM-DD'), '10:00', 90, 'Powai Padel Arena', 4, 'All Levels', 'completed', 'public', 350, demo, 'mixed', 2, NOW() - INTERVAL '12 days')
   ON CONFLICT (id) DO NOTHING;
 
   UPDATE "Game" SET score = '{"team1":3,"team2":2}' WHERE id = g5;
