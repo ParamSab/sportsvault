@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useStore } from '@/lib/store';
 import { SPORTS, POSITIONS, FORMATS } from '@/lib/mockData';
 import { haptic, nativeShare, isNative } from '@/lib/native';
+import { track } from '@/lib/analytics';
 
 // Dynamic import for Leaflet (SSR-safe)
 import dynamic from 'next/dynamic';
@@ -105,6 +106,7 @@ export default function CreateGamePage({ onComplete }) {
             setCreatedGame(data.game);
             setIsSuccess(true);
             haptic('success'); // native tactile confirmation
+            track('game_created', { sport: data.game.sport, format: data.game.format });
         } catch (err) {
             console.error('Failed to save game to DB:', err);
             setCreateError('Network error. Check your connection and try again.');
@@ -529,6 +531,7 @@ export default function CreateGamePage({ onComplete }) {
                             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}
                             onClick={async () => {
                                 haptic('light');
+                                track('game_shared', { sport: createdGame.sport, via: 'native' });
                                 const shared = await nativeShare({
                                     title: createdGame.title,
                                     text: shareMsg,
@@ -543,6 +546,7 @@ export default function CreateGamePage({ onComplete }) {
                     <a
                         href={`https://wa.me/?text=${encodeURIComponent(shareMsg)}`}
                         target="_blank"
+                        onClick={() => track('game_shared', { sport: createdGame.sport, via: 'whatsapp' })}
                         className="btn btn-primary"
                         style={{ background: '#25D366', borderColor: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}
                     >

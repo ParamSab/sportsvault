@@ -4,6 +4,7 @@ import { useStore } from '@/lib/store';
 import { SPORTS, POSITIONS, getPlayer, getSportEmoji, spotsLeft, formatDate, getInitials, getTrustTier } from '@/lib/mockData';
 import { balanceTeams, generateWhatsAppMessage, getWhatsAppUrl } from '@/lib/teamBalancer';
 import { haptic, scheduleGameReminder, cancelGameReminder, nativeShare } from '@/lib/native';
+import { track } from '@/lib/analytics';
 import PitchView from './PitchView';
 import PaymentPage from './PaymentPage';
 
@@ -195,6 +196,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
             // Native: tactile confirmation + schedule an on-device reminder for this game.
             haptic('success');
             scheduleGameReminder(game);
+            track('rsvp_yes', { sport: game.sport, gameId });
         } else if (status === 'no') {
             // Left the game — clear the on-device reminder.
             haptic('light');
@@ -1306,6 +1308,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
 
                 {/* WhatsApp Share */}
                 <a href={getWhatsAppUrl(whatsappMsg)} target="_blank" rel="noopener noreferrer" className="btn btn-block"
+                    onClick={() => track('game_shared', { sport: game.sport, via: 'whatsapp' })}
                     style={{ background: '#25D366', color: '#fff', padding: '14px 24px', fontSize: '0.9375rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 'var(--radius-full)', textDecoration: 'none' }}>
                     📤 Share on WhatsApp
                 </a>

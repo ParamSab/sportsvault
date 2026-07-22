@@ -222,6 +222,19 @@ model OtpCode {
   @@index([email])
 }
 
+// First-party product analytics event log (written via /api/track).
+model Event {
+  id        String   @id @default(uuid())
+  userId    String?
+  name      String
+  props     String? // JSON string
+  createdAt DateTime @default(now())
+
+  @@index([name, createdAt])
+  @@index([userId])
+  @@index([createdAt])
+}
+
 model Notification {
   id        String   @id @default(uuid())
   userId    String

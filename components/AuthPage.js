@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useStore } from '@/lib/store';
 import { SPORTS, POSITIONS, PLAYERS } from '@/lib/mockData';
+import { track } from '@/lib/analytics';
 
 export default function AuthPage() {
     const { state, dispatch } = useStore();
@@ -122,6 +123,7 @@ export default function AuthPage() {
             });
             const data = await res.json();
             if (res.ok && data.user) {
+                track('login', { method: 'password' });
                 dispatch({ type: 'LOGIN', payload: data.user });
                 router.push('/invite');
             } else {
@@ -213,6 +215,7 @@ export default function AuthPage() {
             data = await res.json();
             if (res.status === 200) {
                 if (data.exists && data.user) {
+                    track('login', { method: authMode === 'email' ? 'email_code' : 'sms_code' });
                     dispatch({ type: 'LOGIN', payload: data.user });
                     if (data.needsPasswordSetup) {
                         // Pre-fill email for setup if we know it
@@ -400,6 +403,7 @@ export default function AuthPage() {
             });
         } catch (_) { /* continue fallback */ }
 
+        track('signup_completed', { method: authMode, sports: newUser.sports });
         dispatch({ type: 'LOGIN', payload: newUser });
         router.push('/invite');
     };

@@ -12,6 +12,7 @@ import SportsCVPage from './SportsCVPage';
 import AuthPage from './AuthPage';
 import { getInitials } from '@/lib/mockData';
 import { haptic } from '@/lib/native';
+import { track } from '@/lib/analytics';
 
 export default function AppShell() {
     const { state, dispatch } = useStore();
@@ -23,6 +24,13 @@ export default function AppShell() {
     const [showAuthGate, setShowAuthGate] = useState(false);
 
     const isGuest = !state.isAuthenticated;
+
+    // Analytics: one app-open event per load (drives activity + retention).
+    useEffect(() => {
+        if (!state.isLoaded) return;
+        track('app_opened', { guest: isGuest });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [state.isLoaded]);
 
     useEffect(() => {
         if (!state.isLoaded) return;
