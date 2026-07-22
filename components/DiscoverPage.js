@@ -225,14 +225,14 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
                     <div className="welcome-banner-content">
                         <div className="welcome-banner-icon" aria-hidden="true">SV</div>
                         <div className="welcome-banner-copy">
-                            <div className="welcome-banner-title">Welcome to SportsVault!</div>
+                            <div className="welcome-banner-title">Never lose a court to a no-show</div>
                             <div className="welcome-banner-text">
-                                New in town or looking for your next game? Scroll below to find games near you and join a community of players.
+                                Short a player for padel? Find your 4th in minutes — or join football & cricket games near you. Book, fill the game, and play.
                             </div>
                             <div className="welcome-banner-actions">
-                                <span className="welcome-pill welcome-pill-blue">Find Games</span>
+                                <span className="welcome-pill welcome-pill-orange">🎾 Find Your 4th</span>
                                 <span className="welcome-pill welcome-pill-green">RSVP Instantly</span>
-                                <span className="welcome-pill welcome-pill-orange">Build Your Rep</span>
+                                <span className="welcome-pill welcome-pill-blue">Build Your Rep</span>
                             </div>
                         </div>
                     </div>

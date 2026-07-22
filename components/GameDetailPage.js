@@ -297,12 +297,22 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     const buildBlastMessage = () => {
         const inviteLink = `${window.location.origin}/?game=${game.id}`;
         const mapLine = game.lat && game.lng ? `\nhttps://maps.google.com/?q=${game.lat},${game.lng}` : '';
+        // Spots-left hook — the sharp "we need players" pull. Extra punchy for
+        // padel, where a game is exactly 4 and one missing player kills the court.
+        let hook;
+        if (spots <= 0) {
+            hook = `Game's full — hop on the backup list 👇`;
+        } else if (game.sport === 'padel' && spots === 1) {
+            hook = `🎾 We need our 4th! 1 spot left 👇`;
+        } else {
+            hook = `${spots} spot${spots === 1 ? '' : 's'} left — grab yours 👇`;
+        }
         return (
             `Hey! ${state.currentUser?.name || 'Your friend'} is organising a ` +
             `${game.format} ${SPORTS[game.sport]?.name} game 🏆\n\n` +
             `📅 ${formatDate(game.date)} at ${game.time}\n` +
             `📍 ${game.location}${mapLine}\n\n` +
-            `RSVP here 👉 ${inviteLink}`
+            `${hook}\nRSVP here 👉 ${inviteLink}`
         );
     };
 

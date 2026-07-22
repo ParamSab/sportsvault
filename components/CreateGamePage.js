@@ -504,7 +504,12 @@ export default function CreateGamePage({ onComplete }) {
     ];
 
     if (isSuccess && createdGame) {
-        const shareMsg = `⚽ *${createdGame.title}*\n📅 ${createdGame.date} at ${createdGame.time}\n📍 ${createdGame.location}\n\nRSVP here 👉 ${window.location.origin}/?game=${createdGame.id}`;
+        const openSpots = Math.max(0, (Number(createdGame.maxPlayers) || 0) - 1); // organizer already in
+        const spotsHook = createdGame.sport === 'padel'
+            ? (openSpots === 1 ? `🎾 Need our 4th — 1 spot left!` : `🎾 ${openSpots} spots left — who's in?`)
+            : `${openSpots} spots left — who's in?`;
+        const sportEmoji = SPORTS[createdGame.sport]?.emoji || '⚽';
+        const shareMsg = `${sportEmoji} *${createdGame.title}*\n📅 ${createdGame.date} at ${createdGame.time}\n📍 ${createdGame.location}\n\n${spotsHook}\nRSVP here 👉 ${window.location.origin}/?game=${createdGame.id}`;
         return (
             <div className="animate-fade-in text-center" style={{ padding: '40px 20px' }}>
                 <div style={{ fontSize: '4rem', marginBottom: 20 }}>🚀</div>
