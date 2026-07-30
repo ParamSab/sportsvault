@@ -1,7 +1,7 @@
 'use client';
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useStore } from '@/lib/store';
-import { SPORTS, getPlayer, getSportEmoji, spotsLeft, formatDate, getInitials, PLAYERS } from '@/lib/mockData';
+import { SPORTS, getPlayer, getSportEmoji, spotsLeft, formatDate, getInitials, PLAYERS, hasGameEnded } from '@/lib/mockData';
 import dynamic from 'next/dynamic';
 
 function calcDistKm(userLat, userLng, gameLat, gameLng) {
@@ -119,6 +119,7 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
 
         return (state.games || [])
             .filter(g => g.status === 'open')
+            .filter(g => !hasGameEnded(g)) // hide games whose slot has already passed (even if not yet flipped to 'completed')
             .filter(g => {
                 const vis = g.visibility || 'public';
                 const orgId = String(g.organizerId || g.organizer?.id || g.organizer || '');
