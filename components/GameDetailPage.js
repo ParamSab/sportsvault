@@ -441,11 +441,13 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                             background: 'rgba(255,255,255,0.03)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.05)' 
                         }}>
                             <div className="text-xs" style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--text-secondary)' }}>
-                                🏟️ <span style={{ fontWeight: 600 }}>{game.pitchType || 'Game'}</span>
+                                {/* Legacy non-football games have football defaults ('5-a-side', '3G Astro')
+                                    baked into the DB — fall back to the sport's real format for those. */}
+                                🏟️ <span style={{ fontWeight: 600 }}>{(game.sport === 'football' ? game.pitchType : game.pitchType?.includes('a-side') ? game.format : game.pitchType) || game.format || 'Game'}</span>
                             </div>
                             <span style={{ opacity: 0.2 }}>|</span>
                             <div className="text-xs" style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--text-secondary)' }}>
-                                🌱 <span style={{ fontWeight: 600 }}>{game.surface || 'Turf'}</span>
+                                🌱 <span style={{ fontWeight: 600 }}>{(game.sport !== 'football' && game.surface?.includes('Astro') ? null : game.surface) || (game.sport === 'padel' ? 'Court' : 'Turf')}</span>
                             </div>
                             <span style={{ opacity: 0.2 }}>|</span>
                             <div className="text-xs" style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--text-secondary)' }}>

@@ -432,7 +432,7 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
                                     <div className="game-card-info-row">
                                         <span className="info-icon">⭐</span>
                                         <span className="info-text">{game.skillLevel || 'All Levels'}</span>
-                                        {game.surface && <span className="surface-tag">🌱 {game.surface}</span>}
+                                        {game.surface && !(game.sport !== 'football' && game.surface.includes('Astro')) && <span className="surface-tag">🌱 {game.surface}</span>}
                                     </div>
                                 </div>
 

@@ -23,6 +23,20 @@ const PRIVACY_OPTIONS = [
 
 const SKILL_LEVELS = ['All Levels', 'Beginner-Friendly', 'Intermediate', 'Advanced'];
 
+// Sport-specific game-spec options. n-a-side pitch types are football-only;
+// other sports use the format picked in step 1 as their game type.
+const SURFACES = {
+    football: ['3G Astro', '4G Astro', 'Natural Grass', 'Indoor', 'Hard Ground', 'Hybrid'],
+    padel: ['Outdoor Court', 'Indoor Court', 'Panoramic (Glass)'],
+    cricket: ['Natural Turf', 'Astro Turf', 'Matting', 'Concrete', 'Indoor'],
+};
+
+const SPEC_DEFAULTS = {
+    football: { pitchType: '5-a-side', surface: '3G Astro', footwear: 'AG Boots / TF shoes' },
+    padel: { pitchType: '', surface: 'Outdoor Court', footwear: '' },
+    cricket: { pitchType: '', surface: 'Natural Turf', footwear: '' },
+};
+
 export default function CreateGamePage({ onComplete }) {
     const { state, dispatch } = useStore();
     const [step, setStep] = useState(0);
@@ -39,9 +53,9 @@ export default function CreateGamePage({ onComplete }) {
         approvalRequired: false,
         bookingImage: null,
         // Footy Addicts Parity
-        pitchType: '5-a-side',
-        surface: '3G Astro',
-        footwear: 'AG Boots / TF shoes',
+        pitchType: '',
+        surface: '',
+        footwear: '',
         price: 0,
         upiId: '',
         gender: 'mixed',
@@ -125,7 +139,7 @@ export default function CreateGamePage({ onComplete }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {Object.entries(SPORTS).map(([key, sport]) => (
                     <button key={key}
-                        onClick={() => { update('sport', key); update('format', ''); setErrors({}); setStep(1); }}
+                        onClick={() => { setGame(prev => ({ ...prev, sport: key, format: '', ...(SPEC_DEFAULTS[key] || { pitchType: '', surface: '', footwear: '' }) })); setErrors({}); setStep(1); }}
                         style={{
                             display: 'flex', alignItems: 'center', gap: 16,
                             padding: '24px', borderRadius: 16,
@@ -275,9 +289,13 @@ export default function CreateGamePage({ onComplete }) {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                     <div>
                         <label style={labelStyle}>Game Type</label>
-                        <select value={game.pitchType} onChange={e => update('pitchType', e.target.value)} style={inputStyle}>
-                            {['5-a-side', '6-a-side', '7-a-side', '8-a-side', '9-a-side', '11-a-side'].map(t => <option key={t}>{t}</option>)}
-                        </select>
+                        {game.sport === 'football' ? (
+                            <select value={game.pitchType} onChange={e => update('pitchType', e.target.value)} style={inputStyle}>
+                                {['5-a-side', '6-a-side', '7-a-side', '8-a-side', '9-a-side', '11-a-side'].map(t => <option key={t}>{t}</option>)}
+                            </select>
+                        ) : (
+                            <input type="text" value={game.format} disabled style={{ ...inputStyle, opacity: 0.7 }} />
+                        )}
                     </div>
                     <div>
                         <label style={labelStyle}>Gender</label>
@@ -291,9 +309,9 @@ export default function CreateGamePage({ onComplete }) {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                     <div>
-                        <label style={labelStyle}>Pitch Surface</label>
+                        <label style={labelStyle}>{game.sport === 'football' ? 'Pitch Surface' : 'Court Surface'}</label>
                         <select value={game.surface} onChange={e => update('surface', e.target.value)} style={inputStyle}>
-                            {['3G Astro', '4G Astro', 'Natural Grass', 'Indoor', 'Hard Ground', 'Hybrid'].map(s => <option key={s}>{s}</option>)}
+                            {(SURFACES[game.sport] || SURFACES.football).map(s => <option key={s}>{s}</option>)}
                         </select>
                     </div>
                     <div>
@@ -497,7 +515,7 @@ export default function CreateGamePage({ onComplete }) {
                         <div className="text-sm text-muted">⏱️ {game.duration} minutes · {game.maxPlayers} players</div>
                         <div className="text-sm text-muted">⭐ {game.skillLevel}</div>
                         <div className="text-xs text-secondary" style={{ marginTop: 4, opacity: 0.8 }}>
-                            {game.pitchType} · {game.surface} · {game.gender}
+                            {[game.pitchType || game.format, game.surface, game.gender].filter(Boolean).join(' · ')}
                         </div>
                     </div>
                 </div>
