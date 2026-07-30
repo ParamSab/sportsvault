@@ -1,7 +1,7 @@
 'use client';
 import { useState, useMemo, useEffect } from 'react';
 import { useStore } from '@/lib/store';
-import { SPORTS, POSITIONS, getPlayer, getSportEmoji, spotsLeft, formatDate, getInitials, getTrustTier } from '@/lib/mockData';
+import { SPORTS, POSITIONS, getPlayer, getSportEmoji, spotsLeft, formatDate, getInitials, getTrustTier, hasGameEnded } from '@/lib/mockData';
 import { balanceTeams, generateWhatsAppMessage, getWhatsAppUrl } from '@/lib/teamBalancer';
 import { haptic, scheduleGameReminder, cancelGameReminder, nativeShare } from '@/lib/native';
 import { track } from '@/lib/analytics';
@@ -54,7 +54,7 @@ function ConfirmationCelebration({ sport }) {
     );
 }
 
-export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
+export default function GameDetailPage({ gameId, onBack, onViewProfile, onRateGame }) {
     const { state, dispatch } = useStore();
     const [selectedPosition, setSelectedPosition] = useState('');
     const [showTeams, setShowTeams] = useState(false);
@@ -1306,6 +1306,17 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
                             </div>
                         )}
                     </div>
+                )}
+
+                {/* Rate players — unlocked once the game has ended, for anyone who was confirmed in it */}
+                {hasGameEnded(game) && onRateGame && (myRsvp?.status === 'yes' || myRsvp?.status === 'checked_in' || isOrganizer) && (
+                    <button
+                        className="btn btn-primary btn-block"
+                        onClick={() => onRateGame(game.id)}
+                        style={{ marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                    >
+                        ⭐ Rate Players
+                    </button>
                 )}
 
                 {/* WhatsApp Share */}

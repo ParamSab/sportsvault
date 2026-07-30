@@ -235,6 +235,38 @@ export async function POST(req) {
 
     // --- Try Prisma first ---
     try {
+        // Dedupe guard: if this organizer just created an identical game in the
+        // last 30s (double-tap, retry, or race), return that one instead of a
+        // duplicate. Defense-in-depth behind the client's in-flight lock.
+        try {
+            const since = new Date(Date.now() - 30 * 1000);
+            const dupe = await prisma.game.findFirst({
+                where: {
+                    organizerId: userId,
+                    title: game.title,
+                    date: game.date,
+                    time: game.time,
+                    createdAt: { gte: since },
+                },
+                include: {
+                    organizer: { select: { id: true, name: true, photo: true } },
+                    rsvps: { include: { player: { select: { id: true, name: true, photo: true, positions: true, ratings: true } } } },
+                },
+                orderBy: { createdAt: 'desc' },
+            });
+            if (dupe) {
+                const serialized = {
+                    ...dupe,
+                    rsvps: dupe.rsvps.map(r => ({
+                        playerId: r.playerId, status: r.status, position: r.position || '',
+                        paymentStatus: r.paymentStatus || 'not_required',
+                        player: r.player ? { ...r.player, positions: JSON.parse(r.player.positions || '{}'), ratings: JSON.parse(r.player.ratings || '{}') } : null,
+                    })),
+                };
+                return Response.json({ game: serialized, deduped: true });
+            }
+        } catch (_) { /* dedupe is best-effort; fall through to create */ }
+
         const newGame = await prisma.game.create({
             data: {
                 title: game.title,

@@ -87,8 +87,11 @@ export default function CreateGamePage({ onComplete }) {
     };
 
     const [createError, setCreateError] = useState('');
+    const [isCreating, setIsCreating] = useState(false);
 
     const handleCreate = async () => {
+        if (isCreating) return; // guard against double-submit / rapid taps creating duplicate games
+        setIsCreating(true);
         setCreateError('');
         try {
             const newGame = {
@@ -114,6 +117,7 @@ export default function CreateGamePage({ onComplete }) {
             const data = await res.json();
             if (!res.ok || !data.game) {
                 setCreateError(data.error || 'Failed to create game. Please try again.');
+                setIsCreating(false);
                 return;
             }
             dispatch({ type: 'CREATE_GAME', payload: data.game });
@@ -124,6 +128,7 @@ export default function CreateGamePage({ onComplete }) {
         } catch (err) {
             console.error('Failed to save game to DB:', err);
             setCreateError('Network error. Check your connection and try again.');
+            setIsCreating(false);
         }
     };
 
@@ -601,8 +606,8 @@ export default function CreateGamePage({ onComplete }) {
                     ) : (
                         <>
                             {createError && <p style={{ color: '#ef4444', fontSize: '0.8rem', marginBottom: 8, textAlign: 'center' }}>{createError}</p>}
-                            <button className={`btn btn-${game.sport || 'primary'}`} style={{ flex: 1 }} onClick={handleCreate}>
-                                Create Game 🚀
+                            <button className={`btn btn-${game.sport || 'primary'}`} style={{ flex: 1, opacity: isCreating ? 0.6 : 1 }} onClick={handleCreate} disabled={isCreating}>
+                                {isCreating ? 'Creating…' : 'Create Game 🚀'}
                             </button>
                         </>
                     )}

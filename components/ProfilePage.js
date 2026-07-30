@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useStore } from '@/lib/store';
-import { SPORTS, getPlayer, getInitials, getTrustTier, formatDate } from '@/lib/mockData';
+import { SPORTS, getPlayer, getInitials, getTrustTier, formatDate, hasGameEnded } from '@/lib/mockData';
 
 function GameRow({ g, onClick }) {
     const sport = SPORTS[g.sport];
@@ -135,7 +135,9 @@ export default function ProfilePage({ playerId, isOwn, onBack, onViewCV, onViewG
     const hasRating = rating && rating.count >= 3;
     const thoughts = Array.isArray(player.thoughts) ? player.thoughts : [];
     const playerGames = (state.games || []).filter(g => (g.rsvps || []).some(r => String(r.playerId) === String(player.id)));
-    const pastGames = playerGames.filter(g => g.status === 'completed');
+    // A game counts as "past" (and rateable) once it has ended — not only once
+    // the DB flips it to 'completed' (which lags by ~2 days).
+    const pastGames = playerGames.filter(g => g.status === 'completed' || hasGameEnded(g));
     const isFriend = !isOwn && (state.friends || []).some(fId => String(fId) === String(player.id));
     const isPendingSent = !isOwn && (state.pendingFriends || []).some(f => f.isSender && String(f.id) === String(player.id));
 
