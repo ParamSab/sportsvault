@@ -297,7 +297,7 @@ export default function GameDetailPage({ gameId, onBack, onViewProfile }) {
     };
     
     const buildBlastMessage = () => {
-        const inviteLink = `${window.location.origin}/?game=${game.id}`;
+        const inviteLink = `${process.env.NEXT_PUBLIC_APP_URL || 'https://sportsvault.co.in'}/?game=${game.id}`;
         const mapLine = game.lat && game.lng ? `\nhttps://maps.google.com/?q=${game.lat},${game.lng}` : '';
         // Spots-left hook — the sharp "we need players" pull. Extra punchy for
         // padel, where a game is exactly 4 and one missing player kills the court.

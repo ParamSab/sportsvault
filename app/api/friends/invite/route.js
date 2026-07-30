@@ -19,7 +19,13 @@ export async function POST(req) {
         }
 
         const smsLinks = [];
-        const defaultMsg = message || `${session.user?.name || 'Your friend'} invited you to play on SportsVault! Download the app and join the game.`;
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://sportsvault.co.in';
+        let defaultMsg = message || `${session.user?.name || 'Your friend'} invited you to play on SportsVault!`;
+        // Every invite must carry a destination — append the site link unless a
+        // custom message already includes one.
+        if (!defaultMsg.includes('sportsvault')) {
+            defaultMsg += `\n\nJoin here 👉 ${appUrl}`;
+        }
 
         // Batch-load all friend data in one query instead of N individual queries
         const friendUsers = await prisma.user.findMany({

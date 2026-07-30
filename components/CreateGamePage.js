@@ -529,7 +529,7 @@ export default function CreateGamePage({ onComplete }) {
             ? (openSpots === 1 ? `🎾 Need our 4th — 1 spot left!` : `🎾 ${openSpots} spots left — who's in?`)
             : `${openSpots} spots left — who's in?`;
         const sportEmoji = SPORTS[createdGame.sport]?.emoji || '⚽';
-        const shareMsg = `${sportEmoji} *${createdGame.title}*\n📅 ${createdGame.date} at ${createdGame.time}\n📍 ${createdGame.location}\n\n${spotsHook}\nRSVP here 👉 ${window.location.origin}/?game=${createdGame.id}`;
+        const shareMsg = `${sportEmoji} *${createdGame.title}*\n📅 ${createdGame.date} at ${createdGame.time}\n📍 ${createdGame.location}\n\n${spotsHook}\nRSVP here 👉 ${process.env.NEXT_PUBLIC_APP_URL || 'https://sportsvault.co.in'}/?game=${createdGame.id}`;
         return (
             <div className="animate-fade-in text-center" style={{ padding: '40px 20px' }}>
                 <div style={{ fontSize: '4rem', marginBottom: 20 }}>🚀</div>
