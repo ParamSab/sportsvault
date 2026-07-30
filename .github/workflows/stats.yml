@@ -1,0 +1,43 @@
+name: Product Stats
+
+on:
+  workflow_dispatch:
+
+jobs:
+  stats:
+    name: Impressions and signups
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm install --global vercel@latest
+      - run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Query stats
+        run: |
+          set -a; source .vercel/.env.production.local; set +a
+          DB="${DATABASE_URL/:6543\//:5432/}"
+          DB="${DB/?pgbouncer=true/}"
+          echo "=== Events by name (total / last 7d / unique users) ==="
+          psql "$DB" -c "
+            SELECT name, COUNT(*) AS total,
+                   COUNT(*) FILTER (WHERE \"createdAt\" > now() - interval '7 days') AS last7d,
+                   COUNT(DISTINCT \"userId\") AS uniq_users,
+                   MIN(\"createdAt\")::date AS first_seen,
+                   MAX(\"createdAt\")::date AS last_seen
+            FROM \"Event\" GROUP BY name ORDER BY total DESC;"
+          echo "=== App opens per day (last 14d) ==="
+          psql "$DB" -c "
+            SELECT \"createdAt\"::date AS day, COUNT(*) AS opens,
+                   COUNT(DISTINCT \"userId\") AS uniq
+            FROM \"Event\" WHERE name = 'app_opened'
+              AND \"createdAt\" > now() - interval '14 days'
+            GROUP BY 1 ORDER BY 1;"
+          echo "=== Signups ==="
+          psql "$DB" -c "
+            SELECT COUNT(*) AS total_users,
+                   COUNT(*) FILTER (WHERE \"createdAt\" > now() - interval '7 days') AS last7d,
+                   COUNT(*) FILTER (WHERE \"createdAt\" > now() - interval '30 days') AS last30d
+            FROM \"User\";"
+          echo "=== Signups per week ==="
+          psql "$DB" -c "
+            SELECT date_trunc('week', \"createdAt\")::date AS week, COUNT(*) AS signups
+            FROM \"User\" GROUP BY 1 ORDER BY 1;"
