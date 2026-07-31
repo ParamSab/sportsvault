@@ -3,6 +3,55 @@ import { useState, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { SPORTS, RATING_ATTRIBUTES, getPlayer, getInitials } from '@/lib/mockData';
 
+// World padel rating scale (0–7, as used by Playtomic / WPT rankings) mapped
+// to our 5-star attribute scale, so raters calibrate against a known standard.
+const PADEL_LEVELS = [
+    { stars: 1, level: '0.5 – 1.5', name: 'Beginner', desc: 'New to padel. Learning serves, basic strokes and scoring. Rallies are short.' },
+    { stars: 2, level: '2.0 – 2.5', name: 'Improver', desc: 'Consistent forehand/backhand at slow pace. Starting to use the back glass and lob.' },
+    { stars: 3, level: '3.0 – 3.5', name: 'Intermediate', desc: 'Controls direction and pace, comfortable off the walls, moves to the net with intent.' },
+    { stars: 4, level: '4.0 – 5.0', name: 'Advanced', desc: 'Tactical positional play, reliable bandeja/víbora, few unforced errors, reads opponents.' },
+    { stars: 5, level: '5.5 – 7.0', name: 'Expert / Competition', desc: 'Tournament level. Dictates points, full defensive and attacking wall game, pro-level pace.' },
+];
+
+function PadelLevelGuide({ sportColor }) {
+    const [open, setOpen] = useState(false);
+    return (
+        <div className="glass-card no-hover" style={{ marginBottom: 16, padding: open ? undefined : '12px 16px' }}>
+            <button
+                onClick={() => setOpen(o => !o)}
+                style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%',
+                    background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit',
+                }}
+            >
+                <span style={{ fontSize: '0.9375rem', fontWeight: 600 }}>🎾 How to rate — World Padel Levels</span>
+                <span className="text-muted" style={{ fontSize: '0.75rem' }}>{open ? '▲ hide' : '▼ guide'}</span>
+            </button>
+            {open && (
+                <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <p className="text-xs text-muted" style={{ margin: 0 }}>
+                        Stars map to the international padel level scale (0–7) used worldwide. Rate each skill against these benchmarks:
+                    </p>
+                    {PADEL_LEVELS.map(l => (
+                        <div key={l.stars} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                            <span style={{
+                                flex: '0 0 auto', minWidth: 34, textAlign: 'center', fontWeight: 700, fontSize: '0.8125rem',
+                                color: sportColor, border: `1.5px solid ${sportColor}55`, borderRadius: 8, padding: '3px 6px',
+                            }}>{l.stars}★</span>
+                            <div>
+                                <div className="text-sm" style={{ fontWeight: 600 }}>
+                                    {l.name} <span className="text-muted" style={{ fontWeight: 400 }}>· Level {l.level}</span>
+                                </div>
+                                <div className="text-xs text-muted">{l.desc}</div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
 export default function RatePage({ gameId, onBack }) {
     const { state, dispatch } = useStore();
     const [currentIdx, setCurrentIdx] = useState(0);
@@ -191,6 +240,9 @@ export default function RatePage({ gameId, onBack }) {
                     {SPORTS[sport]?.emoji} {SPORTS[sport]?.name}
                 </div>
             </div>
+
+            {/* Padel: world-level rating guide so stars mean the same thing to everyone */}
+            {sport === 'padel' && <PadelLevelGuide sportColor={sportColor} />}
 
             {/* Attribute star ratings */}
             <div className="glass-card no-hover" style={{ marginBottom: 16 }}>
