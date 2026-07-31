@@ -3,7 +3,7 @@ import { getSupabase } from '@/lib/supabase';
 import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
 import { sessionOptions } from '@/lib/session';
-import { isDevOtpBypass, normalizePhone, serializeUser, setPendingVerifiedAuth } from '@/lib/auth';
+import { isDevOtpBypass, normalizePhone, serializeUser, sessionUser, setPendingVerifiedAuth } from '@/lib/auth';
 import { findLocalUserByPhone } from '@/lib/localUserStore';
 
 async function findUserByPhone(normalized) {
@@ -79,7 +79,7 @@ export async function POST(req) {
                 });
             }
 
-            session.user = userData;
+            session.user = sessionUser(user);
             delete session.pendingVerifiedAuth;
             await session.save();
             return Response.json({ user: userData, exists: true, needsPasswordSetup: false });
@@ -89,6 +89,11 @@ export async function POST(req) {
         return Response.json({ exists: false, phone: normalized });
     } catch (err) {
         console.error('[PHONE VERIFY ERROR]', err);
+        // Twilio 20404: the verification no longer exists — expired or already
+        // consumed (e.g. a retry after a check that succeeded server-side).
+        if (err?.code === 20404) {
+            return Response.json({ error: 'That code has expired or was already used. Tap "Resend code" and try the new one.' }, { status: 400 });
+        }
         return Response.json({ error: err.message || 'Verification failed' }, { status: 500 });
     }
 }

@@ -102,8 +102,13 @@ export async function GET(req) {
             take: 100, // Never return more than 100 games at once
         });
 
+        // Legacy uncompressed uploads can be multi-MB base64 blobs; shipping
+        // them in a 100-game list blows Vercel's 4.5MB response limit (413).
+        const safePhoto = (p) => (p && p.length <= 150_000 ? p : null);
         const serialized = games.map(g => ({
             ...g,
+            bookingImage: null, // full image available via /api/games/[id]
+            organizer: g.organizer ? { ...g.organizer, photo: safePhoto(g.organizer.photo) } : null,
             rsvps: g.rsvps.map(r => ({
                 playerId: r.playerId,
                 status: r.status,
@@ -111,6 +116,7 @@ export async function GET(req) {
                 paymentStatus: r.paymentStatus || 'not_required',
                 player: r.player ? {
                     ...r.player,
+                    photo: safePhoto(r.player.photo),
                     positions: JSON.parse(r.player.positions || '{}'),
                     ratings: JSON.parse(r.player.ratings || '{}')
                 } : null

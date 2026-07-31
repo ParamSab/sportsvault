@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
 import { sessionOptions } from '@/lib/session';
-import { isDevOtpBypass } from '@/lib/auth';
+import { isDevOtpBypass, sessionUser } from '@/lib/auth';
 
 function normalizePhone(phone) {
     const cleaned = phone.trim();
@@ -102,7 +102,7 @@ export async function POST(req) {
             delete opts.cookieOptions.maxAge;
         }
         const session = await getIronSession(cookieStore, opts);
-        session.user = userData;
+        session.user = sessionUser(userData);
         session.isLoaded = true;
         await session.save();
 

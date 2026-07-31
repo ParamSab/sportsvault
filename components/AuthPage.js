@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useStore } from '@/lib/store';
 import { SPORTS, POSITIONS, PLAYERS } from '@/lib/mockData';
 import { track } from '@/lib/analytics';
+import { compressImage } from '@/lib/imageUtils';
 
 export default function AuthPage() {
     const { state, dispatch } = useStore();
@@ -62,9 +63,10 @@ export default function AuthPage() {
     const handlePhotoUpload = (e) => {
         const file = e.target.files[0];
         if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => setProfile(prev => ({ ...prev, photo: reader.result }));
-            reader.readAsDataURL(file);
+            // Avatar-sized: keeps the stored data URI small (~30-60KB)
+            compressImage(file, { maxDim: 512, quality: 0.7 })
+                .then(dataUrl => setProfile(prev => ({ ...prev, photo: dataUrl })))
+                .catch(() => {});
         }
     };
 

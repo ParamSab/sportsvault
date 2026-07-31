@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useStore } from '@/lib/store';
 import { SPORTS, POSITIONS, FORMATS } from '@/lib/mockData';
 import { haptic, nativeShare, isNative } from '@/lib/native';
+import { compressImage } from '@/lib/imageUtils';
 import { track } from '@/lib/analytics';
 
 // Dynamic import for Leaflet (SSR-safe)
@@ -484,11 +485,9 @@ export default function CreateGamePage({ onComplete }) {
                         onChange={(e) => {
                             const file = e.target.files[0];
                             if (file) {
-                                const reader = new FileReader();
-                                reader.onloadend = () => update('bookingImage', reader.result);
-                                reader.readAsDataURL(file);
+                                compressImage(file).then(dataUrl => update('bookingImage', dataUrl)).catch(() => {});
                             }
-                        }} 
+                        }}
                     />
                 </label>
                 <div className="text-sm text-secondary">Tap to upload proof (Receipt, Email, etc.)</div>

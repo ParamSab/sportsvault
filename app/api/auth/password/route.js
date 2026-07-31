@@ -5,7 +5,7 @@ import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
 import { sessionOptions } from '@/lib/session';
 import { findLocalUserByEmail } from '@/lib/localUserStore';
-import { serializeUser } from '@/lib/auth';
+import { serializeUser, sessionUser } from '@/lib/auth';
 
 export async function POST(req) {
     try {
@@ -57,7 +57,7 @@ export async function POST(req) {
         const cookieStore = await cookies();
         const session = await getIronSession(cookieStore, sessionOptions);
 
-        session.user = serializeUser(user);
+        session.user = sessionUser(user);
         session.isLoaded = true;
 
         if (rememberMe) {
@@ -69,7 +69,7 @@ export async function POST(req) {
         await session.save();
 
         const frontendUser = {
-            ...session.user,
+            ...serializeUser(user),
             joined: user.createdAt,
         };
 

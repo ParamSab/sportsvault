@@ -9,6 +9,7 @@ import {
     normalizeEmail,
     normalizePhone,
     serializeUser,
+    sessionUser,
 } from '@/lib/auth';
 import { findLocalUserByEmail, findLocalUserById, findLocalUserByPhone, upsertLocalUser } from '@/lib/localUserStore';
 
@@ -80,7 +81,7 @@ export async function POST(req) {
             }
 
             const userData = serializeUser(user);
-            session.user = userData;
+            session.user = sessionUser(userData);
             delete session.pendingVerifiedAuth;
             await session.save();
             return Response.json({ user: userData });
@@ -113,7 +114,7 @@ export async function POST(req) {
                 ...(hashedPassword && { password: hashedPassword }),
             });
             const serialized = serializeUser(localUser);
-            session.user = serialized;
+            session.user = sessionUser(localUser);
             delete session.pendingVerifiedAuth;
             await session.save();
             return Response.json({ user: serialized, localFallback: true });
@@ -164,7 +165,7 @@ export async function POST(req) {
         }
 
         const serialized = serializeUser(userData);
-        session.user = serialized;
+        session.user = sessionUser(userData);
         delete session.pendingVerifiedAuth;
         await session.save();
 

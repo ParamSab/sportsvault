@@ -4,19 +4,23 @@ import { sessionOptions } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
 import { getSupabase } from '@/lib/supabase';
 
-async function userStillExists(userId) {
+// Returns {photo} for a live user, null if the user no longer exists.
+// The photo is fetched here because it is deliberately NOT stored in the
+// session cookie (inline base64 photos blew past the 4KB cookie limit and
+// broke login for users with profile photos).
+async function fetchLiveUser(userId) {
     try {
-        const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
-        if (user) return true;
+        const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, photo: true } });
+        if (user) return user;
     } catch (_) {}
     try {
         const supabase = getSupabase();
         if (supabase) {
-            const { data } = await supabase.from('users').select('id').eq('id', userId).maybeSingle();
-            if (data) return true;
+            const { data } = await supabase.from('users').select('id, photo').eq('id', userId).maybeSingle();
+            if (data) return data;
         }
     } catch (_) {}
-    return false;
+    return null;
 }
 
 export async function GET() {
@@ -28,14 +32,14 @@ export async function GET() {
         }
 
         const userId = session.user.dbId || session.user.id;
-        const exists = await userStillExists(userId);
-        if (!exists) {
+        const liveUser = await fetchLiveUser(userId);
+        if (!liveUser) {
             session.destroy();
             await session.save();
             return Response.json({ user: null }, { status: 401 });
         }
 
-        return Response.json({ user: session.user });
+        return Response.json({ user: { ...session.user, photo: session.user.photo || liveUser.photo || null } });
     } catch (err) {
         console.error('Session GET error:', err);
         return Response.json({ user: null });

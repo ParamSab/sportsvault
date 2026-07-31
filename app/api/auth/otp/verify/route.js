@@ -3,7 +3,7 @@ import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
 import { sessionOptions } from '@/lib/session';
 import { getSupabase } from '@/lib/supabase';
-import { isDevOtpBypass } from '@/lib/auth';
+import { isDevOtpBypass, sessionUser } from '@/lib/auth';
 
 export async function POST(req) {
     try {
@@ -87,7 +87,7 @@ export async function POST(req) {
                 dbId: user.id,
             };
             delete userData.password;
-            session.user = userData;
+            session.user = sessionUser(userData);
             await session.save();
             return Response.json({ user: userData, exists: true });
         }
