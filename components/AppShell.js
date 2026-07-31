@@ -11,7 +11,7 @@ import RatePage from './RatePage';
 import SportsCVPage from './SportsCVPage';
 import AuthPage from './AuthPage';
 import { getInitials } from '@/lib/mockData';
-import { haptic } from '@/lib/native';
+import { haptic, initDeepLinks } from '@/lib/native';
 import { track } from '@/lib/analytics';
 
 export default function AppShell() {
@@ -24,6 +24,10 @@ export default function AppShell() {
     const [showAuthGate, setShowAuthGate] = useState(false);
 
     const isGuest = !state.isAuthenticated;
+
+    // Universal Links: route sportsvault.co.in links opened from other apps
+    // (WhatsApp etc.) into the webview instead of dropping them.
+    useEffect(() => { initDeepLinks(); }, []);
 
     // Analytics: one app-open event per load (drives activity + retention).
     useEffect(() => {

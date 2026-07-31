@@ -15,7 +15,15 @@ const withPWA = withPWAInit({
 });
 
 /** @type {import('next').NextConfig} */
-const nextConfig = {};
+const nextConfig = {
+    async rewrites() {
+        // Universal Links: Apple fetches this well-known path; serve it from the
+        // AASA route so it gets a proper application/json content type.
+        return [
+            { source: '/.well-known/apple-app-site-association', destination: '/api/aasa' },
+        ];
+    },
+};
 
 // next-pwa injects a webpack config, which Next 16's default Turbopack dev
 // server rejects. Only wrap with the PWA plugin for production builds
