@@ -61,6 +61,11 @@ export default function RatePage({ gameId, onBack }) {
     const [skipped, setSkipped] = useState(new Set()); // already-rated players
     const [submitting, setSubmitting] = useState(false);
 
+    // Opening the rating flow satisfies the post-game nudge for this game.
+    useEffect(() => {
+        try { localStorage.setItem(`sv_rate_done_${gameId}`, '1'); } catch { /* ignore */ }
+    }, [gameId]);
+
     // Try fresh fetch if game not in state (e.g. navigated directly)
     const [freshGame, setFreshGame] = useState(null);
     useEffect(() => {

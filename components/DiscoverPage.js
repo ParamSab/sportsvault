@@ -39,7 +39,7 @@ async function reverseGeocode(lat, lng) {
     }
 }
 
-export default function DiscoverPage({ onViewGame, onViewProfile }) {
+export default function DiscoverPage({ onViewGame, onViewProfile, onRateGame }) {
     const { state, dispatch } = useStore();
     const [sportFilter, setSportFilter] = useState('all');
     const [viewMode, setViewMode] = useState('list');
@@ -198,8 +198,48 @@ export default function DiscoverPage({ onViewGame, onViewProfile }) {
     const userLat = state.currentUser?.lat || 19.076;
     const userLng = state.currentUser?.lng || 72.877;
 
+    // Post-game rating nudge: most recent game (last 7 days) the user played
+    // that they haven't rated or dismissed yet. Gentle, never mandatory.
+    const [rateNudgeTick, setRateNudgeTick] = useState(0);
+    const rateNudgeGame = useMemo(() => {
+        if (!state.isAuthenticated) return null;
+        const meId = String(state.currentUser?.dbId || state.currentUser?.id || '');
+        if (!meId || typeof window === 'undefined') return null;
+        const weekAgo = Date.now() - 7 * 24 * 3600 * 1000;
+        return (state.games || [])
+            .filter(g => hasGameEnded(g))
+            .filter(g => new Date(`${g.date}T${g.time || '00:00'}`).getTime() > weekAgo)
+            .filter(g => (g.rsvps || []).some(r =>
+                String(r.playerId) === meId && (r.status === 'yes' || r.status === 'checked_in')))
+            .filter(g => (g.rsvps || []).filter(r =>
+                (r.status === 'yes' || r.status === 'checked_in') && String(r.playerId) !== meId).length > 0)
+            .filter(g => !localStorage.getItem(`sv_rate_done_${g.id}`) && !localStorage.getItem(`sv_rate_skip_${g.id}`))
+            .sort((a, b) => `${b.date}T${b.time}`.localeCompare(`${a.date}T${a.time}`))[0] || null;
+    }, [state.games, state.isAuthenticated, state.currentUser, rateNudgeTick]);
+
     return (
         <div className="animate-fade-in">
+            {/* Post-game rating nudge */}
+            {rateNudgeGame && onRateGame && (
+                <div style={{ background: 'linear-gradient(135deg, rgba(198,244,50,0.15), rgba(216,250,90,0.1))', border: '1px solid rgba(198,244,50,0.35)', borderRadius: 'var(--radius-lg)', padding: '14px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ fontSize: '1.5rem' }}>{getSportEmoji(rateNudgeGame.sport)}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 2 }}>How was {rateNudgeGame.title}?</div>
+                        <div className="text-xs text-muted">Rate your teammates — it builds everyone&apos;s rep.</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                        <button className="btn btn-sm btn-primary" style={{ fontSize: '0.8rem', padding: '7px 14px' }}
+                            onClick={() => { localStorage.setItem(`sv_rate_done_${rateNudgeGame.id}`, '1'); onRateGame(rateNudgeGame.id); }}>
+                            ⭐ Rate
+                        </button>
+                        <button className="btn btn-sm btn-ghost" style={{ fontSize: '0.8rem' }}
+                            onClick={() => { localStorage.setItem(`sv_rate_skip_${rateNudgeGame.id}`, '1'); setRateNudgeTick(t => t + 1); }}>
+                            ✕
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Location prompt */}
             {state.isAuthenticated && !hasLocation && !locationDismissed && state.isLoaded && (
                 <div style={{ background: 'linear-gradient(135deg, rgba(198,244,50,0.15), rgba(216,250,90,0.1))', border: '1px solid rgba(198,244,50,0.35)', borderRadius: 'var(--radius-lg)', padding: '16px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>

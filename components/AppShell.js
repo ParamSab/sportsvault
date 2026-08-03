@@ -112,7 +112,7 @@ export default function AppShell() {
         if (ratingGame) return <RatePage gameId={ratingGame} onBack={() => setRatingGame(null)} />;
 
         switch (activeTab) {
-            case 'discover': return <DiscoverPage onViewGame={setViewingGame} onViewProfile={setViewingProfile} />;
+            case 'discover': return <DiscoverPage onViewGame={setViewingGame} onViewProfile={setViewingProfile} onRateGame={setRatingGame} />;
             case 'friends': return <FriendsPage onViewProfile={setViewingProfile} onViewGame={setViewingGame} />;
             case 'create': return <CreateGamePage onComplete={() => setActiveTab('discover')} />;
             case 'notifications': return <NotificationsPage onViewGame={setViewingGame} />;

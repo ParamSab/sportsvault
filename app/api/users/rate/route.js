@@ -50,10 +50,25 @@ export async function POST(req) {
         } catch {
             return Response.json({ error: 'Invalid request body' }, { status: 400 });
         }
-        const { playerId, sport, rating, attrs, thought, gameId } = body;
+        const { playerId, sport, attrs, thought, gameId } = body;
 
-        if (!playerId || !sport || !rating) {
+        if (!playerId || !sport || !body.rating) {
             return Response.json({ error: 'Missing required fields' }, { status: 400 });
+        }
+
+        // Validate score values — averages are stored incrementally, so a single
+        // out-of-range submission would permanently skew a player's rating.
+        const rating = Number(body.rating);
+        if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
+            return Response.json({ error: 'Rating must be between 1 and 5' }, { status: 400 });
+        }
+        if (attrs && typeof attrs === 'object') {
+            for (const val of Object.values(attrs)) {
+                const n = Number(val);
+                if (!Number.isFinite(n) || n < 1 || n > 5) {
+                    return Response.json({ error: 'Attribute ratings must be between 1 and 5' }, { status: 400 });
+                }
+            }
         }
 
         // The rater must be authenticated. Derive their identity from the
@@ -81,12 +96,21 @@ export async function POST(req) {
             // Authorize: the rater and the player being rated must both have been
             // in this game. Prevents rating people you never played with.
             if (gameId) {
-                const [raterRsvp, ratedRsvp] = await Promise.all([
+                const [raterRsvp, ratedRsvp, ratedGame] = await Promise.all([
                     prisma.rsvp.findFirst({ where: { gameId, playerId: fromId } }),
                     prisma.rsvp.findFirst({ where: { gameId, playerId } }),
+                    prisma.game.findUnique({ where: { id: gameId }, select: { date: true, time: true, duration: true } }),
                 ]);
                 if (!raterRsvp) return Response.json({ error: 'You were not part of this game.' }, { status: 403 });
                 if (!ratedRsvp) return Response.json({ error: 'That player was not part of this game.' }, { status: 403 });
+                // Ratings open only once the game has ended (UI already enforces this).
+                if (ratedGame) {
+                    const start = new Date(`${ratedGame.date}T${ratedGame.time || '00:00'}`);
+                    const end = new Date(start.getTime() + (Number(ratedGame.duration) || 90) * 60000);
+                    if (!isNaN(end.getTime()) && end.getTime() > Date.now()) {
+                        return Response.json({ error: 'You can rate players after the game ends.' }, { status: 403 });
+                    }
+                }
             }
 
             const result = computeUpdatedRatings(user.ratings, sport, rating, attrs, fromId, gameId);
