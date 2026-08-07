@@ -46,3 +46,6 @@ ios/App/build/
 *.xccheckout
 *.moved-aside
 DerivedData/
+
+# Android signing (never commit)
+android/keystore.properties

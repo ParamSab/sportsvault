@@ -21,6 +21,8 @@ const nextConfig = {
         // AASA route so it gets a proper application/json content type.
         return [
             { source: '/.well-known/apple-app-site-association', destination: '/api/aasa' },
+            // Android App Links: Google fetches this to verify sportsvault.co.in links open the app.
+            { source: '/.well-known/assetlinks.json', destination: '/api/assetlinks' },
         ];
     },
 };

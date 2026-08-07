@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SportsVault</string>
+    <string name="title_activity_main">SportsVault</string>
+    <string name="package_name">com.paramsab.sportsvault</string>
+    <string name="custom_url_scheme">com.paramsab.sportsvault</string>
+</resources>
